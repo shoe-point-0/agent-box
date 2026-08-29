@@ -1,5 +1,5 @@
 <!-- sprout-task
-{"schema_version":1,"id":"m1-repository-resolver","status":"open","created_at":"2026-08-29T06:55:50.389921423Z"}
+{"schema_version":1,"id":"m1-repository-resolver","status":"implemented","created_at":"2026-08-29T06:55:50.389921423Z","implemented_at":"2026-08-29T20:09:15.319648668Z"}
 -->
 
 # Resolve repository intent without materialization
