@@ -170,11 +170,11 @@ These are not rejected forever. They are prevented from destabilizing the first 
 | Docker privilege | Rootful daemon inside the disposable VM; socket never exposed to workspace containers | Maximum Compose/image compatibility while keeping the dangerous daemon out of the Machine and agent container. |
 | Source authority | The Box's Machine-side worktrees and private Git stores are canonical; the VM and containers receive a synchronized filesystem view | There is one write history, no merge arbitration between runtime layers, and ordinary VM loss does not define source history. |
 | Git containment | Create one private bare Git store per repository per Box, then create the Box worktree from it | Agents can commit normally without mutating the user's source repository metadata or another Box. |
-| Git portability | Preserve the same canonical absolute paths on Machine, VM, and workspace service | Stock Git works across layers without rewriting `.git` internals. |
+| Git portability | Preserve the same canonical absolute paths on Machine, VM, and workspace service, gated by the real VirtioFS path probe | Stock Git works through Linux bind mounts without rewriting `.git` internals; VZ/VirtioFS transport remains unproven until the Darwin/arm64 hardware gate. |
 | Services | Compose is the service graph | Do not invent a weaker Compose clone in Agent Box YAML. |
 | Multi-repo Compose | Generate a root Compose file that uses Compose `include` | Each repository keeps its own path base and ownership boundary. |
 | Runtime adaptation | Generate an Agent Box override file | Inject labels, mounts, the gateway, network policy, and port suppression without editing repository files. |
-| Networking | One unprivileged loopback HTTP listener plus `*.abox.localhost` hostnames | No root, DNS daemon, `/etc/hosts`, or resolver mutation. |
+| Networking | One unprivileged IPv4 loopback HTTP listener plus `*.abox.localhost` hostnames, with resolver and proxy-bypass preflight | No root, DNS daemon, `/etc/hosts`, or resolver mutation; `.localhost` alone does not defeat an explicit proxy. |
 | Control plane | `abox` CLI talks to user-scoped `aboxd` over a Unix socket | Long-lived routing and serialized reconciliation require a daemon. |
 | Guest control | Invoke pinned tools through Lima's control/SSH channel | No custom guest daemon until a measured requirement justifies one. |
 | State | SQLite in WAL mode plus an append-only operation journal | Transactional local state, crash recovery, inspectability, and simple distribution. |
@@ -201,6 +201,18 @@ Lima and Docker already expose these operations. A custom always-on guest proces
 ### 5.3 Why Compose is the only service model
 
 Agent Box YAML must not duplicate images, build contexts, health checks, dependency conditions, profiles, secrets, networks, volumes, and restart behavior already represented by Compose. Repositories continue to own their service definitions. Agent Box owns only cross-repository composition and Box-specific policy.
+
+### 5.4 Milestone 0 evidence boundary
+
+The measured substrate gate is published in [`docs/architecture/substrate-spikes.md`](docs/architecture/substrate-spikes.md) and accepted by [`ADR 0001`](docs/decisions/0001-milestone-0-substrate-gate.md). Product implementation may proceed only while every Linux-exercisable critical probe is green on the exact recorded matrix. A failed Git, Compose, routing, ownership, cleanup, or recovery probe blocks the affected implementation until the mechanism or this specification changes explicitly.
+
+The Linux probes narrowed three assumptions:
+
+- identical absolute Git paths work through the tested bind-mount boundary, but remain conditional across Lima VZ and VirtioFS;
+- repository port suppression depends on a pinned Compose version that demonstrably normalizes the generated `!reset []` override before apply; and
+- wildcard `.localhost` routing is proven on an unprivileged IPv4 listener only when resolver and proxy-bypass behavior pass preflight.
+
+Lima VZ, VirtioFS coherency and watcher behavior, the mount allowlist, concurrent Lima forwarding, Darwin resolver/browser behavior, and their crash cleanup paths remain explicit non-claims until `m5-darwin-arm64-hardware-gate` passes unchanged fixtures on real Apple Silicon hardware. Cross-compilation is not runtime evidence.
 
 ---
 
