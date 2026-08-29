@@ -172,6 +172,10 @@ func TestProfileRejectsCraftedRefsURLsHelpersAndOptions(t *testing.T) {
 			_, err := client.ResolveCommit(context.Background(), root, "refs/heads/a\nb")
 			return err
 		},
+		"rev-list option": func() error {
+			_, err := client.ReachableCommits(context.Background(), root, "--all")
+			return err
+		},
 		"remote helper": func() error {
 			_, err := client.Fetch(context.Background(), root, "evil::payload", sha+":refs/heads/base")
 			return err

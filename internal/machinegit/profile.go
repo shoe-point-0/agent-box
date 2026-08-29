@@ -313,6 +313,26 @@ func (c Client) IsAncestor(ctx context.Context, repository, base, tip string) (p
 	return c.run(ctx, repository, noTransport, "merge-base", "--is-ancestor", base, tip)
 }
 
+// ReachableCommits enumerates commit IDs reachable from explicit trusted tips.
+// With no tips it enumerates all refs in repository. It never consults a
+// configured remote or enables a transport, and the terminating -- prevents
+// paths from being interpreted as revision arguments.
+func (c Client) ReachableCommits(ctx context.Context, repository string, tips ...string) (process.Result, error) {
+	arguments := []string{"rev-list"}
+	if len(tips) == 0 {
+		arguments = append(arguments, "--all")
+	} else {
+		for _, tip := range tips {
+			if !validObjectName(tip, false) {
+				return process.Result{}, refuse("tip", "must be a full ref or full object ID")
+			}
+		}
+		arguments = append(arguments, tips...)
+	}
+	arguments = append(arguments, "--")
+	return c.run(ctx, repository, noTransport, arguments...)
+}
+
 // Push publishes explicit non-forced refspecs to an explicit destination.
 func (c Client) Push(ctx context.Context, repository, remoteURL string, refspecs ...string) (process.Result, error) {
 	transport, err := validateRemoteURL(remoteURL, c.Credentials)
