@@ -25,13 +25,30 @@
     "workingDirectory": "services/payments"
   },
   "services": [
-    {"name": "payments-api", "ready": true}
+    {
+      "name": "payments-api",
+      "ready": true
+    }
   ],
   "routes": [],
   "ports": [],
   "commands": [
-    {"name": "test", "argv": ["go", "test", "./..."]},
-    {"name": "status", "argv": ["abox", "status", "AUTH-142"]}
+    {
+      "name": "status",
+      "argv": [
+        "abox",
+        "status",
+        "AUTH-142"
+      ]
+    },
+    {
+      "name": "test",
+      "argv": [
+        "go",
+        "test",
+        "./..."
+      ]
+    }
   ],
   "policy": {
     "gitMetadata": "read-write",
