@@ -1,0 +1,36 @@
+{
+  "classification": "restart",
+  "reason": "changes-required",
+  "changes": [
+    {
+      "class": "in-place",
+      "reason": "route-or-readiness-changed",
+      "resource": "route/api",
+      "description": "route or readiness configuration may be updated in place and probed again"
+    },
+    {
+      "class": "growth",
+      "reason": "runtime-disk-increase",
+      "resource": "runtime-host",
+      "description": "disk growth requires the supported runtime-host growth operation"
+    },
+    {
+      "class": "restart",
+      "reason": "runtime-resources-changed",
+      "resource": "runtime-host",
+      "description": "CPU or memory changes require a runtime-host restart"
+    },
+    {
+      "class": "restart",
+      "reason": "secret-reference-changed",
+      "resource": "secret/TOKEN",
+      "description": "secret reference changes restart only declared consumers"
+    },
+    {
+      "class": "in-place",
+      "reason": "setup-job-changed",
+      "resource": "setup-job/install",
+      "description": "setup-job stamp and dependent stamps must be invalidated"
+    }
+  ]
+}
