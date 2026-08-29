@@ -20,7 +20,10 @@ const (
 	nullPath     = "/dev/null"
 )
 
-var ErrPolicy = errors.New("machine git policy refusal")
+var (
+	ErrPolicy         = errors.New("machine git policy refusal")
+	ErrBranchNotFound = errors.New("machine git branch not found")
+)
 
 // Result is the observation returned by the hardened Git boundary. The alias
 // lets callers define narrow Git interfaces without importing the subprocess
@@ -89,10 +92,25 @@ func (c Client) ResolveCommit(ctx context.Context, repository, ref string) (proc
 // ref-format rules. Callers must require stdout to equal branch exactly because
 // --branch can otherwise expand previous-checkout syntax.
 func (c Client) CheckBranch(ctx context.Context, repository, branch string) (process.Result, error) {
-	if branch == "" || strings.HasPrefix(branch, "-") || hasControl(branch) || len(branch) > maxRefLength {
+	if !validBranch(branch) {
 		return process.Result{}, refuse("branch", "must be a bounded branch name without options or control characters")
 	}
 	return c.run(ctx, repository, noTransport, "check-ref-format", "--branch", branch)
+}
+
+// LookupBranch observes an exact local branch without consulting remote or
+// abbreviated ref namespaces. A missing branch returns a process ExitError
+// with code 1, matching git rev-parse --quiet's script-facing contract.
+func (c Client) LookupBranch(ctx context.Context, repository, branch string) (process.Result, error) {
+	if !validBranch(branch) {
+		return process.Result{}, refuse("branch", "must be a bounded branch name without options or control characters")
+	}
+	result, err := c.run(ctx, repository, noTransport, "rev-parse", "--verify", "--quiet", "--end-of-options", "refs/heads/"+branch+"^{commit}")
+	var exitErr *process.ExitError
+	if errors.As(err, &exitErr) && exitErr.Code == 1 {
+		return result, ErrBranchNotFound
+	}
+	return result, err
 }
 
 // InitBare creates an empty private store. Object transfer is deliberately a
@@ -105,6 +123,49 @@ func (c Client) InitBare(ctx context.Context, parent, destination string) (proce
 		return process.Result{}, refuse("destination", "must be an immediate child of the operation directory")
 	}
 	return c.runRaw(ctx, parent, noTransport, "init", "--bare", "--initial-branch=abox-seed", "--", destination)
+}
+
+// CloneBare copies a local repository into an already-owned or absent bare
+// destination. --local plus --no-hardlinks makes object storage independent
+// without invoking a transport helper or retaining alternates.
+func (c Client) CloneBare(ctx context.Context, parent, source, destination string) (process.Result, error) {
+	if err := validateCanonicalPath("source", source); err != nil {
+		return process.Result{}, err
+	}
+	if err := rejectAlternates(source); err != nil {
+		return process.Result{}, err
+	}
+	if err := validateCanonicalPath("destination", destination); err != nil {
+		return process.Result{}, err
+	}
+	if filepath.Dir(destination) != parent {
+		return process.Result{}, refuse("destination", "must be an immediate child of the operation directory")
+	}
+	return c.runRaw(
+		ctx,
+		parent,
+		fileTransport,
+		"clone", "--bare", "--local", "--no-hardlinks", "--no-tags", "--no-recurse-submodules", "--", source, destination,
+	)
+}
+
+// SetPrivateBase pins the immutable planned commit in a private namespace so
+// detached commits remain reachable without creating the task branch early.
+func (c Client) SetPrivateBase(ctx context.Context, repository, commit string) (process.Result, error) {
+	if !validObjectID(commit) {
+		return process.Result{}, refuse("commit", "must be a full object ID")
+	}
+	return c.run(ctx, repository, noTransport, "update-ref", "--no-deref", "refs/abox/base", commit)
+}
+
+// ConfigurePrivateStore enables reflogs and removes clone-created publication
+// configuration. The trusted publish destination remains outside this store.
+func (c Client) ConfigurePrivateStore(ctx context.Context, repository string) error {
+	if _, err := c.run(ctx, repository, noTransport, "config", "--local", "core.logAllRefUpdates", "true"); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, repository, noTransport, "config", "--local", "--remove-section", "remote.origin")
+	return err
 }
 
 // Fetch imports explicit refs from an explicit supported URL. It never reads a
@@ -445,6 +506,22 @@ func validObjectName(value string, allowHEAD bool) bool {
 		return true
 	}
 	return validFullRef(value)
+}
+
+func validObjectID(value string) bool {
+	if len(value) != 40 {
+		return false
+	}
+	for _, r := range value {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func validBranch(branch string) bool {
+	return branch != "" && !strings.HasPrefix(branch, "-") && !hasControl(branch) && len(branch) <= maxRefLength
 }
 
 func validFullRef(value string) bool {

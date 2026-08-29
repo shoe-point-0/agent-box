@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/manifest"
@@ -64,6 +65,23 @@ type DirtySourceError struct {
 func (e *DirtySourceError) Error() string { return "repository source is dirty: " + e.Repository }
 
 func (e *DirtySourceError) ChangedPaths() []string { return append([]string(nil), e.paths...) }
+
+func (e *DirtySourceError) ErrorCode() contract.ErrorCode { return contract.CodeGitDirtySource }
+
+func (e *DirtySourceError) ExitCode() int { return contract.ExitCodeFor(e.ErrorCode()) }
+
+// CheckClean parses script-facing porcelain and returns a typed safety refusal
+// when any tracked or untracked source path changed.
+func CheckClean(name string, status []byte) error {
+	changed, err := parseStatusPaths(status)
+	if err != nil {
+		return err
+	}
+	if len(changed) != 0 {
+		return &DirtySourceError{Repository: name, paths: changed}
+	}
+	return nil
+}
 
 // Resolver combines read-only Git observations with centralized path
 // construction. It has no state, filesystem, Lima, Compose, or port writer.
@@ -121,12 +139,8 @@ func (r Resolver) resolveOne(ctx context.Context, repository manifest.Repository
 	if err != nil {
 		return Facts{}, fmt.Errorf("resolve repository %s status: %w", repository.Name, err)
 	}
-	changed, err := parseStatusPaths(status.Stdout)
-	if err != nil {
+	if err := CheckClean(repository.Name, status.Stdout); err != nil {
 		return Facts{}, fmt.Errorf("resolve repository %s status: %w", repository.Name, err)
-	}
-	if len(changed) != 0 {
-		return Facts{}, &DirtySourceError{Repository: repository.Name, paths: changed}
 	}
 
 	commitResult, err := r.Git.ResolveCommit(ctx, sourceRoot, repository.Checkout.Ref)
