@@ -36,4 +36,12 @@ command+=(
   --source tool
 )
 
-exec "${command[@]}"
+# Hermes CLI emits a machine-readable session footer after the assistant's
+# final response when invoked from tool mode. Snowball's protocol requires the
+# final non-empty stdout line to be exactly the promise marker, so strip only
+# that footer while preserving the agent's response and exit status.
+set +e
+"${command[@]}" | sed -E '/^session_id: [0-9]{8}_[0-9]{6}_[[:alnum:]_-]+$/d'
+status=${PIPESTATUS[0]}
+set -e
+exit "$status"
