@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode"
 
 	"github.com/shoe-point-0/agent-box/internal/process"
@@ -168,6 +169,106 @@ func (c Client) ConfigurePrivateStore(ctx context.Context, repository string) er
 	return err
 }
 
+// UsesRelativeWorktrees reports whether a private store enables Git's relative
+// worktree metadata. Agent Box currently requires invariant absolute paths, so
+// callers reject a true result before invoking repository-aware commands.
+func (c Client) UsesRelativeWorktrees(ctx context.Context, repository string) (bool, error) {
+	if err := validateCanonicalPath("repository", repository); err != nil {
+		return false, err
+	}
+	if err := rejectAlternates(repository); err != nil {
+		return false, err
+	}
+	config := filepath.Join(repository, "config")
+	for _, key := range []string{"extensions.relativeWorktrees", "worktree.useRelativePaths"} {
+		enabled, found, err := c.configBool(ctx, repository, config, key)
+		if err != nil {
+			return false, err
+		}
+		if found && enabled {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// WorktreeList returns Git's NUL-delimited script-facing registration records.
+func (c Client) WorktreeList(ctx context.Context, repository string) (process.Result, error) {
+	return c.run(ctx, repository, noTransport, "worktree", "list", "--porcelain", "-z")
+}
+
+// Gitlinks lists a planned tree recursively so callers can reject active
+// submodules before creating a linked worktree.
+func (c Client) Gitlinks(ctx context.Context, repository, commit string) (process.Result, error) {
+	if !validObjectID(commit) {
+		return process.Result{}, refuse("commit", "must be a full object ID")
+	}
+	return c.run(ctx, repository, noTransport, "ls-tree", "-r", "-z", "--full-tree", commit)
+}
+
+// AddWorktree creates one generated branch and linked worktree at an exact
+// commit. Branch and commit inputs are validated before Git starts.
+func (c Client) AddWorktree(ctx context.Context, repository, branch, path, commit string) (process.Result, error) {
+	if !validBranch(branch) {
+		return process.Result{}, refuse("branch", "must be a bounded branch name without options or control characters")
+	}
+	if err := validateCanonicalPath("worktree", path); err != nil {
+		return process.Result{}, err
+	}
+	if !validObjectID(commit) {
+		return process.Result{}, refuse("commit", "must be a full object ID")
+	}
+	if err := c.rejectConfiguredFilters(ctx, repository); err != nil {
+		return process.Result{}, err
+	}
+	return c.run(ctx, repository, noTransport, "worktree", "add", "-b", branch, "--", path, commit)
+}
+
+// LockWorktree protects one linked worktree with an explicit ownership reason.
+func (c Client) LockWorktree(ctx context.Context, repository, path, reason string) (process.Result, error) {
+	if err := validateCanonicalPath("worktree", path); err != nil {
+		return process.Result{}, err
+	}
+	if reason == "" || len(reason) > 1024 || hasControl(reason) {
+		return process.Result{}, refuse("lock reason", "must be bounded text without control characters")
+	}
+	return c.run(ctx, repository, noTransport, "worktree", "lock", "--reason", reason, "--", path)
+}
+
+// UnlockWorktree unlocks a caller-proved worktree immediately before cleanup.
+func (c Client) UnlockWorktree(ctx context.Context, repository, path string) (process.Result, error) {
+	if err := validateCanonicalPath("worktree", path); err != nil {
+		return process.Result{}, err
+	}
+	return c.run(ctx, repository, noTransport, "worktree", "unlock", "--", path)
+}
+
+// WorktreeCommonDir resolves the absolute common Git directory for a linked
+// worktree without relying on its writable configuration as ownership state.
+func (c Client) WorktreeCommonDir(ctx context.Context, worktree string) (process.Result, error) {
+	return c.run(ctx, worktree, noTransport, "rev-parse", "--path-format=absolute", "--git-common-dir")
+}
+
+// RemoveWorktree removes a caller-proved clean linked worktree. This method
+// performs no ownership decision; callers must prove the exact resource first.
+func (c Client) RemoveWorktree(ctx context.Context, repository, path string) (process.Result, error) {
+	if err := validateCanonicalPath("worktree", path); err != nil {
+		return process.Result{}, err
+	}
+	return c.run(ctx, repository, noTransport, "worktree", "remove", "--", path)
+}
+
+// DeleteBranch removes a generated ref only if it still names expectedCommit.
+func (c Client) DeleteBranch(ctx context.Context, repository, branch, expectedCommit string) (process.Result, error) {
+	if !validBranch(branch) {
+		return process.Result{}, refuse("branch", "must be a bounded branch name without options or control characters")
+	}
+	if !validObjectID(expectedCommit) {
+		return process.Result{}, refuse("commit", "must be a full object ID")
+	}
+	return c.run(ctx, repository, noTransport, "update-ref", "-d", "refs/heads/"+branch, expectedCommit)
+}
+
 // Fetch imports explicit refs from an explicit supported URL. It never reads a
 // remote name or destination from repository-writable configuration.
 func (c Client) Fetch(ctx context.Context, repository, remoteURL string, refspecs ...string) (process.Result, error) {
@@ -268,6 +369,25 @@ func (c Client) rejectConfiguredFilters(ctx context.Context, repository string) 
 		return nil
 	}
 	return err
+}
+
+func (c Client) configBool(ctx context.Context, directory, config, key string) (bool, bool, error) {
+	result, err := c.runRaw(ctx, directory, noTransport, "config", "--file", config, "--type=bool", "--get", key)
+	if err == nil {
+		switch strings.TrimSpace(string(result.Stdout)) {
+		case "true":
+			return true, true, nil
+		case "false":
+			return false, true, nil
+		default:
+			return false, false, errors.New("machine git returned a non-boolean configuration value")
+		}
+	}
+	var exitErr *process.ExitError
+	if errors.As(err, &exitErr) && exitErr.Code == 1 && len(result.Stdout) == 0 {
+		return false, false, nil
+	}
+	return false, false, err
 }
 
 func (c Client) runRaw(ctx context.Context, directory string, transport transport, arguments ...string) (process.Result, error) {
@@ -413,14 +533,63 @@ func rejectAlternates(repository string) error {
 		filepath.Join(repository, "objects", "info", "alternates"),
 		filepath.Join(repository, ".git", "objects", "info", "alternates"),
 	}
+	if common, err := linkedCommonDir(repository); err == nil && common != "" {
+		candidates = append(candidates, filepath.Join(common, "objects", "info", "alternates"))
+	} else if err != nil {
+		return refuse("repository", "cannot verify linked-worktree object storage")
+	}
 	for _, candidate := range candidates {
 		if _, err := os.Lstat(candidate); err == nil {
 			return refuse("repository", "object alternates are forbidden")
-		} else if !errors.Is(err, os.ErrNotExist) {
+		} else if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 			return refuse("repository", "cannot verify object alternates")
 		}
 	}
 	return nil
+}
+
+func linkedCommonDir(repository string) (string, error) {
+	pointer := filepath.Join(repository, ".git")
+	info, err := os.Lstat(pointer)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", nil
+	}
+	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 4096 {
+		return "", errors.New("invalid linked-worktree pointer")
+	}
+	content, err := os.ReadFile(pointer)
+	if err != nil {
+		return "", err
+	}
+	line := strings.TrimSuffix(string(content), "\n")
+	gitDir, found := strings.CutPrefix(line, "gitdir: ")
+	if !found || strings.Contains(gitDir, "\n") || validateCanonicalPath("git directory", gitDir) != nil {
+		return "", errors.New("invalid linked-worktree pointer")
+	}
+	commonFile := filepath.Join(gitDir, "commondir")
+	commonInfo, err := os.Lstat(commonFile)
+	if err != nil || !commonInfo.Mode().IsRegular() || commonInfo.Size() <= 0 || commonInfo.Size() > 4096 {
+		return "", errors.New("invalid linked-worktree common directory")
+	}
+	commonContent, err := os.ReadFile(commonFile)
+	if err != nil {
+		return "", err
+	}
+	relative := strings.TrimSuffix(string(commonContent), "\n")
+	if relative == "" || strings.Contains(relative, "\n") || strings.IndexByte(relative, 0) >= 0 {
+		return "", errors.New("invalid linked-worktree common directory")
+	}
+	common := filepath.Clean(filepath.Join(gitDir, relative))
+	if !filepath.IsAbs(common) {
+		return "", errors.New("invalid linked-worktree common directory")
+	}
+	return common, nil
 }
 
 func validateRemoteURL(value string, credentials Credentials) (transport, error) {

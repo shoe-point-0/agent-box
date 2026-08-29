@@ -115,6 +115,26 @@ func TestProfileRejectsAlternatesBeforeGitStarts(t *testing.T) {
 	}
 }
 
+func TestProfileRejectsLinkedWorktreeAlternatesBeforeGitStarts(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "store.git")
+	admin := filepath.Join(store, "worktrees", "repo")
+	worktree := filepath.Join(root, "worktree")
+	mustMkdir(t, filepath.Join(store, "objects", "info"))
+	mustMkdir(t, admin)
+	mustMkdir(t, worktree)
+	mustWrite(t, filepath.Join(worktree, ".git"), "gitdir: "+admin+"\n", 0o600)
+	mustWrite(t, filepath.Join(admin, "commondir"), "../..\n", 0o600)
+	mustWrite(t, filepath.Join(store, "objects", "info", "alternates"), "/tmp/foreign\n", 0o600)
+	recorder := &recordingExecutor{}
+	client := testClient(worktree, recorder)
+
+	_, err := client.Status(context.Background(), worktree)
+	if !errors.Is(err, ErrPolicy) || recorder.calls != 0 {
+		t.Fatalf("Status() error = %v, calls = %d, want linked alternate refusal before execution", err, recorder.calls)
+	}
+}
+
 func TestProfileRejectsRepositoryFiltersBeforeStatus(t *testing.T) {
 	gitPath := realGitPath(t)
 	root := t.TempDir()

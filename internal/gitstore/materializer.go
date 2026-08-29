@@ -13,6 +13,7 @@ import (
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 )
@@ -40,6 +41,7 @@ type Materializer struct {
 type Record struct {
 	Repository         string
 	GitCommonDir       string
+	Identity           ownership.FileIdentity
 	BaseCommit         string
 	PublishDestination repository.Destination
 }
@@ -150,9 +152,14 @@ func (m Materializer) Materialize(ctx context.Context, facts repository.Facts, i
 		return fail(fmt.Errorf("materialize private Git store %s: verify base commit: %w", facts.Name, err))
 	}
 
+	identity, err := ownership.InspectPath(facts.GitStorePath)
+	if err != nil {
+		return fail(fmt.Errorf("materialize private Git store %s: record identity: %w", facts.Name, err))
+	}
+
 	return Record{
 		Repository: facts.Name, GitCommonDir: facts.GitStorePath, BaseCommit: facts.BaseCommit,
-		PublishDestination: facts.PublishDestination,
+		Identity: identity, PublishDestination: facts.PublishDestination,
 	}, nil
 }
 

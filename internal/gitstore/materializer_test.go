@@ -16,6 +16,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/manifest"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/process"
@@ -42,10 +43,13 @@ func TestMaterializeRealGitDetachedPrivateStore(t *testing.T) {
 	}
 	wantRecord := gitstore.Record{
 		Repository: fixture.facts.Name, GitCommonDir: fixture.facts.GitStorePath,
-		BaseCommit: fixture.facts.BaseCommit, PublishDestination: fixture.facts.PublishDestination,
+		Identity: record.Identity, BaseCommit: fixture.facts.BaseCommit, PublishDestination: fixture.facts.PublishDestination,
 	}
 	if record != wantRecord {
 		t.Fatalf("record = %#v, want %#v", record, wantRecord)
+	}
+	if record.Identity == (ownership.FileIdentity{}) {
+		t.Fatal("private store identity is empty")
 	}
 	assertAbsent(t, marker)
 	if got := strings.TrimSpace(mustGit(t, fixture.gitPath, fixture.facts.GitStorePath, "rev-parse", "refs/abox/base")); got != fixture.facts.BaseCommit {

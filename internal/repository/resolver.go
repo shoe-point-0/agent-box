@@ -73,7 +73,7 @@ func (e *DirtySourceError) ExitCode() int { return contract.ExitCodeFor(e.ErrorC
 // CheckClean parses script-facing porcelain and returns a typed safety refusal
 // when any tracked or untracked source path changed.
 func CheckClean(name string, status []byte) error {
-	changed, err := parseStatusPaths(status)
+	changed, err := ChangedPaths(status)
 	if err != nil {
 		return err
 	}
@@ -81,6 +81,12 @@ func CheckClean(name string, status []byte) error {
 		return &DirtySourceError{Repository: name, paths: changed}
 	}
 	return nil
+}
+
+// ChangedPaths parses NUL-delimited porcelain-v2 status and returns every
+// changed path without treating path bytes as line-oriented text.
+func ChangedPaths(status []byte) ([]string, error) {
+	return parseStatusPaths(status)
 }
 
 // Resolver combines read-only Git observations with centralized path
