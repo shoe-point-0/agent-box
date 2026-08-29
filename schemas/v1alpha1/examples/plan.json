@@ -51,6 +51,12 @@
       "writable": true
     }
   ],
+  "policy": {
+    "gitMetadata": "read-write",
+    "dockerSocket": "deny",
+    "machineMounts": "declared-only",
+    "networkEgress": "allow"
+  },
   "tools": {
     "agentBox": "0.1.0-dev",
     "git": "2.51.0",

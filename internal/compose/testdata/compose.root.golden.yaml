@@ -1,0 +1,3 @@
+include:
+  - path: "$ROOT/worktree/compose.dev.yaml"
+    project_directory: "$ROOT/worktree"

@@ -1,0 +1,48 @@
+services:
+  "worker":
+    ports: !reset []
+    labels:
+      "dev.abox.box": "$BOX_ID"
+      "dev.abox.generation": "7"
+      "dev.abox.managed": "true"
+      "dev.abox.plan": "$PLAN_DIGEST"
+      "dev.abox.workspace": "$WORKSPACE_ID"
+    networks:
+      default: {}
+    volumes:
+      - type: bind
+        source: "$ROOT/git/repo.git"
+        target: "$ROOT/git/repo.git"
+        read_only: true
+      - type: bind
+        source: "$ROOT/worktree"
+        target: "$ROOT/worktree"
+        read_only: false
+  "workspace":
+    ports: !reset []
+    labels:
+      "dev.abox.box": "$BOX_ID"
+      "dev.abox.generation": "7"
+      "dev.abox.managed": "true"
+      "dev.abox.plan": "$PLAN_DIGEST"
+      "dev.abox.workspace": "$WORKSPACE_ID"
+    networks:
+      default: {}
+    volumes:
+      - type: bind
+        source: "$ROOT/git/repo.git"
+        target: "$ROOT/git/repo.git"
+        read_only: true
+      - type: bind
+        source: "$ROOT/worktree"
+        target: "$ROOT/worktree"
+        read_only: false
+networks:
+  default:
+    internal: true
+    labels:
+      "dev.abox.box": "$BOX_ID"
+      "dev.abox.generation": "7"
+      "dev.abox.managed": "true"
+      "dev.abox.plan": "$PLAN_DIGEST"
+      "dev.abox.workspace": "$WORKSPACE_ID"

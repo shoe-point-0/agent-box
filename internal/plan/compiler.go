@@ -94,7 +94,13 @@ func Compile(input Input) (contract.Plan, []byte, error) {
 			WorkingDirectory: input.Workspace.Spec.WorkspaceService.WorkingDirectory,
 		},
 		Mounts: mounts,
-		Tools:  input.Tools,
+		Policy: contract.PolicyPlan{
+			GitMetadata:   input.Workspace.Spec.Policy.GitMetadata,
+			DockerSocket:  input.Workspace.Spec.Policy.DockerSocket,
+			MachineMounts: input.Workspace.Spec.Policy.MachineMounts,
+			NetworkEgress: input.Workspace.Spec.Policy.NetworkEgress,
+		},
+		Tools: input.Tools,
 	}
 	plan.PlanDigest, err = digestPlan(plan)
 	if err != nil {
@@ -367,6 +373,7 @@ type digestDocument struct {
 	Compose          contract.ComposePlan          `json:"compose"`
 	WorkspaceService contract.WorkspaceServicePlan `json:"workspaceService"`
 	Mounts           []contract.MountPlan          `json:"mounts"`
+	Policy           contract.PolicyPlan           `json:"policy"`
 	Tools            contract.ToolVersions         `json:"tools"`
 }
 
@@ -375,7 +382,7 @@ func digestPlan(plan contract.Plan) (contract.Digest, error) {
 		SchemaVersion: plan.SchemaVersion, WorkspaceID: plan.WorkspaceID, BoxID: plan.BoxID,
 		TaskKey: plan.TaskKey, Manifest: plan.Manifest, Repositories: plan.Repositories,
 		RuntimeHost: plan.RuntimeHost, Compose: plan.Compose, WorkspaceService: plan.WorkspaceService,
-		Mounts: plan.Mounts, Tools: plan.Tools,
+		Mounts: plan.Mounts, Policy: plan.Policy, Tools: plan.Tools,
 	}
 	encoded, err := json.Marshal(document)
 	if err != nil {

@@ -30,6 +30,7 @@ type Plan struct {
 	Compose          ComposePlan          `json:"compose"`
 	WorkspaceService WorkspaceServicePlan `json:"workspaceService"`
 	Mounts           []MountPlan          `json:"mounts"`
+	Policy           PolicyPlan           `json:"policy"`
 	Tools            ToolVersions         `json:"tools"`
 	PlanDigest       Digest               `json:"planDigest"`
 }
@@ -74,6 +75,16 @@ type MountPlan struct {
 	Path     string   `json:"path"`
 	Services []string `json:"services"`
 	Writable bool     `json:"writable"`
+}
+
+// PolicyPlan contains behavior-affecting policy already validated by the
+// manifest loader. Runtime adapters consume this immutable projection rather
+// than reaching back into mutable manifest intent.
+type PolicyPlan struct {
+	GitMetadata   string `json:"gitMetadata"`
+	DockerSocket  string `json:"dockerSocket"`
+	MachineMounts string `json:"machineMounts"`
+	NetworkEgress string `json:"networkEgress"`
 }
 
 // ToolVersions records behavior-affecting tool versions without host secrets.

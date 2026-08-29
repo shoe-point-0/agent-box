@@ -4,7 +4,7 @@
   "title": "Agent Box Plan v1alpha1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "workspaceId", "boxId", "taskKey", "manifest", "repositories", "runtimeHost", "compose", "workspaceService", "mounts", "tools", "planDigest"],
+  "required": ["schemaVersion", "workspaceId", "boxId", "taskKey", "manifest", "repositories", "runtimeHost", "compose", "workspaceService", "mounts", "policy", "tools", "planDigest"],
   "properties": {
     "schemaVersion": {"const": "abox.plan/v1alpha1"},
     "workspaceId": {"type": "string", "minLength": 1},
@@ -16,6 +16,7 @@
     "compose": {"$ref": "#/$defs/compose"},
     "workspaceService": {"$ref": "#/$defs/workspaceService"},
     "mounts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/mount"}},
+    "policy": {"$ref": "#/$defs/policy"},
     "tools": {"$ref": "#/$defs/tools"},
     "planDigest": {"$ref": "#/$defs/digest"}
   },
@@ -71,6 +72,16 @@
         "path": {"$ref": "#/$defs/absolutePath"},
         "services": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "writable": {"type": "boolean"}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gitMetadata", "dockerSocket", "machineMounts", "networkEgress"],
+      "properties": {
+        "gitMetadata": {"type": "string", "enum": ["read-only", "read-write"]},
+        "dockerSocket": {"const": "deny"},
+        "machineMounts": {"const": "declared-only"},
+        "networkEgress": {"type": "string", "enum": ["allow", "deny"]}
       }
     },
     "tools": {
