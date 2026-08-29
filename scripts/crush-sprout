@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Run the Agent Box Sprout backlog through Snowball with the Hermes `alph` profile.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(git -C "$script_dir" rev-parse --show-toplevel)"
+prompt_file="${SPROUT_CRUSHER_PROMPT:-$repo_root/automation/sprout-crusher/master-prompt.md}"
+snowball_runner="${SNOWBALL_RUNNER:-$HOME/.hermes/profiles/alph/skills/snowballing/scripts/snowball.sh}"
+agent_adapter="${SPROUT_CRUSHER_AGENT:-$repo_root/scripts/alph-snowball-agent}"
+subcommand="${1:-run}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+
+[[ -f "$snowball_runner" ]] || {
+  printf 'snowball runner does not exist: %s\n' "$snowball_runner" >&2
+  exit 1
+}
+[[ -x "$agent_adapter" ]] || {
+  printf 'Hermes Snowball adapter is not executable: %s\n' "$agent_adapter" >&2
+  exit 1
+}
+[[ -f "$prompt_file" ]] || {
+  printf 'master prompt does not exist: %s\n' "$prompt_file" >&2
+  exit 1
+}
+
+common=(
+  --project "$repo_root"
+  --prompt-file "$prompt_file"
+)
+run_options=(
+  --agent-command "$agent_adapter"
+  --allow-commits
+  --no-sdd
+  --max-iterations "${SNOWBALL_MAX_ITERATIONS:-40}"
+  --max-errors "${SNOWBALL_MAX_ERRORS:-2}"
+  --max-stalls "${SNOWBALL_MAX_STALLS:-3}"
+  --max-minutes "${SNOWBALL_MAX_MINUTES:-0}"
+)
+if [[ "${SNOWBALL_ALLOW_DIRTY:-0}" == "1" ]]; then
+  run_options+=(--allow-dirty)
+fi
+
+case "$subcommand" in
+  validate)
+    exec bash "$snowball_runner" validate "${common[@]}" "${run_options[@]}" "$@"
+    ;;
+  dry-run)
+    exec bash "$snowball_runner" run "${common[@]}" "${run_options[@]}" --dry-run "$@"
+    ;;
+  status)
+    exec bash "$snowball_runner" status "${common[@]}" "$@"
+    ;;
+  run)
+    bash "$snowball_runner" run "${common[@]}" "${run_options[@]}" --dry-run "$@"
+    exec bash "$snowball_runner" run "${common[@]}" "${run_options[@]}" "$@"
+    ;;
+  fresh)
+    bash "$snowball_runner" run "${common[@]}" "${run_options[@]}" --fresh --dry-run "$@"
+    exec bash "$snowball_runner" run "${common[@]}" "${run_options[@]}" --fresh "$@"
+    ;;
+  *)
+    printf 'usage: %s [validate|dry-run|status|run|fresh] [snowball options]\n' "$0" >&2
+    exit 2
+    ;;
+esac

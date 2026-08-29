@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Adapt Snowball's stdin agent contract to the Hermes `alph` profile.
+set -euo pipefail
+
+agent_command="${HERMES_CRUSHER_COMMAND:-alph}"
+project_dir="${SNOWBALL_PROJECT_DIR:-$PWD}"
+max_turns="${HERMES_CRUSHER_MAX_TURNS:-500}"
+skills="${HERMES_CRUSHER_SKILLS:-agent-box-systems-engineering,go-coder,principal-engineer}"
+toolsets="${HERMES_CRUSHER_TOOLSETS:-hermes-cli}"
+git_guard="$project_dir/automation/sprout-crusher/bin"
+
+[[ -x "$git_guard/git" ]] || {
+  printf 'Git push guard is not executable: %s/git\n' "$git_guard" >&2
+  exit 1
+}
+export HERMES_CRUSHER_REAL_GIT="${HERMES_CRUSHER_REAL_GIT:-$(command -v git)}"
+export PATH="$git_guard:$PATH"
+
+command=(
+  "$agent_command"
+  --yolo
+  --in "$project_dir"
+  --skills "$skills"
+  --toolsets "$toolsets"
+)
+
+if [[ -n "${HERMES_CRUSHER_REASONING:-}" ]]; then
+  command+=(--reasoning "$HERMES_CRUSHER_REASONING")
+fi
+
+command+=(
+  chat
+  --quiet
+  --query-file -
+  --max-turns "$max_turns"
+  --source tool
+)
+
+exec "${command[@]}"

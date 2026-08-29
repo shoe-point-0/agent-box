@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Defense in depth for autonomous runs: permit normal Git, reject network pushes.
+set -euo pipefail
+
+real_git="${HERMES_CRUSHER_REAL_GIT:?HERMES_CRUSHER_REAL_GIT is required}"
+for argument in "$@"; do
+  case "$argument" in
+    push|send-pack)
+      printf 'Sprout Crusher forbids remote Git mutation: git %s\n' "$argument" >&2
+      exit 97
+      ;;
+  esac
+done
+exec "$real_git" "$@"
