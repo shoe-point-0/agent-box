@@ -18,30 +18,30 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 2 && args[0] == "__failure-worker" {
 		if err := spike.RunFailureWorker(context.Background(), args[1]); err != nil {
-			fmt.Fprintf(stderr, "failure worker: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "failure worker: %v\n", err)
 			return 1
 		}
 		return 0
 	}
 	registry := spike.NewRegistry()
 	if err := spike.RegisterHarnessSmoke(registry); err != nil {
-		fmt.Fprintf(stderr, "initialize spike registry: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "initialize spike registry: %v\n", err)
 		return 1
 	}
 	if err := spike.RegisterGitPathProbe(registry); err != nil {
-		fmt.Fprintf(stderr, "initialize Git path probe: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "initialize Git path probe: %v\n", err)
 		return 1
 	}
 	if err := spike.RegisterComposeProbe(registry); err != nil {
-		fmt.Fprintf(stderr, "initialize Compose probe: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "initialize Compose probe: %v\n", err)
 		return 1
 	}
 	if err := spike.RegisterRoutingProbe(registry); err != nil {
-		fmt.Fprintf(stderr, "initialize routing probe: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "initialize routing probe: %v\n", err)
 		return 1
 	}
 	if err := spike.RegisterFailureMatrix(registry); err != nil {
-		fmt.Fprintf(stderr, "initialize failure matrix: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "initialize failure matrix: %v\n", err)
 		return 1
 	}
 	return runWithRegistry(context.Background(), args, stdout, stderr, registry)
@@ -67,7 +67,10 @@ func runWithRegistry(ctx context.Context, args []string, stdout, stderr io.Write
 			}{SchemaVersion: "abox.spike.list/v1", Spikes: names})
 		}
 		for _, name := range names {
-			fmt.Fprintln(stdout, name)
+			if _, err := fmt.Fprintln(stdout, name); err != nil {
+				_, _ = fmt.Fprintf(stderr, "write output: %v\n", err)
+				return 1
+			}
 		}
 		return 0
 	case "run":
@@ -80,7 +83,7 @@ func runWithRegistry(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 		result, runErr := spike.Execute(ctx, registry, flags.Arg(0), *parent, *maxOutput)
 		if result.SchemaVersion == "" {
-			fmt.Fprintf(stderr, "run spike: %v\n", runErr)
+			_, _ = fmt.Fprintf(stderr, "run spike: %v\n", runErr)
 			return 1
 		}
 		if code := encodeJSON(stdout, stderr, result); code != 0 {
@@ -96,7 +99,7 @@ func runWithRegistry(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 		inspection, err := spike.Inspect(args[1])
 		if err != nil {
-			fmt.Fprintf(stderr, "inspect spike root: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "inspect spike root: %v\n", err)
 			return 1
 		}
 		return encodeJSON(stdout, stderr, inspection)
@@ -105,7 +108,7 @@ func runWithRegistry(ctx context.Context, args []string, stdout, stderr io.Write
 			return usageError(stderr)
 		}
 		if err := spike.Cleanup(ctx, registry, args[1]); err != nil {
-			fmt.Fprintf(stderr, "cleanup spike root: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "cleanup spike root: %v\n", err)
 			return 1
 		}
 		return encodeJSON(stdout, stderr, struct {
@@ -122,13 +125,13 @@ func encodeJSON(stdout, stderr io.Writer, value any) int {
 	encoder := json.NewEncoder(stdout)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(value); err != nil {
-		fmt.Fprintf(stderr, "encode output: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "encode output: %v\n", err)
 		return 1
 	}
 	return 0
 }
 
 func usageError(stderr io.Writer) int {
-	fmt.Fprintln(stderr, "usage: abox-spike list [--json] | run [--parent DIR] [--max-output BYTES] <name> | inspect <root> | cleanup <root>")
+	_, _ = fmt.Fprintln(stderr, "usage: abox-spike list [--json] | run [--parent DIR] [--max-output BYTES] <name> | inspect <root> | cleanup <root>")
 	return 2
 }

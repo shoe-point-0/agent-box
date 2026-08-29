@@ -83,11 +83,11 @@ func TestRunnerHelperProcess(t *testing.T) {
 	arguments := os.Args[separator+1:]
 	switch arguments[0] {
 	case "output":
-		fmt.Fprint(os.Stdout, strings.Repeat("o", 32))
-		fmt.Fprint(os.Stderr, strings.Repeat("e", 32))
+		_, _ = fmt.Fprint(os.Stdout, strings.Repeat("o", 32))
+		_, _ = fmt.Fprint(os.Stderr, strings.Repeat("e", 32))
 		os.Exit(7)
 	case "literal":
-		fmt.Fprintln(os.Stdout, arguments[1])
+		_, _ = fmt.Fprintln(os.Stdout, arguments[1])
 		os.Exit(0)
 	case "sleep":
 		time.Sleep(10 * time.Second)

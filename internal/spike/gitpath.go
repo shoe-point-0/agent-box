@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"syscall"
 )
@@ -527,13 +526,4 @@ func regularFileInfos(root string) ([]fs.FileInfo, error) {
 		return nil, err
 	}
 	return files, nil
-}
-
-func sortedFixtureNames(fixtures []gitPathFixture) []string {
-	names := make([]string, 0, len(fixtures))
-	for _, fixture := range fixtures {
-		names = append(names, fixture.name)
-	}
-	sort.Strings(names)
-	return names
 }

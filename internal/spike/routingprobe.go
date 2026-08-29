@@ -381,10 +381,10 @@ func (backend *routingBackend) ServeHTTP(writer http.ResponseWriter, request *ht
 		_ = json.NewEncoder(writer).Encode(routingObservation{Backend: backend.name, Host: request.Host, Headers: request.Header.Clone()})
 	case "/browser":
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(writer, "<!doctype html><html><body>abox-browser-%s</body></html>", backend.name)
+		_, _ = fmt.Fprintf(writer, "<!doctype html><html><body>abox-browser-%s</body></html>", backend.name)
 	case "/sse":
 		writer.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(writer, "data: %s\n\n", backend.name)
+		_, _ = fmt.Fprintf(writer, "data: %s\n\n", backend.name)
 		if flusher, ok := writer.(http.Flusher); ok {
 			flusher.Flush()
 		}
@@ -618,9 +618,11 @@ func serveRoutingWebSocket(writer http.ResponseWriter, request *http.Request, ba
 	if err != nil {
 		return
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	acceptHash := sha1.Sum([]byte(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-	fmt.Fprintf(buffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", base64.StdEncoding.EncodeToString(acceptHash[:]))
+	if _, err := fmt.Fprintf(buffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", base64.StdEncoding.EncodeToString(acceptHash[:])); err != nil {
+		return
+	}
 	if err := buffer.Flush(); err != nil {
 		return
 	}
@@ -638,10 +640,12 @@ func exerciseRoutingWebSocket(ctx context.Context, port int, host, payload strin
 	if err != nil {
 		return fmt.Errorf("dial WebSocket route: %w", err)
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	_ = connection.SetDeadline(time.Now().Add(3 * time.Second))
 	key := base64.StdEncoding.EncodeToString([]byte("abox-routing-key"))
-	fmt.Fprintf(connection, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\n\r\n", host, key)
+	if _, err := fmt.Fprintf(connection, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\n\r\n", host, key); err != nil {
+		return fmt.Errorf("write WebSocket handshake: %w", err)
+	}
 	reader := bufio.NewReader(connection)
 	response, err := http.ReadResponse(reader, &http.Request{Method: http.MethodGet})
 	if err != nil {
@@ -844,7 +848,7 @@ func fetchStatus(ctx context.Context, targetURL string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, response.Body)
 	return response.StatusCode, nil
 }

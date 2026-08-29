@@ -90,7 +90,7 @@ func runComposeProbe(ctx context.Context, env *Environment) error {
 	}
 	baseImage = strings.TrimSpace(baseImage)
 	if !strings.Contains(baseImage, "@sha256:") {
-		return fmt.Errorf("Compose base image is not content-addressed: %q", baseImage)
+		return fmt.Errorf("compose base image is not content-addressed: %q", baseImage)
 	}
 
 	rootFile, overrideFile, repositories, images, err := writeComposeFixtures(tree, env.workspace.metadata.ID, baseImage)
@@ -191,7 +191,7 @@ func runComposeProbe(ctx context.Context, env *Environment) error {
 			OwnerLabel:       parts[3],
 		}
 		if !serviceResult.Running || serviceResult.Identity != expectedIdentity || !serviceResult.PortBindingsNone || !serviceResult.DockerPortEmpty || serviceResult.OwnerLabel != env.workspace.metadata.ID {
-			return fmt.Errorf("Compose service invariant failed: %+v", serviceResult)
+			return fmt.Errorf("compose service invariant failed: %+v", serviceResult)
 		}
 		services = append(services, serviceResult)
 	}
@@ -404,12 +404,12 @@ func cleanupComposeProject(ctx context.Context, workspace *Workspace, resource R
 		return err
 	}
 	if strings.TrimSpace(remaining) != "" {
-		return fmt.Errorf("Compose project still has containers after down: %s", remaining)
+		return fmt.Errorf("compose project still has containers after down: %s", remaining)
 	}
 	for _, image := range project.images {
 		result, inspectErr := (Runner{MaxOutput: defaultOutputLimit}).Run(ctx, Command{Argv: []string{"docker", "image", "inspect", image}, Env: os.Environ()})
 		if inspectErr == nil {
-			return fmt.Errorf("Compose project image still exists after down: %s", image)
+			return fmt.Errorf("compose project image still exists after down: %s", image)
 		}
 		if result.ExitCode == -1 {
 			return fmt.Errorf("inspect removed Compose image %s failed unexpectedly", image)

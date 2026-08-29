@@ -1,3 +1,8 @@
 # Python tooling
 __pycache__/
 *.py[cod]
+
+# Repository-local build and tool output
+/bin/
+/.tools/
+/nohup.out
