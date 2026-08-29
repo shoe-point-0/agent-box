@@ -16,6 +16,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/daemonclient"
+	"github.com/shoe-point-0/agent-box/internal/manifest"
 )
 
 type fakeDaemon struct {
@@ -81,18 +82,158 @@ func TestHelpExposesOnlyImplementedCommands(t *testing.T) {
 	if code := run(context.Background(), []string{"help"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("help code = %d", code)
 	}
-	for _, command := range []string{"up", "version", "help"} {
+	for _, command := range []string{"init", "up", "version", "help"} {
 		if !strings.Contains(stdout.String(), "  "+command) {
 			t.Errorf("help does not expose %q: %q", command, stdout.String())
 		}
 	}
-	for _, unavailable := range []string{"init", "plan", "list", "status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
+	for _, unavailable := range []string{"plan", "list", "status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
 		if strings.Contains(stdout.String(), "  "+unavailable+" ") {
 			t.Errorf("help claims unavailable command %q", unavailable)
 		}
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("help stderr = %q", stderr.String())
+	}
+}
+
+func TestInitCreatesDeterministicStrictManifestWithoutDaemonOrBoxState(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	deps := dependencies{
+		getwd: func() (string, error) { return root, nil },
+		userPaths: func() (daemon.UserPaths, error) {
+			panic("init contacted the daemon path provider")
+		},
+		newClient: func(string) (daemonAPI, error) {
+			panic("init constructed a daemon client")
+		},
+		startDaemon: func(daemon.UserPaths) (<-chan error, error) {
+			panic("init started the daemon")
+		},
+	}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"init"}, &stdout, &stderr, deps); code != contract.ExitOK {
+		t.Fatalf("init code = %d; stderr = %q", code, stderr.String())
+	}
+	manifestPath := filepath.Join(root, ".abox", "box.yaml")
+	if got, want := stdout.String(), "created "+manifestPath+"\n"; got != want {
+		t.Fatalf("init stdout = %q, want %q", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("init stderr = %q, want empty", stderr.String())
+	}
+	contents, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(contents), starterManifest; got != want {
+		t.Fatalf("starter manifest differs:\n%s", got)
+	}
+	info, err := os.Stat(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("manifest mode = %04o, want 0600", got)
+	}
+	loader, err := manifest.NewLoader([]string{root}, manifest.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := loader.Load(manifestPath)
+	if err != nil {
+		t.Fatalf("strict loader rejected starter manifest: %v", err)
+	}
+	if got := workspace.Spec.Repositories[0].CanonicalLocal; got != root {
+		t.Fatalf("starter repository = %q, want %q", got, root)
+	}
+	rootEntries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestEntries, err := os.ReadDir(filepath.Join(root, ".abox"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootEntries) != 1 || rootEntries[0].Name() != ".abox" || len(manifestEntries) != 1 || manifestEntries[0].Name() != "box.yaml" {
+		t.Fatalf("init created unexpected filesystem state: root=%v .abox=%v", rootEntries, manifestEntries)
+	}
+}
+
+func TestInitPreservesExistingManifestUnlessForced(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	directory := filepath.Join(root, ".abox")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "box.yaml")
+	original := []byte("existing manifest\n")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deps := dependencies{getwd: func() (string, error) { return root, nil }}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"init"}, &stdout, &stderr, deps); code != contract.ExitConflict {
+		t.Fatalf("init existing code = %d, want %d; stderr=%q", code, contract.ExitConflict, stderr.String())
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(contents, original) {
+		t.Fatalf("non-force init replaced existing manifest with %q", contents)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runWith(t.Context(), []string{"init", "--force"}, &stdout, &stderr, deps); code != contract.ExitOK {
+		t.Fatalf("forced init code = %d; stderr=%q", code, stderr.String())
+	}
+	contents, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(contents); got != starterManifest {
+		t.Fatalf("forced init content differs:\n%s", got)
+	}
+}
+
+func TestInitRefusesSymlinkedManifestDirectory(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	target := t.TempDir()
+	if err := os.Symlink(target, filepath.Join(root, ".abox")); err != nil {
+		t.Fatal(err)
+	}
+	deps := dependencies{getwd: func() (string, error) { return root, nil }}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"init", "--force"}, &stdout, &stderr, deps); code != contract.ExitPrerequisite {
+		t.Fatalf("symlink init code = %d, want %d; stderr=%q", code, contract.ExitPrerequisite, stderr.String())
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("symlink target was mutated: %v", entries)
+	}
+}
+
+func TestInitHelpAndArguments(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"init", "--force", "--force"}, {"init", "extra"}, {"init", "--help", "--force"}} {
+		var stdout, stderr bytes.Buffer
+		if code := runWith(t.Context(), args, &stdout, &stderr, dependencies{}); code != contract.ExitUsage {
+			t.Errorf("runWith(%v) code = %d, want %d", args, code, contract.ExitUsage)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"init", "--help"}, &stdout, &stderr, dependencies{}); code != contract.ExitOK {
+		t.Fatalf("init help code = %d", code)
+	}
+	if !strings.Contains(stdout.String(), "--force") || stderr.Len() != 0 {
+		t.Fatalf("init help stdout/stderr = %q/%q", stdout.String(), stderr.String())
 	}
 }
 

@@ -75,6 +75,27 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps 
 		}
 		return contract.ExitOK
 	}
+	if args[0] == "init" {
+		options, parseFailure := parseInit(args[1:])
+		if parseFailure != nil {
+			return reportFailure(stdout, stderr, false, parseFailure)
+		}
+		if options.help {
+			return writeInitHelp(stdout)
+		}
+		cwd, err := deps.getwd()
+		if err != nil {
+			return reportFailure(stdout, stderr, false, failure(contract.CodePrerequisiteFailed, "cannot resolve current directory"))
+		}
+		manifestPath, initFailure := initializeWorkspace(cwd, options.force)
+		if initFailure != nil {
+			return reportFailure(stdout, stderr, false, initFailure)
+		}
+		if _, err := fmt.Fprintf(stdout, "created %s\n", manifestPath); err != nil {
+			return contract.ExitInternal
+		}
+		return contract.ExitOK
+	}
 	if args[0] != "up" {
 		return reportFailure(stdout, stderr, false, failure(contract.CodeCLIUsage, "unknown command"))
 	}
@@ -359,11 +380,12 @@ func writeHelp(writer io.Writer) int {
 	_, err := fmt.Fprint(writer, `Usage: abox <command>
 
 Commands:
+  init     create a strict starter manifest without provisioning
   up       submit a versioned up request to aboxd
   version  print build version
   help     show this help
 
-Run "abox up --help" for command options.
+Run "abox <command> --help" for command options.
 `)
 	if err != nil {
 		return contract.ExitInternal
