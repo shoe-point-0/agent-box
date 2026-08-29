@@ -1,0 +1,35 @@
+apiVersion: abox.dev/v1alpha1
+kind: Workspace
+metadata:
+  name: compiler-fixture
+spec:
+  repositories:
+    - name: repo
+      source:
+        local: ../../repository
+      checkout:
+        ref: HEAD
+        branch: abox/{{ box.task }}/repo
+      workspacePath: services/repo
+  host:
+    cpus: 2500m
+    memory: 3GiB
+    disk: 20GiB
+  compose:
+    includes:
+      - repository: repo
+        path: compose.dev.yaml
+    profiles: [test, development, test]
+  workspaceService:
+    name: workspace
+    repository: repo
+    workingDirectory: services/repo
+  mounts:
+    - repository: repo
+      services: [worker, workspace, worker]
+      mode: read-write
+  policy:
+    gitMetadata: read-only
+    dockerSocket: deny
+    machineMounts: declared-only
+    networkEgress: deny

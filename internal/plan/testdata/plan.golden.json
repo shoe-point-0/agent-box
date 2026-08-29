@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "abox.plan/v1alpha1",
+  "workspaceId": "$WORKSPACE_ID",
+  "boxId": "$BOX_ID",
+  "taskKey": "TASK-16",
+  "manifest": {
+    "path": "$ROOT/workspace/.abox/box.yaml",
+    "digest": "sha256:d75ca45f7f26119d182472af985155daff1f2a4e1982bcebcf99a270f66d1dbe"
+  },
+  "repositories": [
+    {
+      "name": "repo",
+      "sourcePath": "$ROOT/repository",
+      "baseCommit": "0123456789abcdef0123456789abcdef01234567",
+      "branch": "abox/TASK-16/repo",
+      "worktreePath": "/state/boxes/$BOX_ID/workspace/services/repo",
+      "gitCommonDir": "/state/boxes/$BOX_ID/git/repo.git"
+    }
+  ],
+  "runtimeHost": {
+    "driver": "lima-qemu",
+    "instanceName": "abox-$BOX_ID",
+    "cpuMillicores": 2500,
+    "memoryBytes": 3221225472,
+    "diskBytes": 21474836480
+  },
+  "compose": {
+    "projectName": "abox-$BOX_ID",
+    "includes": [
+      {
+        "path": "/state/boxes/$BOX_ID/workspace/services/repo/compose.dev.yaml",
+        "digest": "sha256:04d816be2570a20f411783b3ea4779c34608cfbae4f4cad755fb67a1945c78fa"
+      }
+    ],
+    "profiles": ["development", "test"]
+  },
+  "workspaceService": {
+    "name": "workspace",
+    "repository": "repo",
+    "workingDirectory": "services/repo"
+  },
+  "mounts": [
+    {
+      "path": "/state/boxes/$BOX_ID/git/repo.git",
+      "services": ["worker", "workspace"],
+      "writable": false
+    },
+    {
+      "path": "/state/boxes/$BOX_ID/workspace/services/repo",
+      "services": ["worker", "workspace"],
+      "writable": true
+    }
+  ],
+  "tools": {
+    "agentBox": "0.1.0-dev",
+    "git": "2.51.0",
+    "lima": "2.0.0",
+    "docker": "28.3.3",
+    "compose": "2.39.1"
+  },
+  "planDigest": "$PLAN_DIGEST"
+}

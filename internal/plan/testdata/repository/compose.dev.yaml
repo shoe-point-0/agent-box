@@ -1,0 +1,6 @@
+services:
+  workspace:
+    image: alpine:3.22
+    command: ["sleep", "infinity"]
+  worker:
+    image: alpine:3.22
