@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abox.dev/schemas/output/v1alpha1",
+  "title": "Agent Box CLI Output v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operationId", "box", "repositories", "routes", "ports"],
+  "properties": {
+    "schemaVersion": {"const": "abox.output/v1alpha1"},
+    "operationId": {"type": "string", "pattern": "^op_[0-9A-Z]+$"},
+    "box": {"$ref": "#/$defs/box"},
+    "repositories": {"type": "array", "items": {"$ref": "#/$defs/repository"}},
+    "routes": {"type": "array", "items": {"$ref": "#/$defs/route"}},
+    "ports": {"type": "array", "items": {"$ref": "#/$defs/port"}}
+  },
+  "$defs": {
+    "absolutePath": {"type": "string", "pattern": "^/", "minLength": 2},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "box": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "taskKey", "state", "workspaceRoot", "generation", "planDigest"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "taskKey": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1}, "workspaceRoot": {"$ref": "#/$defs/absolutePath"},
+        "generation": {"type": "integer", "minimum": 0}, "planDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "repository": {
+      "type": "object", "additionalProperties": false, "required": ["name", "branch", "commit", "path", "dirty"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1}, "branch": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}, "path": {"$ref": "#/$defs/absolutePath"}, "dirty": {"type": "boolean"}
+      }
+    },
+    "route": {
+      "type": "object", "additionalProperties": false, "required": ["name", "url", "ready"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "url": {"type": "string", "pattern": "^http://"}, "ready": {"type": "boolean"}}
+    },
+    "port": {
+      "type": "object", "additionalProperties": false, "required": ["name", "host", "port", "ready"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "host": {"const": "127.0.0.1"}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}, "ready": {"type": "boolean"}}
+    }
+  }
+}

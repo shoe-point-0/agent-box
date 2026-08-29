@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "abox.error/v1alpha1",
+  "code": "ABOX_GIT_DIRTY_SOURCE",
+  "message": "repository source is dirty",
+  "resource": "payments",
+  "retryable": false
+}

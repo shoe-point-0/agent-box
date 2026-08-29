@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "abox.context/v1alpha1",
+  "box": {
+    "id": "auth-142-3m6y4k2p",
+    "taskKey": "AUTH-142",
+    "state": "READY",
+    "generation": 4,
+    "planDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "workspace": {
+    "id": "ws_h7n2x0m4",
+    "manifestPath": "/work/billing/.abox/box.yaml",
+    "root": "/state/boxes/auth-142-3m6y4k2p/workspace"
+  },
+  "repositories": [
+    {
+      "name": "payments",
+      "branch": "abox/auth-142/payments",
+      "baseCommit": "b6ea6ef0d5746f61f1a72df9c9e44abdb19d472a",
+      "path": "/state/boxes/auth-142-3m6y4k2p/workspace/services/payments"
+    }
+  ],
+  "workspaceService": {
+    "name": "payments-api",
+    "workingDirectory": "services/payments"
+  },
+  "services": [
+    {"name": "payments-api", "ready": true}
+  ],
+  "routes": [],
+  "ports": [],
+  "commands": [
+    {"name": "test", "argv": ["go", "test", "./..."]},
+    {"name": "status", "argv": ["abox", "status", "AUTH-142"]}
+  ],
+  "policy": {
+    "gitMetadata": "read-write",
+    "dockerSocket": "deny",
+    "machineMounts": "declared-only",
+    "networkEgress": "allow"
+  },
+  "durability": "filesystem synchronization provides operational redundancy; Git provides history and recovery; uncommitted work and unpushed commits are not backed up"
+}

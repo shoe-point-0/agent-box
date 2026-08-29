@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abox.dev/schemas/error/v1alpha1",
+  "title": "Agent Box Error v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "code", "message", "retryable"],
+  "properties": {
+    "schemaVersion": {"const": "abox.error/v1alpha1"},
+    "code": {
+      "enum": [
+        "ABOX_API_INCOMPATIBLE", "ABOX_BRANCH_CONFLICT", "ABOX_CLEANUP_REFUSED", "ABOX_CLI_USAGE",
+        "ABOX_DAEMON_UNAVAILABLE", "ABOX_FEATURE_NOT_SUPPORTED", "ABOX_GIT_DIRTY_SOURCE",
+        "ABOX_IDENTITY_CONFLICT", "ABOX_INFRASTRUCTURE_APPLY_FAILED", "ABOX_INTERNAL_INVARIANT",
+        "ABOX_MACHINE_UNSUPPORTED", "ABOX_MANIFEST_INVALID", "ABOX_NOT_FOUND", "ABOX_OPERATION_CONFLICT",
+        "ABOX_OWNERSHIP_CONFLICT", "ABOX_PREREQUISITE_FAILED", "ABOX_ROUTE_NOT_READY", "ABOX_SERVICE_NOT_READY"
+      ]
+    },
+    "message": {"type": "string", "minLength": 1},
+    "field": {"type": "string", "minLength": 1},
+    "resource": {"type": "string", "minLength": 1},
+    "retryable": {"type": "boolean"}
+  }
+}

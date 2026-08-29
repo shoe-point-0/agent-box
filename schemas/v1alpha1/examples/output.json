@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "abox.output/v1alpha1",
+  "operationId": "op_01K4M8T4Y8DMG0RMPV3YYPS8RA",
+  "box": {
+    "id": "auth-142-3m6y4k2p",
+    "taskKey": "AUTH-142",
+    "state": "READY",
+    "workspaceRoot": "/state/boxes/auth-142-3m6y4k2p/workspace",
+    "generation": 4,
+    "planDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "repositories": [
+    {
+      "name": "payments",
+      "branch": "abox/auth-142/payments",
+      "commit": "b6ea6ef0d5746f61f1a72df9c9e44abdb19d472a",
+      "path": "/state/boxes/auth-142-3m6y4k2p/workspace/services/payments",
+      "dirty": false
+    }
+  ],
+  "routes": [],
+  "ports": []
+}

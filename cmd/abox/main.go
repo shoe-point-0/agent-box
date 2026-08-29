@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/version"
 )
 
@@ -23,5 +24,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	_, _ = fmt.Fprintln(stderr, "abox: no product commands are implemented yet; use --version")
-	return 2
+	return contract.ExitUsage
 }

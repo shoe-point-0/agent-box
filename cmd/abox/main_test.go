@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/shoe-point-0/agent-box/internal/contract"
 )
 
 func TestRunReportsVersion(t *testing.T) {
@@ -32,8 +34,8 @@ func TestRunRejectsUnimplementedCommands(t *testing.T) {
 	t.Parallel()
 
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"up"}, &stdout, &stderr); code != 2 {
-		t.Fatalf("run(up) code = %d, want 2", code)
+	if code := run([]string{"up"}, &stdout, &stderr); code != contract.ExitUsage {
+		t.Fatalf("run(up) code = %d, want %d", code, contract.ExitUsage)
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("run(up) stdout = %q, want empty", stdout.String())

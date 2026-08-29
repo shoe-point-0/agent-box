@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "abox.plan/v1alpha1",
+  "workspaceId": "ws_h7n2x0m4",
+  "boxId": "auth-142-3m6y4k2p",
+  "taskKey": "AUTH-142",
+  "manifest": {
+    "path": "/work/billing/.abox/box.yaml",
+    "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "repositories": [
+    {
+      "name": "payments",
+      "sourcePath": "/work/billing/payments",
+      "baseCommit": "b6ea6ef0d5746f61f1a72df9c9e44abdb19d472a",
+      "branch": "abox/auth-142/payments",
+      "worktreePath": "/state/boxes/auth-142-3m6y4k2p/workspace/services/payments",
+      "gitCommonDir": "/state/boxes/auth-142-3m6y4k2p/git/payments.git"
+    }
+  ],
+  "runtimeHost": {
+    "driver": "lima-qemu",
+    "instanceName": "abox-auth-142-3m6y4k2p",
+    "cpuMillicores": 6000,
+    "memoryBytes": 12884901888,
+    "diskBytes": 64424509440
+  },
+  "compose": {
+    "projectName": "abox-auth-142-3m6y4k2p",
+    "includes": [
+      {
+        "path": "/state/boxes/auth-142-3m6y4k2p/workspace/services/payments/compose.dev.yaml",
+        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ],
+    "profiles": ["development"]
+  },
+  "workspaceService": {
+    "name": "payments-api",
+    "repository": "payments",
+    "workingDirectory": "services/payments"
+  },
+  "mounts": [
+    {
+      "path": "/state/boxes/auth-142-3m6y4k2p/workspace/services/payments",
+      "services": ["payments-api"],
+      "writable": true
+    },
+    {
+      "path": "/state/boxes/auth-142-3m6y4k2p/git/payments.git",
+      "services": ["payments-api"],
+      "writable": true
+    }
+  ],
+  "tools": {
+    "agentBox": "0.1.0-dev",
+    "git": "2.51.0",
+    "lima": "2.0.0",
+    "docker": "28.3.3",
+    "compose": "2.39.1"
+  },
+  "planDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+}
