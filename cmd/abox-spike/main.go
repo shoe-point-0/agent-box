@@ -29,6 +29,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "initialize Compose probe: %v\n", err)
 		return 1
 	}
+	if err := spike.RegisterRoutingProbe(registry); err != nil {
+		fmt.Fprintf(stderr, "initialize routing probe: %v\n", err)
+		return 1
+	}
 	return runWithRegistry(context.Background(), args, stdout, stderr, registry)
 }
 
