@@ -68,7 +68,10 @@ func TestRealGitAdversarialExecutionProfile(t *testing.T) {
 		"top level":      func() (process.Result, error) { return client.TopLevel(context.Background(), repository) },
 		"status":         func() (process.Result, error) { return client.Status(context.Background(), repository) },
 		"resolve commit": func() (process.Result, error) { return client.ResolveCommit(context.Background(), repository, "HEAD") },
-		"reachability":   func() (process.Result, error) { return client.IsAncestor(context.Background(), repository, base, tip) },
+		"check branch": func() (process.Result, error) {
+			return client.CheckBranch(context.Background(), repository, "abox/demo")
+		},
+		"reachability": func() (process.Result, error) { return client.IsAncestor(context.Background(), repository, base, tip) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := invoke()
@@ -225,6 +228,7 @@ func TestCommandUsesOnlyControlledEnvironmentAndExplicitCredentials(t *testing.T
 	for key, want := range map[string]string{
 		"GIT_CONFIG_GLOBAL": nullPath, "GIT_CONFIG_SYSTEM": nullPath,
 		"GIT_CONFIG_NOSYSTEM": "1", "GIT_PROTOCOL_FROM_USER": "0",
+		"GIT_OPTIONAL_LOCKS": "0",
 		"GIT_ALLOW_PROTOCOL": "ssh", "GIT_TERMINAL_PROMPT": "0",
 		"GIT_ASKPASS": credentials.AskPass, "GIT_SSH": credentials.SSH,
 		"SSH_AUTH_SOCK": credentials.SSHAuthSock,

@@ -22,6 +22,11 @@ const (
 
 var ErrPolicy = errors.New("machine git policy refusal")
 
+// Result is the observation returned by the hardened Git boundary. The alias
+// lets callers define narrow Git interfaces without importing the subprocess
+// package and bypassing the production boundary guard.
+type Result = process.Result
+
 // Executor is implemented by process.Runner. Tests may substitute a recorder.
 type Executor interface {
 	Run(context.Context, process.Command) (process.Result, error)
@@ -78,6 +83,16 @@ func (c Client) ResolveCommit(ctx context.Context, repository, ref string) (proc
 		return process.Result{}, refuse("ref", "must be HEAD, a full ref, or a full object ID")
 	}
 	return c.run(ctx, repository, noTransport, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+}
+
+// CheckBranch validates one intended local branch name through Git's own
+// ref-format rules. Callers must require stdout to equal branch exactly because
+// --branch can otherwise expand previous-checkout syntax.
+func (c Client) CheckBranch(ctx context.Context, repository, branch string) (process.Result, error) {
+	if branch == "" || strings.HasPrefix(branch, "-") || hasControl(branch) || len(branch) > maxRefLength {
+		return process.Result{}, refuse("branch", "must be a bounded branch name without options or control characters")
+	}
+	return c.run(ctx, repository, noTransport, "check-ref-format", "--branch", branch)
 }
 
 // InitBare creates an empty private store. Object transfer is deliberately a
@@ -242,6 +257,7 @@ func (c Client) command(directory string, transport transport, arguments ...stri
 		"GIT_TERMINAL_PROMPT":    "0",
 		"GIT_PROTOCOL_FROM_USER": "0",
 		"GIT_NO_REPLACE_OBJECTS": "1",
+		"GIT_OPTIONAL_LOCKS":     "0",
 		"GIT_PAGER":              "cat",
 		"PAGER":                  "cat",
 		"GIT_EDITOR":             falsePath,
