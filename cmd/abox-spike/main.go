@@ -16,6 +16,13 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 2 && args[0] == "__failure-worker" {
+		if err := spike.RunFailureWorker(context.Background(), args[1]); err != nil {
+			fmt.Fprintf(stderr, "failure worker: %v\n", err)
+			return 1
+		}
+		return 0
+	}
 	registry := spike.NewRegistry()
 	if err := spike.RegisterHarnessSmoke(registry); err != nil {
 		fmt.Fprintf(stderr, "initialize spike registry: %v\n", err)
@@ -31,6 +38,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if err := spike.RegisterRoutingProbe(registry); err != nil {
 		fmt.Fprintf(stderr, "initialize routing probe: %v\n", err)
+		return 1
+	}
+	if err := spike.RegisterFailureMatrix(registry); err != nil {
+		fmt.Fprintf(stderr, "initialize failure matrix: %v\n", err)
 		return 1
 	}
 	return runWithRegistry(context.Background(), args, stdout, stderr, registry)
