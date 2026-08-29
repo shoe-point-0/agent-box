@@ -1,6 +1,6 @@
 # ADR 0001: Gate implementation on measured substrate evidence
 
-- Status: Accepted for the Linux implementation lane
+- Status: Accepted
 - Date: 2026-08-29
 - Scope: Milestone 0 substrate decisions only
 
