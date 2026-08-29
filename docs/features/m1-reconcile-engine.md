@@ -77,6 +77,12 @@ Implement the operation DAG engine
   failure before mutation, partial-create compensation, current-attempt-only
   compensation, and bounded cleanup after request cancellation.
 - `go test -race -count=10 ./...` passed across every Go package after closure.
+- A post-closure adversarial review found that canceled request contexts could
+  suppress apply-result events, compensation after-events shared the exhausted
+  cleanup context, and parallel completion order was discarded. The correction
+  gives every after-event its own explicit timeout and preserves completion
+  order for reverse compensation. The dedicated regression tests passed under
+  `go test -race -count=50 ./internal/reconcile`.
 - `make check` passed: golangci-lint reported `0 issues`; module tidiness and
   verification, `go test ./...`, `go test -race ./...`, `go vet ./...`, Linux
   builds, spike smoke, shell syntax, and Python automation tests all passed.

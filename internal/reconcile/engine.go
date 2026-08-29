@@ -67,6 +67,7 @@ type Recorder interface {
 type Config struct {
 	MaxParallel         int
 	CompensationTimeout time.Duration
+	AfterEventTimeout   time.Duration
 	Recorder            Recorder
 }
 
@@ -75,6 +76,7 @@ type Config struct {
 type Engine struct {
 	maxParallel         int
 	compensationTimeout time.Duration
+	afterEventTimeout   time.Duration
 	recorder            Recorder
 	executionMutex      sync.Mutex
 }
@@ -87,12 +89,16 @@ func New(config Config) (*Engine, error) {
 	if config.CompensationTimeout <= 0 {
 		return nil, errors.New("create reconcile engine: compensation timeout must be positive")
 	}
+	if config.AfterEventTimeout <= 0 {
+		return nil, errors.New("create reconcile engine: after-event timeout must be positive")
+	}
 	if config.Recorder == nil {
 		return nil, errors.New("create reconcile engine: recorder is nil")
 	}
 	return &Engine{
 		maxParallel:         config.MaxParallel,
 		compensationTimeout: config.CompensationTimeout,
+		afterEventTimeout:   config.AfterEventTimeout,
 		recorder:            config.Recorder,
 	}, nil
 }
@@ -135,12 +141,10 @@ func (e *Engine) Execute(ctx context.Context, operations []Operation) error {
 		batch := slices.Clone(ready[:limit])
 		ready = ready[limit:]
 
-		results := e.runBatch(ctx, g.operations, batch)
+		results, batchCreated := e.runBatch(ctx, g.operations, batch)
+		created = append(created, batchCreated...)
 		var executionErr error
 		for _, result := range results {
-			if result.applied != nil {
-				created = append(created, *result.applied)
-			}
 			if result.err != nil {
 				if executionErr == nil {
 					executionErr = fmt.Errorf("operation %q: %w", result.key, result.err)
@@ -166,18 +170,28 @@ func (e *Engine) Execute(ctx context.Context, operations []Operation) error {
 	return nil
 }
 
-func (e *Engine) runBatch(ctx context.Context, operations map[string]Operation, keys []string) []stepResult {
-	results := make([]stepResult, len(keys))
-	var group sync.WaitGroup
-	for index, key := range keys {
-		group.Add(1)
+func (e *Engine) runBatch(ctx context.Context, operations map[string]Operation, keys []string) ([]stepResult, []applied) {
+	completed := make(chan stepResult, len(keys))
+	for _, key := range keys {
 		go func() {
-			defer group.Done()
-			results[index] = e.runStep(ctx, key, operations[key])
+			completed <- e.runStep(ctx, key, operations[key])
 		}()
 	}
-	group.Wait()
-	return results
+	results := make([]stepResult, 0, len(keys))
+	created := make([]applied, 0, len(keys))
+	for range keys {
+		result := <-completed
+		results = append(results, result)
+		if result.applied != nil {
+			created = append(created, *result.applied)
+		}
+	}
+	// Graph advancement and primary error selection remain deterministic while
+	// created preserves completion order for reverse-order compensation.
+	slices.SortFunc(results, func(left, right stepResult) int {
+		return strings.Compare(left.key, right.key)
+	})
+	return results, created
 }
 
 func (e *Engine) runStep(ctx context.Context, key string, operation Operation) stepResult {
@@ -197,7 +211,7 @@ func (e *Engine) runStep(ctx context.Context, key string, operation Operation) s
 	if applyErr != nil {
 		transition.Kind = TransitionApplyFailed
 	}
-	recordErr := e.recorder.Record(ctx, transition)
+	recordErr := e.recordAfterSideEffect(ctx, transition)
 
 	step := stepResult{key: key}
 	if result.Created {
@@ -231,7 +245,7 @@ func (e *Engine) compensate(ctx context.Context, created []applied) error {
 		if err != nil {
 			transition.Kind = TransitionCompensationFailed
 		}
-		recordErr := e.recorder.Record(cleanupContext, transition)
+		recordErr := e.recordAfterSideEffect(cleanupContext, transition)
 		if err != nil || recordErr != nil {
 			compensationErr = errors.Join(compensationErr,
 				fmt.Errorf("operation %q compensate: %w", key, errors.Join(err, wrapIf(recordErr, "persist compensation result"))))
@@ -241,6 +255,15 @@ func (e *Engine) compensate(ctx context.Context, created []applied) error {
 		return fmt.Errorf("compensation: %w", compensationErr)
 	}
 	return nil
+}
+
+// recordAfterSideEffect gets a fresh bounded context because the side effect
+// may have completed while consuming or canceling the request context. Losing
+// the matching after-event would unnecessarily force unknown-partial recovery.
+func (e *Engine) recordAfterSideEffect(parent context.Context, transition Transition) error {
+	recordContext, cancel := context.WithTimeout(context.WithoutCancel(parent), e.afterEventTimeout)
+	defer cancel()
+	return e.recorder.Record(recordContext, transition)
 }
 
 func validate(operations []Operation) (graph, error) {

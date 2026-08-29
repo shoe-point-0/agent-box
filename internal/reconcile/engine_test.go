@@ -159,6 +159,53 @@ func TestFailedApplyCanCompensateItsCreatedPartialResult(t *testing.T) {
 	}
 }
 
+func TestCompensationReversesParallelCompletionOrder(t *testing.T) {
+	t.Parallel()
+	bReturning := make(chan struct{})
+	allowA := make(chan struct{})
+	var mutex sync.Mutex
+	var compensated []string
+	created := func(key string, apply func(context.Context, Observation) (Result, error)) Operation {
+		return &fakeOperation{
+			key:   key,
+			apply: apply,
+			compensate: func(context.Context, Result) error {
+				mutex.Lock()
+				defer mutex.Unlock()
+				compensated = append(compensated, key)
+				return nil
+			},
+		}
+	}
+	a := created("a", func(context.Context, Observation) (Result, error) {
+		<-allowA
+		return Result{Created: true}, nil
+	})
+	b := created("b", func(context.Context, Observation) (Result, error) {
+		close(bReturning)
+		return Result{Created: true}, nil
+	})
+	failure := &fakeOperation{
+		key: "failure", dependencies: []string{"a", "b"},
+		apply: func(context.Context, Observation) (Result, error) {
+			return Result{}, errors.New("injected")
+		},
+	}
+	engine := newTestEngine(t, 2, &memoryRecorder{})
+	done := make(chan error, 1)
+	go func() { done <- engine.Execute(t.Context(), []Operation{a, b, failure}) }()
+	<-bReturning
+	// Let b cross the engine's completion boundary before allowing a to return.
+	time.Sleep(20 * time.Millisecond)
+	close(allowA)
+	if err := <-done; err == nil {
+		t.Fatal("Execute() succeeded despite injected failure")
+	}
+	if !slices.Equal(compensated, []string{"a", "b"}) {
+		t.Fatalf("compensation order = %v, want reverse completion [a b]", compensated)
+	}
+}
+
 func TestParallelismIsBoundedAndDependenciesWait(t *testing.T) {
 	t.Parallel()
 	started := make(chan string, 4)
@@ -361,6 +408,36 @@ func TestCompensationUsesFreshBoundedContextAfterCancellation(t *testing.T) {
 	}
 }
 
+func TestApplyResultEventUsesFreshBoundedContextAfterCancellation(t *testing.T) {
+	t.Parallel()
+	requestContext, cancel := context.WithCancel(t.Context())
+	var resultRecorded atomic.Bool
+	recorder := recorderFunc(func(ctx context.Context, transition Transition) error {
+		if transition.Kind != TransitionApplyFailed {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return fmt.Errorf("after-event context already canceled: %w", ctx.Err())
+		}
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("after-event context has no deadline")
+		}
+		resultRecorded.Store(true)
+		return nil
+	})
+	operation := &fakeOperation{key: "resource", apply: func(context.Context, Observation) (Result, error) {
+		cancel()
+		return Result{}, context.Canceled
+	}}
+	engine := newTestEngine(t, 1, recorder)
+	if err := engine.Execute(requestContext, []Operation{operation}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want context.Canceled", err)
+	}
+	if !resultRecorded.Load() {
+		t.Fatal("apply result event was not recorded after request cancellation")
+	}
+}
+
 type fakeOperation struct {
 	key          string
 	dependencies []string
@@ -404,6 +481,12 @@ type memoryRecorder struct {
 	failKind    string
 }
 
+type recorderFunc func(context.Context, Transition) error
+
+func (record recorderFunc) Record(ctx context.Context, transition Transition) error {
+	return record(ctx, transition)
+}
+
 func (r *memoryRecorder) Record(_ context.Context, transition Transition) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -431,7 +514,10 @@ func (r *memoryRecorder) kinds() []string {
 
 func newTestEngine(t *testing.T, maxParallel int, recorder Recorder) *Engine {
 	t.Helper()
-	engine, err := New(Config{MaxParallel: maxParallel, CompensationTimeout: time.Second, Recorder: recorder})
+	engine, err := New(Config{
+		MaxParallel: maxParallel, CompensationTimeout: time.Second,
+		AfterEventTimeout: time.Second, Recorder: recorder,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,9 +535,10 @@ func createdResult(context.Context, Observation) (Result, error) {
 func TestNewRejectsUnsafeConfiguration(t *testing.T) {
 	t.Parallel()
 	tests := []Config{
-		{MaxParallel: 0, CompensationTimeout: time.Second, Recorder: &memoryRecorder{}},
-		{MaxParallel: 1, CompensationTimeout: 0, Recorder: &memoryRecorder{}},
-		{MaxParallel: 1, CompensationTimeout: time.Second},
+		{MaxParallel: 0, CompensationTimeout: time.Second, AfterEventTimeout: time.Second, Recorder: &memoryRecorder{}},
+		{MaxParallel: 1, CompensationTimeout: 0, AfterEventTimeout: time.Second, Recorder: &memoryRecorder{}},
+		{MaxParallel: 1, CompensationTimeout: time.Second, AfterEventTimeout: 0, Recorder: &memoryRecorder{}},
+		{MaxParallel: 1, CompensationTimeout: time.Second, AfterEventTimeout: time.Second},
 	}
 	for _, config := range tests {
 		if engine, err := New(config); err == nil || !reflect.ValueOf(engine).IsNil() {
