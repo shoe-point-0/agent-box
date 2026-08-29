@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-var expectedV1Tables = []string{
+var expectedTables = []string{
 	"box_generations",
 	"boxes",
 	"compose_projects",
@@ -224,7 +224,7 @@ func TestOpenRejectsNewerSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`PRAGMA user_version = 2`); err != nil {
+	if _, err := db.Exec(`PRAGMA user_version = ` + strconv.Itoa(CurrentSchemaVersion+1)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -358,8 +358,8 @@ func assertSchema(t *testing.T, db *sql.DB) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(tables, expectedV1Tables) {
-		t.Fatalf("tables = %v, want %v", tables, expectedV1Tables)
+	if !slices.Equal(tables, expectedTables) {
+		t.Fatalf("tables = %v, want %v", tables, expectedTables)
 	}
 	for _, deferred := range []string{"routes", "port_allocations", "setup_stamps"} {
 		if slices.Contains(tables, deferred) {
