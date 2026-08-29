@@ -273,6 +273,31 @@ func (j *Journal) Events(ctx context.Context, operationID string, afterSequence 
 	return events, nil
 }
 
+// Operation returns one persisted operation by its stable identity. It is used
+// by transports that must stop an attached event stream only after the durable
+// terminal state is visible.
+func (j *Journal) Operation(ctx context.Context, operationID string) (Operation, error) {
+	if err := validateOpaque("operation ID", operationID); err != nil {
+		return Operation{}, fmt.Errorf("read operation: %w", err)
+	}
+	var operation Operation
+	var found bool
+	err := j.store.View(ctx, func(tx *sql.Tx) error {
+		var err error
+		operation, found, err = scanOperation(tx.QueryRowContext(ctx, `SELECT id, box_id, idempotency_key, kind,
+			request_digest, recorded_state, started_at, finished_at, COALESCE(error_code, '')
+			FROM operations WHERE id = ?`, operationID))
+		return err
+	})
+	if err != nil {
+		return Operation{}, fmt.Errorf("read operation: %w", err)
+	}
+	if !found {
+		return Operation{}, fmt.Errorf("read operation: %w", ErrNotFound)
+	}
+	return operation, nil
+}
+
 // StreamItem contains either one event or a terminal stream error.
 type StreamItem struct {
 	Event Event
