@@ -116,6 +116,9 @@ func Compile(ctx context.Context, input Input) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("normalize Compose root: %w", err)
 	}
+	if err := validatePolicy(baseline, input.Plan, false); err != nil {
+		return Result{}, err
+	}
 	services, err := serviceNames(baseline)
 	if err != nil {
 		return Result{}, fmt.Errorf("inspect Compose root: %w", err)
@@ -131,6 +134,9 @@ func Compile(ctx context.Context, input Input) (Result, error) {
 	resolved, err := normalize(ctx, input, stagedRootPath, stagedOverridePath)
 	if err != nil {
 		return Result{}, fmt.Errorf("normalize adapted Compose model: %w", err)
+	}
+	if err := validatePolicy(resolved, input.Plan, true); err != nil {
+		return Result{}, err
 	}
 	canonical, err := validateAndCanonicalize(resolved, input.Plan, input.Generation, services, input.Secrets)
 	if err != nil {

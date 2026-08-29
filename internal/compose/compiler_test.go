@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -124,6 +125,92 @@ func TestCompileRefusesPublicationOrUnredactedSecret(t *testing.T) {
 			t.Fatalf("Compile(unredacted secret) error = %v", err)
 		}
 	})
+}
+
+func TestCompileRejectsForbiddenNormalizedPolicyBeforeApply(t *testing.T) {
+	tests := []struct {
+		name      string
+		field     string
+		configure func(contract.Plan, map[string]any)
+	}{
+		{"privileged", "services.workspace.privileged", setServiceField("privileged", true)},
+		{"host network", "services.workspace.network_mode", setServiceField("network_mode", "host")},
+		{"host PID", "services.workspace.pid", setServiceField("pid", "host")},
+		{"host IPC", "services.workspace.ipc", setServiceField("ipc", "host")},
+		{"host UTS", "services.workspace.uts", setServiceField("uts", "host")},
+		{"host user namespace", "services.workspace.userns_mode", setServiceField("userns_mode", "host")},
+		{"host cgroup namespace", "services.workspace.cgroup", setServiceField("cgroup", "host")},
+		{"capability addition", "services.workspace.cap_add", setServiceField("cap_add", []any{"SYS_ADMIN"})},
+		{"seccomp unconfined", "services.workspace.security_opt[0]", setServiceField("security_opt", []any{"seccomp=unconfined"})},
+		{"AppArmor unconfined", "services.workspace.security_opt[0]", setServiceField("security_opt", []any{"apparmor=unconfined"})},
+		{"SELinux disabled", "services.workspace.security_opt[0]", setServiceField("security_opt", []any{"label=disable"})},
+		{"device", "services.workspace.devices[0]", setServiceField("devices", []any{map[string]any{"source": "/dev/null", "target": "/dev/xnull", "permissions": "rwm"}})},
+		{"device cgroup rule", "services.workspace.device_cgroup_rules[0]", setServiceField("device_cgroup_rules", []any{"c 1:3 rwm"})},
+		{"Docker socket source", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "bind", "source": "/var/run/docker.sock", "target": "/socket"})},
+		{"Docker socket target", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "volume", "source": "docker-api", "target": "/run/docker.sock"})},
+		{"proc mount", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "bind", "source": "/proc", "target": "/mnt/proc"})},
+		{"sys mount", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "volume", "source": "sys", "target": "/sys/kernel"})},
+		{"dev mount", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "tmpfs", "target": "/dev/shm/foreign"})},
+		{"cgroup mount", "services.workspace.volumes[0]", replaceFirstVolume(map[string]any{"type": "volume", "source": "cgroup", "target": "/sys/fs/cgroup"})},
+		{"undeclared bind", "services.workspace.volumes[0].source", replaceFirstVolume(map[string]any{"type": "bind", "source": "/opt/foreign", "target": "/opt/foreign"})},
+		{"rewritten bind target", "services.workspace.volumes[0].target", mutateFirstVolume("target", "/workspace")},
+		{"widened bind access", "services.workspace.volumes[0].read_only", mutateReadOnlyPlanBind},
+		{"shared bind propagation", "services.workspace.volumes[0].bind.propagation", mutateFirstVolume("bind", map[string]any{"propagation": "rshared"})},
+		{"missing Plan bind", "services.workspace.volumes", removeFirstVolume},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			compiled, outputDirectory, _ := fixturePlan(t, "2.39.1")
+			overlay := map[string]any{}
+			test.configure(compiled, overlay)
+			runner := &fakeRunner{outputs: [][]byte{
+				[]byte("2.39.1\n"),
+				[]byte(`{"services":{"workspace":{},"worker":{}}}`),
+				adaptedModel(t, compiled, map[string]any{"workspace": overlay}),
+			}}
+			_, err := compose.Compile(context.Background(), compose.Input{
+				Plan: compiled, Directory: outputDirectory, Generation: generation,
+				ComposeCommand: []string{"docker", "compose"}, Runner: runner,
+			})
+			var violation *compose.PolicyViolation
+			if !errors.As(err, &violation) {
+				t.Fatalf("Compile() error = %v, want PolicyViolation", err)
+			}
+			if violation.Service != "workspace" || violation.Field != test.field {
+				t.Fatalf("violation = %+v, want service workspace field %s", violation, test.field)
+			}
+			if len(runner.commands) != 3 {
+				t.Fatalf("commands = %d, want version plus two config-only normalizations", len(runner.commands))
+			}
+			for _, command := range runner.commands {
+				for _, forbidden := range []string{"pull", "build", "create", "up", "start"} {
+					if slices.Contains(command.Argv, forbidden) {
+						t.Fatalf("policy refusal executed forbidden command %q: %q", forbidden, command.Argv)
+					}
+				}
+			}
+			for _, artifact := range []string{compose.RootFileName, compose.OverrideFileName, compose.ResolvedModelFileName} {
+				if _, statErr := os.Stat(filepath.Join(outputDirectory, artifact)); !os.IsNotExist(statErr) {
+					t.Fatalf("artifact %s exists after policy refusal: %v", artifact, statErr)
+				}
+			}
+		})
+	}
+}
+
+func TestCompileAllowsNoNewPrivilegesSecurityOption(t *testing.T) {
+	compiled, outputDirectory, _ := fixturePlan(t, "2.39.1")
+	adapted := adaptedModel(t, compiled, map[string]any{"workspace": map[string]any{
+		"security_opt": []any{"no-new-privileges=true"},
+	}})
+	runner := &fakeRunner{outputs: [][]byte{[]byte("2.39.1\n"), []byte(`{"services":{"workspace":{},"worker":{}}}`), adapted}}
+	if _, err := compose.Compile(context.Background(), compose.Input{
+		Plan: compiled, Directory: outputDirectory, Generation: generation,
+		ComposeCommand: []string{"docker", "compose"}, Runner: runner,
+	}); err != nil {
+		t.Fatalf("Compile(no-new-privileges) error = %v", err)
+	}
 }
 
 func TestCompileNormalizesWithRealPinnedCompose(t *testing.T) {
@@ -335,6 +422,14 @@ func adaptedModel(t *testing.T, compiled contract.Plan, overlays map[string]any)
 		"worker":    map[string]any{"labels": labels},
 		"workspace": map[string]any{"labels": labels, "build": map[string]any{"context": compiled.Repositories[0].WorktreePath}},
 	}
+	for _, mount := range compiled.Mounts {
+		for _, serviceName := range mount.Services {
+			service := services[serviceName].(map[string]any)
+			service["volumes"] = append(serviceVolumes(service), map[string]any{
+				"type": "bind", "source": mount.Path, "target": mount.Path, "read_only": !mount.Writable,
+			})
+		}
+	}
 	for name, overlay := range overlays {
 		service := services[name].(map[string]any)
 		for key, value := range overlay.(map[string]any) {
@@ -346,6 +441,56 @@ func adaptedModel(t *testing.T, compiled contract.Plan, overlays map[string]any)
 		t.Fatal(err)
 	}
 	return encoded
+}
+
+func serviceVolumes(service map[string]any) []any {
+	volumes, _ := service["volumes"].([]any)
+	return volumes
+}
+
+func setServiceField(field string, value any) func(contract.Plan, map[string]any) {
+	return func(_ contract.Plan, service map[string]any) {
+		service[field] = value
+	}
+}
+
+func replaceFirstVolume(replacement map[string]any) func(contract.Plan, map[string]any) {
+	return func(compiled contract.Plan, service map[string]any) {
+		volumes := plannedServiceVolumes(compiled, "workspace")
+		volumes[0] = replacement
+		service["volumes"] = volumes
+	}
+}
+
+func mutateFirstVolume(field string, value any) func(contract.Plan, map[string]any) {
+	return func(compiled contract.Plan, service map[string]any) {
+		volumes := plannedServiceVolumes(compiled, "workspace")
+		volumes[0].(map[string]any)[field] = value
+		service["volumes"] = volumes
+	}
+}
+
+func mutateReadOnlyPlanBind(compiled contract.Plan, service map[string]any) {
+	volumes := plannedServiceVolumes(compiled, "workspace")
+	volume := volumes[0].(map[string]any)
+	volume["read_only"] = !volume["read_only"].(bool)
+	service["volumes"] = volumes
+}
+
+func removeFirstVolume(compiled contract.Plan, service map[string]any) {
+	service["volumes"] = plannedServiceVolumes(compiled, "workspace")[1:]
+}
+
+func plannedServiceVolumes(compiled contract.Plan, service string) []any {
+	var volumes []any
+	for _, mount := range compiled.Mounts {
+		if slices.Contains(mount.Services, service) {
+			volumes = append(volumes, map[string]any{
+				"type": "bind", "source": mount.Path, "target": mount.Path, "read_only": !mount.Writable,
+			})
+		}
+	}
+	return volumes
 }
 
 func assertCommandContract(t *testing.T, commands []compose.Command, compiled contract.Plan, directory string) {
