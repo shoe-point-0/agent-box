@@ -41,6 +41,9 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	}
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: filepath.Join(root, "runtime"), Journal: operationJournal,
+		List: func(context.Context) (contract.ListOutput, error) {
+			return contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{}}, nil
+		},
 		Run: func(_ context.Context, _ journal.Operation, _ json.RawMessage, emit daemon.Emit) *contract.Failure {
 			if err := emit("reconcile.started", map[string]string{"step": "test"}); err != nil {
 				return &contract.Failure{Code: contract.CodeInternalInvariant}
@@ -94,6 +97,47 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 		if event.Sequence != int64(index+1) || event.OperationID == "" {
 			t.Errorf("event %d = %#v", index, event)
 		}
+	}
+}
+
+func TestClientListsStrictBoundedInventory(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.URL.Path != "/v1/boxes" {
+			t.Errorf("request = %s %s", request.Method, request.URL.Path)
+		}
+		writeTestJSON(writer, contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{
+			{ID: "box-a", WorkspaceID: "ws-a", TaskKey: "TASK-A", ManifestPath: "/work/a/.abox/box.yaml", State: "active", RecordedState: "ready", Drift: []string{}},
+		}})
+	})
+	socket, stop := serveUnixHTTP(t, handler)
+	defer stop()
+	client, err := daemonclient.New(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	output, failure, err := client.List(t.Context())
+	if err != nil || failure != nil || len(output.Boxes) != 1 || output.Boxes[0].ID != "box-a" {
+		t.Fatalf("List() = %#v, %#v, %v", output, failure, err)
+	}
+}
+
+func TestClientRejectsInvalidListEnvelope(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(writer, `{"schemaVersion":"abox.list/v1alpha1","boxes":[],"unknown":true}`)
+	})
+	socket, stop := serveUnixHTTP(t, handler)
+	defer stop()
+	client, err := daemonclient.New(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	_, _, err = client.List(t.Context())
+	if !errors.Is(err, daemonclient.ErrProtocol) {
+		t.Fatalf("List() error = %v, want protocol violation", err)
 	}
 }
 

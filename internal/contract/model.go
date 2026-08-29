@@ -14,6 +14,7 @@ const (
 	PlanSchemaVersion    = "abox.plan/v1alpha1"
 	ContextSchemaVersion = "abox.context/v1alpha1"
 	OutputSchemaVersion  = "abox.output/v1alpha1"
+	ListSchemaVersion    = "abox.list/v1alpha1"
 	EventSchemaVersion   = "abox.event/v1alpha1"
 	ErrorSchemaVersion   = "abox.error/v1alpha1"
 	DaemonAPIVersion     = "abox.api/v1alpha1"
@@ -198,6 +199,23 @@ type OutputRepository struct {
 	Commit string `json:"commit"`
 	Path   string `json:"path"`
 	Dirty  bool   `json:"dirty"`
+}
+
+// ListOutput is the stable, non-streaming inventory returned by abox list.
+// Boxes are ordered by ID and drift contains observations, never repair intent.
+type ListOutput struct {
+	SchemaVersion string    `json:"schemaVersion"`
+	Boxes         []ListBox `json:"boxes"`
+}
+
+type ListBox struct {
+	ID            string   `json:"id"`
+	WorkspaceID   string   `json:"workspaceId"`
+	TaskKey       string   `json:"taskKey"`
+	ManifestPath  string   `json:"manifestPath"`
+	State         string   `json:"state"`
+	RecordedState string   `json:"recordedState"`
+	Drift         []string `json:"drift"`
 }
 
 // Event is a streaming CLI command's versioned NDJSON envelope. Details retain

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shoe-point-0/agent-box/internal/boxlist"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/journal"
@@ -70,9 +71,15 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "aboxd: create operation journal: %v\n", err)
 		return contract.ExitInternal
 	}
+	boxInventory, err := boxlist.New(store)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "aboxd: create Box inventory: %v\n", err)
+		return contract.ExitInternal
+	}
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
+		List:       boxInventory.List,
 		Run: func(context.Context, journal.Operation, json.RawMessage, daemon.Emit) *contract.Failure {
 			return &contract.Failure{Code: contract.CodeFeatureNotSupported}
 		},

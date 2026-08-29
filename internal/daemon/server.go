@@ -60,11 +60,16 @@ type Emit func(kind string, details any) error
 // terminal state; returning nil records success.
 type Runner func(context.Context, journal.Operation, json.RawMessage, Emit) *contract.Failure
 
+// ListBoxes returns a read-only inventory. Implementations may read persisted
+// observations but receive no mutation or reconciliation capability.
+type ListBoxes func(context.Context) (contract.ListOutput, error)
+
 // Config contains explicit daemon-owned paths and operation dependencies.
 type Config struct {
 	RuntimeDir string
 	Journal    *journal.Journal
 	Run        Runner
+	List       ListBoxes
 }
 
 // Server owns one listener, HTTP server, daemon operation context, lock, and
@@ -72,6 +77,7 @@ type Config struct {
 type Server struct {
 	journal    *journal.Journal
 	run        Runner
+	list       ListBoxes
 	httpServer *http.Server
 	listener   net.Listener
 	lock       *os.File
@@ -99,6 +105,9 @@ func Start(config Config) (_ *Server, returnErr error) {
 	if config.Run == nil {
 		return nil, errors.New("start daemon: operation runner is nil")
 	}
+	if config.List == nil {
+		return nil, errors.New("start daemon: Box list service is nil")
+	}
 	prepared, err := prepareRuntime(config.RuntimeDir)
 	if err != nil {
 		return nil, fmt.Errorf("start daemon: %w", err)
@@ -122,7 +131,7 @@ func Start(config Config) (_ *Server, returnErr error) {
 
 	operationContext, cancelOperations := context.WithCancel(context.Background())
 	server := &Server{
-		journal: config.Journal, run: config.Run,
+		journal: config.Journal, run: config.Run, list: config.List,
 		listener: newPeerListener(unixListener, uint32(os.Geteuid())), lock: prepared.lock,
 		socketPath: prepared.socketPath, socket: socket,
 		operationContext: operationContext, cancelOperations: cancelOperations,
@@ -206,6 +215,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/handshake", s.handleHandshake)
+	mux.HandleFunc("GET /v1/boxes", s.handleList)
 	mux.HandleFunc("POST /v1/boxes:up", s.handleUp)
 	mux.HandleFunc("GET /v1/operations/{id}/events", s.handleEvents)
 	return s.requireCompatibleAPI(mux)
@@ -235,6 +245,19 @@ func (s *Server) handleHandshake(writer http.ResponseWriter, _ *http.Request) {
 		Minimum    int    `json:"minimum"`
 		Maximum    int    `json:"maximum"`
 	}{APIVersion: contract.DaemonAPIVersion, Minimum: APIMinVersion, Maximum: APIMaxVersion})
+}
+
+func (s *Server) handleList(writer http.ResponseWriter, request *http.Request) {
+	output, err := s.list(request.Context())
+	if err != nil {
+		writeFailure(writer, http.StatusInternalServerError, internalFailure())
+		return
+	}
+	if output.SchemaVersion != contract.ListSchemaVersion || output.Boxes == nil {
+		writeFailure(writer, http.StatusInternalServerError, internalFailure())
+		return
+	}
+	writeJSON(writer, http.StatusOK, output)
 }
 
 func (s *Server) handleUp(writer http.ResponseWriter, request *http.Request) {

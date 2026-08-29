@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "abox.list/v1alpha1",
+  "boxes": [
+    {
+      "id": "auth-142-3m6y4k2p",
+      "workspaceId": "ws_h7n2x0m4",
+      "taskKey": "AUTH-142",
+      "manifestPath": "/Users/shoe/project/.abox/box.yaml",
+      "state": "active",
+      "recordedState": "ready",
+      "drift": []
+    }
+  ]
+}

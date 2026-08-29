@@ -102,6 +102,27 @@ func (c *Client) Handshake(ctx context.Context) (*contract.Failure, error) {
 	return nil, nil
 }
 
+// List returns the daemon's bounded, strictly decoded read-only Box inventory.
+func (c *Client) List(ctx context.Context) (contract.ListOutput, *contract.Failure, error) {
+	response, err := c.do(ctx, http.MethodGet, "/v1/boxes", nil, "")
+	if err != nil {
+		return contract.ListOutput{}, nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		failure, failureErr := decodeFailure(response)
+		return contract.ListOutput{}, failure, failureErr
+	}
+	var output contract.ListOutput
+	if err := decodeOne(response.Body, &output); err != nil {
+		return contract.ListOutput{}, nil, fmt.Errorf("%w: decode Box list: %v", ErrProtocol, err)
+	}
+	if output.SchemaVersion != contract.ListSchemaVersion || output.Boxes == nil {
+		return contract.ListOutput{}, nil, fmt.Errorf("%w: invalid Box list envelope", ErrProtocol)
+	}
+	return output, nil, nil
+}
+
 // Up submits or reattaches to one idempotent mutation and resumes a broken event
 // stream by durable sequence. Returning a Failure means the daemon completed or
 // rejected the request with a stable symbolic code.

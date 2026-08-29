@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abox.dev/schemas/list/v1alpha1",
+  "title": "Agent Box List Output v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "boxes"],
+  "properties": {
+    "schemaVersion": {"const": "abox.list/v1alpha1"},
+    "boxes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/box"}
+    }
+  },
+  "$defs": {
+    "box": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "workspaceId", "taskKey", "manifestPath", "state", "recordedState", "drift"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "workspaceId": {"type": "string", "minLength": 1},
+        "taskKey": {"type": "string", "minLength": 1},
+        "manifestPath": {"type": "string", "pattern": "^/", "minLength": 2},
+        "state": {"enum": ["active", "stopped", "degraded", "stale"]},
+        "recordedState": {"type": "string", "minLength": 1},
+        "drift": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

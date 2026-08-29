@@ -25,11 +25,15 @@ type fakeDaemon struct {
 	handshakeDefault  error
 	upFailure         *contract.Failure
 	upError           error
+	listOutput        contract.ListOutput
+	listFailure       *contract.Failure
+	listError         error
 	events            []daemonclient.Event
 	request           daemon.MutationRequest
 	key               string
 	closed            bool
 	handshakes        int
+	listCalls         int
 }
 
 func (f *fakeDaemon) Handshake(context.Context) (*contract.Failure, error) {
@@ -58,6 +62,11 @@ func (f *fakeDaemon) Up(_ context.Context, request daemon.MutationRequest, key s
 	return f.upFailure, f.upError
 }
 
+func (f *fakeDaemon) List(context.Context) (contract.ListOutput, *contract.Failure, error) {
+	f.listCalls++
+	return f.listOutput, f.listFailure, f.listError
+}
+
 func (f *fakeDaemon) Close() { f.closed = true }
 
 func TestRunReportsVersion(t *testing.T) {
@@ -82,12 +91,12 @@ func TestHelpExposesOnlyImplementedCommands(t *testing.T) {
 	if code := run(context.Background(), []string{"help"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("help code = %d", code)
 	}
-	for _, command := range []string{"init", "up", "version", "help"} {
+	for _, command := range []string{"init", "list", "up", "version", "help"} {
 		if !strings.Contains(stdout.String(), "  "+command) {
 			t.Errorf("help does not expose %q: %q", command, stdout.String())
 		}
 	}
-	for _, unavailable := range []string{"plan", "list", "status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
+	for _, unavailable := range []string{"plan", "status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
 		if strings.Contains(stdout.String(), "  "+unavailable+" ") {
 			t.Errorf("help claims unavailable command %q", unavailable)
 		}
@@ -234,6 +243,67 @@ func TestInitHelpAndArguments(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "--force") || stderr.Len() != 0 {
 		t.Fatalf("init help stdout/stderr = %q/%q", stdout.String(), stderr.String())
+	}
+}
+
+func TestListRendersDeterministicHumanInventory(t *testing.T) {
+	t.Parallel()
+	client := &fakeDaemon{listOutput: listFixture()}
+	var stdout, stderr bytes.Buffer
+	code := runWith(t.Context(), []string{"list"}, &stdout, &stderr, testDependencies(t.TempDir(), client))
+	if code != contract.ExitOK || stderr.Len() != 0 {
+		t.Fatalf("list code/stderr = %d/%q", code, stderr.String())
+	}
+	want := "BOX           STATE     TASK    WORKSPACE    DRIFT\n" +
+		"box-active    active    TASK-A  ws-active    -\n" +
+		"box-degraded  degraded  TASK-D  ws-degraded  runtime host is running while Compose is stopped\n" +
+		"box-stale     stale     TASK-X  ws-stale     runtime host record is missing for a materialized generation\n" +
+		"box-stopped   stopped   TASK-S  ws-stopped   -\n"
+	if got := stdout.String(); got != want {
+		t.Fatalf("human list = %q, want %q", got, want)
+	}
+	if client.listCalls != 1 || !client.closed {
+		t.Fatalf("list calls/closed = %d/%v", client.listCalls, client.closed)
+	}
+}
+
+func TestListJSONValidatesAgainstVersionedSchema(t *testing.T) {
+	t.Parallel()
+	client := &fakeDaemon{listOutput: listFixture()}
+	var stdout, stderr bytes.Buffer
+	code := runWith(t.Context(), []string{"list", "--json"}, &stdout, &stderr, testDependencies(t.TempDir(), client))
+	if code != contract.ExitOK || stderr.Len() != 0 {
+		t.Fatalf("JSON list code/stderr = %d/%q", code, stderr.String())
+	}
+	validateJSONLine(t, compileCLISchema(t, "list"), bytes.TrimSpace(stdout.Bytes()))
+	var output contract.ListOutput
+	decodeStrictTest(t, bytes.TrimSpace(stdout.Bytes()), &output)
+	if len(output.Boxes) != 4 || output.SchemaVersion != contract.ListSchemaVersion {
+		t.Fatalf("JSON list output = %#v", output)
+	}
+}
+
+func TestListEmptyAndArguments(t *testing.T) {
+	t.Parallel()
+	client := &fakeDaemon{listOutput: contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{}}}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"list"}, &stdout, &stderr, testDependencies(t.TempDir(), client)); code != contract.ExitOK {
+		t.Fatalf("empty list code = %d; stderr=%q", code, stderr.String())
+	}
+	if got, want := stdout.String(), "No Boxes.\n"; got != want {
+		t.Fatalf("empty list output = %q, want %q", got, want)
+	}
+	for _, args := range [][]string{{"list", "--json", "--json"}, {"list", "extra"}, {"list", "--help", "--json"}} {
+		stdout.Reset()
+		stderr.Reset()
+		if code := runWith(t.Context(), args, &stdout, &stderr, dependencies{}); code != contract.ExitUsage {
+			t.Errorf("runWith(%v) code = %d, want %d", args, code, contract.ExitUsage)
+		}
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runWith(t.Context(), []string{"list", "--help"}, &stdout, &stderr, dependencies{}); code != contract.ExitOK || !strings.Contains(stdout.String(), "--json") || stderr.Len() != 0 {
+		t.Fatalf("list help code/stdout/stderr = %d/%q/%q", code, stdout.String(), stderr.String())
 	}
 }
 
@@ -432,6 +502,15 @@ func TestStartDaemonLaunchesPathExecutableWithPrivateLog(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("daemon launcher wait = %v", err)
 	}
+}
+
+func listFixture() contract.ListOutput {
+	return contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{
+		{ID: "box-active", WorkspaceID: "ws-active", TaskKey: "TASK-A", ManifestPath: "/work/active/.abox/box.yaml", State: "active", RecordedState: "ready", Drift: []string{}},
+		{ID: "box-degraded", WorkspaceID: "ws-degraded", TaskKey: "TASK-D", ManifestPath: "/work/degraded/.abox/box.yaml", State: "degraded", RecordedState: "ready", Drift: []string{"runtime host is running while Compose is stopped"}},
+		{ID: "box-stale", WorkspaceID: "ws-stale", TaskKey: "TASK-X", ManifestPath: "/work/stale/.abox/box.yaml", State: "stale", RecordedState: "ready", Drift: []string{"runtime host record is missing for a materialized generation"}},
+		{ID: "box-stopped", WorkspaceID: "ws-stopped", TaskKey: "TASK-S", ManifestPath: "/work/stopped/.abox/box.yaml", State: "stopped", RecordedState: "stopped", Drift: []string{}},
+	}}
 }
 
 func testDependencies(cwd string, client daemonAPI) dependencies {

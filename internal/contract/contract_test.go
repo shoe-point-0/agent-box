@@ -24,6 +24,7 @@ func TestGoldenExamplesValidateAgainstSchemasAndGoModels(t *testing.T) {
 		{"plan", contract.PlanSchemaVersion, func() any { return new(contract.Plan) }},
 		{"context", contract.ContextSchemaVersion, func() any { return new(contract.Context) }},
 		{"output", contract.OutputSchemaVersion, func() any { return new(contract.Output) }},
+		{"list", contract.ListSchemaVersion, func() any { return new(contract.ListOutput) }},
 		{"event", contract.EventSchemaVersion, func() any { return new(contract.Event) }},
 		{"error", contract.ErrorSchemaVersion, func() any { return new(contract.Failure) }},
 	}
@@ -67,7 +68,7 @@ func TestGoldenExamplesValidateAgainstSchemasAndGoModels(t *testing.T) {
 func TestSchemasRejectUnknownAndSecretValueFields(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"plan", "context", "output", "error"} {
+	for _, name := range []string{"plan", "context", "output", "list", "error"} {
 		name := name
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

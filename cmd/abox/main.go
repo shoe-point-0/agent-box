@@ -32,6 +32,7 @@ const (
 
 type daemonAPI interface {
 	Handshake(context.Context) (*contract.Failure, error)
+	List(context.Context) (contract.ListOutput, *contract.Failure, error)
 	Up(context.Context, daemon.MutationRequest, string, func(daemonclient.Event) error) (*contract.Failure, error)
 	Close()
 }
@@ -92,6 +93,39 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps 
 			return reportFailure(stdout, stderr, false, initFailure)
 		}
 		if _, err := fmt.Fprintf(stdout, "created %s\n", manifestPath); err != nil {
+			return contract.ExitInternal
+		}
+		return contract.ExitOK
+	}
+	if args[0] == "list" {
+		options, parseFailure := parseList(args[1:])
+		if parseFailure != nil {
+			return reportFailure(stdout, stderr, options.json, parseFailure)
+		}
+		if options.help {
+			return writeListHelp(stdout)
+		}
+		paths, err := deps.userPaths()
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodePrerequisiteFailed, "cannot resolve user-scoped daemon paths"))
+		}
+		client, connectFailure := connect(ctx, paths, deps)
+		if connectFailure != nil {
+			return reportFailure(stdout, stderr, options.json, connectFailure)
+		}
+		defer client.Close()
+		output, listFailure, transportErr := client.List(ctx)
+		if transportErr != nil {
+			return reportFailure(stdout, stderr, options.json, classifyTransport(transportErr))
+		}
+		if listFailure != nil {
+			return reportFailure(stdout, stderr, options.json, listFailure)
+		}
+		if options.json {
+			if err := json.NewEncoder(stdout).Encode(output); err != nil {
+				return contract.ExitInternal
+			}
+		} else if err := renderList(stdout, output); err != nil {
 			return contract.ExitInternal
 		}
 		return contract.ExitOK
@@ -381,6 +415,7 @@ func writeHelp(writer io.Writer) int {
 
 Commands:
   init     create a strict starter manifest without provisioning
+  list     list recorded Boxes and observed drift
   up       submit a versioned up request to aboxd
   version  print build version
   help     show this help
