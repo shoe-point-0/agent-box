@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "abox.event/v1alpha1",
+  "operationId": "op_01K4M8T4Y8DMG0RMPV3YYPS8RA",
+  "sequence": 1,
+  "kind": "operation.finished",
+  "details": {
+    "apiVersion": "abox.api/v1alpha1",
+    "state": "succeeded"
+  },
+  "occurredAt": "2026-08-29T22:00:00Z"
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abox.dev/schemas/event/v1alpha1",
+  "title": "Agent Box CLI Event v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operationId", "sequence", "kind", "details", "occurredAt"],
+  "properties": {
+    "schemaVersion": {"const": "abox.event/v1alpha1"},
+    "operationId": {"type": "string", "pattern": "^op_[0-9A-Z]+$"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "details": {},
+    "occurredAt": {"type": "string", "format": "date-time"}
+  }
+}

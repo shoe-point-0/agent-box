@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -43,11 +41,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func serve(ctx context.Context, args []string, stderr io.Writer) int {
-	runtimeDir, stateDatabase, err := defaultPaths()
+	userPaths, err := daemon.DefaultUserPaths()
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "aboxd: %v\n", err)
 		return contract.ExitPrerequisite
 	}
+	runtimeDir, stateDatabase := userPaths.RuntimeDir, userPaths.StateDatabase
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&runtimeDir, "runtime-dir", runtimeDir, "secure daemon runtime directory")
@@ -95,29 +94,4 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		return contract.ExitInfrastructure
 	}
 	return contract.ExitOK
-}
-
-func defaultPaths() (runtimeDir, stateDatabase string, err error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", fmt.Errorf("resolve home directory: %w", err)
-	}
-	home, err = filepath.EvalSymlinks(home)
-	if err != nil {
-		return "", "", fmt.Errorf("canonicalize home directory: %w", err)
-	}
-	if runtime.GOOS == "darwin" {
-		applicationRoot := filepath.Join(home, "Library", "Application Support", "Agent Box")
-		return filepath.Join(applicationRoot, "runtime"), filepath.Join(applicationRoot, "state.db"), nil
-	}
-	stateHome := os.Getenv("XDG_STATE_HOME")
-	if stateHome == "" {
-		stateHome = filepath.Join(home, ".local", "state")
-	}
-	applicationRoot := filepath.Join(stateHome, "agent-box")
-	runtimeDir = filepath.Join(applicationRoot, "runtime")
-	if xdgRuntime := os.Getenv("XDG_RUNTIME_DIR"); xdgRuntime != "" {
-		runtimeDir = filepath.Join(xdgRuntime, "agent-box")
-	}
-	return runtimeDir, filepath.Join(applicationRoot, "state.db"), nil
 }

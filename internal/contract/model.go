@@ -5,10 +5,16 @@
 // references and observed facts, never secret values.
 package contract
 
+import (
+	"encoding/json"
+	"time"
+)
+
 const (
 	PlanSchemaVersion    = "abox.plan/v1alpha1"
 	ContextSchemaVersion = "abox.context/v1alpha1"
 	OutputSchemaVersion  = "abox.output/v1alpha1"
+	EventSchemaVersion   = "abox.event/v1alpha1"
 	ErrorSchemaVersion   = "abox.error/v1alpha1"
 	DaemonAPIVersion     = "abox.api/v1alpha1"
 )
@@ -192,4 +198,15 @@ type OutputRepository struct {
 	Commit string `json:"commit"`
 	Path   string `json:"path"`
 	Dirty  bool   `json:"dirty"`
+}
+
+// Event is a streaming CLI command's versioned NDJSON envelope. Details retain
+// the daemon's command-specific, already-redacted payload without reinterpretation.
+type Event struct {
+	SchemaVersion string          `json:"schemaVersion"`
+	OperationID   string          `json:"operationId"`
+	Sequence      int64           `json:"sequence"`
+	Kind          string          `json:"kind"`
+	Details       json.RawMessage `json:"details"`
+	OccurredAt    time.Time       `json:"occurredAt"`
 }

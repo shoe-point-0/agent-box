@@ -478,7 +478,7 @@ func newOperationID() (string, error) {
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
-	return "op_" + hex.EncodeToString(bytes), nil
+	return "op_" + strings.ToUpper(hex.EncodeToString(bytes)), nil
 }
 
 func validateIdempotencyKey(key string) error {

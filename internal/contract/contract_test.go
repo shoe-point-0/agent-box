@@ -24,6 +24,7 @@ func TestGoldenExamplesValidateAgainstSchemasAndGoModels(t *testing.T) {
 		{"plan", contract.PlanSchemaVersion, func() any { return new(contract.Plan) }},
 		{"context", contract.ContextSchemaVersion, func() any { return new(contract.Context) }},
 		{"output", contract.OutputSchemaVersion, func() any { return new(contract.Output) }},
+		{"event", contract.EventSchemaVersion, func() any { return new(contract.Event) }},
 		{"error", contract.ErrorSchemaVersion, func() any { return new(contract.Failure) }},
 	}
 
