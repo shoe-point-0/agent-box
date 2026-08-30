@@ -131,12 +131,15 @@ func (a *Adapter) Inspect(ctx context.Context, spec Spec) (Observation, error) {
 
 // Create creates an absent instance, adopts a matching existing instance, and
 // always re-observes after an attempted side effect.
-func (a *Adapter) Create(ctx context.Context, spec Spec, configPath string) (Observation, error) {
+func (a *Adapter) Create(ctx context.Context, spec Spec, configPath string, configEvidence ownership.PathSetRecord) (Observation, error) {
 	if _, err := compileConfig(spec); err != nil {
 		return Observation{}, err
 	}
 	if !filepath.IsAbs(configPath) || filepath.Clean(configPath) != configPath {
 		return Observation{}, &Error{Kind: InvalidSpecification, Operation: "create", Resource: spec.RuntimeHost.InstanceName, Err: errors.New("config path must be clean and absolute")}
+	}
+	if err := verifyMutationPaths("create", spec, []string{configPath}, configEvidence); err != nil {
+		return Observation{}, err
 	}
 	if err := verifyConfigFile(configPath, spec); err != nil {
 		return Observation{}, err
@@ -150,6 +153,9 @@ func (a *Adapter) Create(ctx context.Context, spec Spec, configPath string) (Obs
 	}
 	if before.State != Absent {
 		return validateObservation("create", spec, before)
+	}
+	if err := verifyMutationPaths("create", spec, []string{configPath}, configEvidence); err != nil {
+		return before, err
 	}
 	_, runErr := a.run(ctx, "create", "--name="+spec.RuntimeHost.InstanceName, "--tty=false", configPath)
 	return a.afterMutation(ctx, "create", spec, runErr, false)
@@ -167,11 +173,31 @@ func (a *Adapter) Start(ctx context.Context, spec Spec) (Observation, error) {
 	if _, err := validateObservation("start", spec, before); err != nil {
 		return before, err
 	}
+	if err := verifyRuntimePaths("start", spec); err != nil {
+		return before, err
+	}
 	if before.State == Running {
 		return before, nil
 	}
 	_, runErr := a.run(ctx, "start", "--tty=false", spec.RuntimeHost.InstanceName)
 	return a.afterMutation(ctx, "start", spec, runErr, false)
+}
+
+func verifyMutationPaths(operation string, spec Spec, additional []string, evidence ownership.PathSetRecord) error {
+	if err := verifyRuntimePaths(operation, spec); err != nil {
+		return err
+	}
+	if err := ownership.VerifyPathSet(additional, evidence); err != nil {
+		return &Error{Kind: ConfigMismatch, Operation: operation, Resource: spec.RuntimeHost.InstanceName, Err: fmt.Errorf("generated path evidence: %w", err)}
+	}
+	return nil
+}
+
+func verifyRuntimePaths(operation string, spec Spec) error {
+	if err := ownership.VerifyPathSet(runtimePaths(spec), spec.PathEvidence); err != nil {
+		return &Error{Kind: ConfigMismatch, Operation: operation, Resource: spec.RuntimeHost.InstanceName, Err: fmt.Errorf("runtime path evidence: %w", err)}
+	}
+	return nil
 }
 
 // Stop stops a matching running instance and is a no-op when it is stopped.

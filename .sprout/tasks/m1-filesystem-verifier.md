@@ -88,17 +88,28 @@ Verify mounted filesystem contracts
   with zero invoker calls.
 - `go vet ./internal/ownership/... ./internal/compose/...` and `git diff
   --check` passed for this slice.
+- Lima mutation preflight: `go test -race -count=10 ./internal/lima/...`
+  passed. The adapter now requires exact ancestor identity evidence for the
+  guest image and every declared mount before create/start reconciliation, and
+  separate evidence for the generated Lima config before create. Deterministic
+  substitution tests replace a generated config and rename/replace a mount
+  ancestor, then prove zero create/start invocations.
+- Cross-boundary regression: `go test -race -count=3
+  ./internal/ownership/... ./internal/lima/... ./internal/compose/...` passed,
+  including the real Docker lifecycle. `make check` passed, including full
+  tests, race tests, vet, lint with `0 issues`, and builds. `sprout check --all`
+  and `git diff --check` passed.
 - Runtime inspection still reports `limactl: command not found`. No VM was
   created and this evidence does not establish Lima, VZ, or VirtioFS behavior.
 
 ## Outcome and follow-ups
 
-In progress. The critical Machine-side TOCTOU primitive now exists and the
-Compose mutation boundary consumes it. Remaining work is to consume the same
-evidence at Lima mutation, implement exact live mount-set observation plus the
-bidirectional/watcher probe and managed Git exclude, and execute the complete
-verifier against the available real-container lane. Real Lima execution remains
-unavailable on this Machine and must not be inferred from the injected boundary.
+In progress. The critical Machine-side TOCTOU primitive now exists and both
+Lima create/start and Compose mutation boundaries consume it. Remaining work is
+to implement exact live mount-set observation plus the bidirectional/watcher
+probe and managed Git exclude, and execute the complete verifier against the
+available real-container lane. Real Lima execution remains unavailable on this
+Machine and must not be inferred from the injected boundary.
 
 ## Original request
 

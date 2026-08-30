@@ -119,13 +119,14 @@ func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 	if err := lima.WriteConfig(configPath, spec); err != nil {
 		t.Fatal(err)
 	}
+	configEvidence := recordPathSet(t, []string{configPath})
 	runner.config = configDocument(t, spec)
 
-	observation, err := adapter.Create(t.Context(), spec, configPath)
+	observation, err := adapter.Create(t.Context(), spec, configPath, configEvidence)
 	if err != nil || observation.State != lima.Stopped {
 		t.Fatalf("Create() = %#v, %v", observation, err)
 	}
-	if _, err := adapter.Create(t.Context(), spec, configPath); err != nil {
+	if _, err := adapter.Create(t.Context(), spec, configPath, configEvidence); err != nil {
 		t.Fatal(err)
 	}
 	if observation, err = adapter.Start(t.Context(), spec); err != nil || observation.State != lima.Running {
@@ -205,7 +206,7 @@ func TestCreateRejectsTamperedGeneratedConfigBeforeLimactl(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("vmType: vz\nmounts:\n  - location: /home\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := adapter.Create(t.Context(), spec, configPath)
+	_, err := adapter.Create(t.Context(), spec, configPath, recordPathSet(t, []string{configPath}))
 	assertKind(t, err, lima.ConfigMismatch)
 	if len(runner.callsCopy()) != 0 {
 		t.Fatal("Create() invoked limactl with tampered generated config")
@@ -252,7 +253,7 @@ func TestCreateClassifiesPartialCreationAndCancellationAfterReobservation(t *tes
 			if err := lima.WriteConfig(configPath, spec); err != nil {
 				t.Fatal(err)
 			}
-			observation, err := adapter.Create(t.Context(), spec, configPath)
+			observation, err := adapter.Create(t.Context(), spec, configPath, recordPathSet(t, []string{configPath}))
 			assertKind(t, err, test.want)
 			if observation.State == lima.Absent || runner.count("list") < 2 {
 				t.Fatalf("Create() did not reobserve: state=%s list-calls=%d", observation.State, runner.count("list"))
@@ -294,8 +295,55 @@ func TestContractRejectsUnsupportedVersionMalformedInventoryAndPostconditionFail
 		if err := lima.WriteConfig(configPath, spec); err != nil {
 			t.Fatal(err)
 		}
-		_, err := adapter.Create(t.Context(), spec, configPath)
+		_, err := adapter.Create(t.Context(), spec, configPath, recordPathSet(t, []string{configPath}))
 		assertKind(t, err, lima.PostconditionFailed)
+	})
+}
+
+func TestCreateAndStartRefusePathSubstitutionBeforeMutation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("generated-config", func(t *testing.T) {
+		adapter, runner, spec := testAdapter(t)
+		configPath := filepath.Join(t.TempDir(), "lima.yaml")
+		if err := lima.WriteConfig(configPath, spec); err != nil {
+			t.Fatal(err)
+		}
+		evidence := recordPathSet(t, []string{configPath})
+		original, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(configPath, configPath+".recorded"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(configPath, original, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err = adapter.Create(t.Context(), spec, configPath, evidence)
+		assertKind(t, err, lima.ConfigMismatch)
+		if runner.count("create") != 0 {
+			t.Fatal("Create() invoked limactl after generated config substitution")
+		}
+	})
+
+	t.Run("runtime-ancestor", func(t *testing.T) {
+		adapter, runner, spec := testAdapter(t)
+		runner.config = configDocument(t, spec)
+		runner.status = "Stopped"
+		mountParent := filepath.Dir(spec.Mounts[0].Path)
+		moved := mountParent + "-moved"
+		if err := os.Rename(mountParent, moved); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(mountParent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		_, err := adapter.Start(t.Context(), spec)
+		assertKind(t, err, lima.ConfigMismatch)
+		if runner.count("start") != 0 {
+			t.Fatal("Start() invoked limactl after runtime ancestor substitution")
+		}
 	})
 }
 
@@ -366,7 +414,36 @@ func testAdapter(t *testing.T) (*lima.Adapter, *fakeRunner, lima.Spec) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return adapter, runner, testSpec(t)
+	spec := testSpec(t)
+	runtimeRoot := t.TempDir()
+	spec.Mounts[0].Path = filepath.Join(runtimeRoot, "git", "repository.git")
+	spec.Mounts[1].Path = filepath.Join(runtimeRoot, "workspace", "repository")
+	for _, mount := range spec.Mounts {
+		if err := os.MkdirAll(mount.Path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	spec.ImagePath = filepath.Join(runtimeRoot, "images", "guest image.img")
+	if err := os.MkdirAll(filepath.Dir(spec.ImagePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(spec.ImagePath, []byte("guest-image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec.PathEvidence, err = lima.RecordRuntimePaths(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return adapter, runner, spec
+}
+
+func recordPathSet(t *testing.T, paths []string) ownership.PathSetRecord {
+	t.Helper()
+	record, err := ownership.RecordPathSet(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
 }
 
 func verifiedLima(t *testing.T) toolchain.Artifact {

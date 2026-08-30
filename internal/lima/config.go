@@ -32,13 +32,23 @@ const (
 
 // Spec is the immutable runtime-host projection consumed by the Lima adapter.
 type Spec struct {
-	RuntimeHost contract.RuntimeHostPlan
-	Mounts      []contract.MountPlan
-	BoxID       string
-	PlanDigest  contract.Digest
-	Generation  int64
-	GuestImage  toolchain.Identity
-	ImagePath   string
+	RuntimeHost  contract.RuntimeHostPlan
+	Mounts       []contract.MountPlan
+	BoxID        string
+	PlanDigest   contract.Digest
+	Generation   int64
+	GuestImage   toolchain.Identity
+	ImagePath    string
+	PathEvidence ownership.PathSetRecord
+}
+
+// RecordRuntimePaths captures the complete Machine path set consumed while a
+// Lima instance is created, started, or reconciled.
+func RecordRuntimePaths(spec Spec) (ownership.PathSetRecord, error) {
+	if _, err := compileConfig(spec); err != nil {
+		return ownership.PathSetRecord{}, err
+	}
+	return ownership.RecordPathSet(runtimePaths(spec))
 }
 
 type limaConfig struct {
@@ -188,6 +198,15 @@ func canonicalFileURL(path string) (string, error) {
 		return "", errors.New("guest image path must be clean, absolute, and NUL-free")
 	}
 	return (&url.URL{Scheme: "file", Path: path}).String(), nil
+}
+
+func runtimePaths(spec Spec) []string {
+	paths := make([]string, 0, len(spec.Mounts)+1)
+	paths = append(paths, spec.ImagePath)
+	for _, mount := range spec.Mounts {
+		paths = append(paths, mount.Path)
+	}
+	return paths
 }
 
 func canonicalDigest(value contract.Digest) bool {
