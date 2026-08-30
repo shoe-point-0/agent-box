@@ -277,6 +277,30 @@ Deliver the single-repository up vertical slice
 - This remains contract-fixture evidence rather than a real Docker-in-Lima
   apply. Filesystem/workspace usability, context publication, atomic READY,
   daemon dispatch, and the real cold/warm CLI smoke remain open.
+- Filesystem-readiness wiring slice: `internal/up.ReconcileFilesystem` now
+  consumes only a complete `ComposeResult`, passes its immutable runtime Spec
+  into the existing live readiness gate, and keeps the context/READY publisher
+  inside that gate's final path-identity boundary. The earlier post-apply
+  observation must match retained IDs before collection starts, and the fresh
+  Docker observation collected with Lima, guest-kernel, container-kernel, and
+  workspace-service evidence must match the same complete ID set before the
+  publisher can run.
+- `go test -race -count=10 ./internal/up` and `go test -race -count=10
+  ./internal/filesystem` passed. The coordinator tests proved that stale input
+  is refused before the gate, changed fresh container identity cannot publish,
+  and the publisher receives the gate's fresh observation rather than the
+  earlier Compose view. The filesystem suite exercised the concrete mount-set,
+  undeclared-mount canary, bidirectional byte/mode/rename/delete, native watcher,
+  immutable-container, cleanup, and final path-substitution checks.
+- `go vet ./internal/up ./internal/filesystem`, `git diff --check`, `sprout
+  check m1-single-repo-up`, and `sprout check --all` passed. Post-slice `make
+  check` passed with lint reporting `0 issues`; module verification, all
+  unit/race tests, vet, builds, smoke, shell, and Python automation checks were
+  green.
+- This is still deterministic adapter evidence, not a real Lima/Compose smoke
+  claim. Context materialization and `Store.PublishReady` must run in the
+  readiness callback before production daemon dispatch can honestly return
+  success.
 
 ## Outcome and follow-ups
 
@@ -339,12 +363,17 @@ runtime contract. A cold attempt applies only behind durable intent; complete
 partial or READY authority takes the observation-only path and must match the
 entire freshly observed resource set exactly.
 
-Next, pass `ComposeResult` into the existing filesystem collector/readiness
-boundary and prove Machine, runtime-host, and workspace-service usability from
-the freshly observed container IDs and mounts. Then add context and READY
-operations and wire the completed runner into `cmd/aboxd`. Keep the packet open
-until the unchanged single-repository fixture passes through the real daemon
-and CLI, including detach and measured warm no-op assertions.
+The twelfth coherent slice binds that retained runtime authority to the existing
+filesystem readiness gate. The final callback sees only a freshly re-observed
+Docker set that still matches every retained resource ID, after Machine,
+runtime-host, container-kernel, and workspace-service checks have passed.
+
+Next, materialize the context document and call `Store.PublishReady` inside the
+filesystem publisher callback, assembling the complete removal snapshot from
+the freshly proven foundation and Compose results. Then wire the completed
+runner into `cmd/aboxd`. Keep the packet open until the unchanged
+single-repository fixture passes through the real daemon and CLI, including
+detach and measured warm no-op assertions.
 
 ## Original request
 
