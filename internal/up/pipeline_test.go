@@ -105,10 +105,39 @@ func TestPipelineStopsAtFirstFailedBoundary(t *testing.T) {
 	}
 }
 
-func TestNewPipelineRequiresRuntimeSpecificReadyBuilder(t *testing.T) {
-	if _, err := NewPipeline(PipelineConfig{}); err == nil || !strings.Contains(err.Error(), "READY config builder") {
-		t.Fatalf("NewPipeline() error = %v", err)
+func TestNewPipelineDelaysRuntimeSpecificBuilders(t *testing.T) {
+	if _, err := NewPipeline(PipelineConfig{}); err == nil || !strings.Contains(err.Error(), "Compose config builder") {
+		t.Fatalf("NewPipeline() missing Compose builder error = %v", err)
 	}
+	if _, err := NewPipeline(PipelineConfig{
+		BuildCompose: func(context.Context, PreparedAttempt, FoundationResult) (ComposeConfig, error) {
+			return ComposeConfig{}, nil
+		},
+	}); err == nil || !strings.Contains(err.Error(), "READY config builder") {
+		t.Fatalf("NewPipeline() missing READY builder error = %v", err)
+	}
+
+	attempt := PreparedAttempt{Operation: journal.Operation{ID: "operation-build-compose"}}
+	foundation := FoundationResult{Lima: LimaResult{}}
+	wantErr := errors.New("injected runtime binding failure")
+	pipeline, err := NewPipeline(PipelineConfig{
+		BuildCompose: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult) (ComposeConfig, error) {
+			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) {
+				t.Fatal("Compose builder did not receive fresh foundation evidence")
+			}
+			return ComposeConfig{}, wantErr
+		},
+		BuildReady: func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) (ReadyConfig, error) {
+			return ReadyConfig{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pipeline.composeInputs(t.Context(), attempt, foundation); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "build Compose config") {
+		t.Fatalf("composeInputs() error = %v, want wrapped builder failure", err)
+	}
+
 	if _, err := AssemblePipelineCoordinator(Config{}, nil); err == nil || !strings.Contains(err.Error(), "pipeline is required") {
 		t.Fatalf("AssemblePipelineCoordinator() error = %v", err)
 	}

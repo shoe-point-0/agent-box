@@ -342,6 +342,29 @@ Deliver the single-repository up vertical slice
 - The pipeline is not yet instantiated by `cmd/aboxd`; production artifact,
   Lima, Compose, and filesystem adapter assembly plus the real cold/warm and
   detached-client smoke remain open.
+- Production-assembly prerequisite slice: `internal/up.Pipeline` now delays
+  `ComposeConfig` construction until the generated/Git/Lima foundation has
+  freshly converged. The previous static `ComposeConfig` shape could not be
+  assembled honestly: its normalization runner must target the just-proven
+  Lima Spec, which does not exist when a per-operation pipeline is constructed.
+  Capturing mutable runtime state in a shared runner would also make concurrent
+  Box operations race and potentially execute against the wrong VM.
+- `go test -race -count=10 ./internal/up`, `go vet ./internal/up`, and `git
+  diff --check` passed. The focused builder test proves the delayed callback
+  receives the exact prepared attempt and fresh foundation result and that a
+  binding failure stops before Compose compilation.
+- Post-slice `make check` passed with lint reporting `0 issues`; module
+  verification, all unit/race tests, vet, builds, smoke, shell, and Python
+  automation checks were green. `sprout check m1-single-repo-up` and `sprout
+  check --all` passed.
+- Inspection also rejected a tempting but unsafe production shortcut: the
+  current `lima.Adapter.Invoke` boundary has no structured environment or
+  secret channel, while `compose.Runner` requires both. Encoding Compose
+  environment or secret values into guest argv would violate the project's
+  no-secret-in-argv contract. Production dispatch therefore still requires a
+  bounded runtime-host Compose command adapter (and the verified guest
+  toolchain/environment contract it consumes), not an argv wrapper in
+  `cmd/aboxd`.
 
 ## Outcome and follow-ups
 
@@ -414,11 +437,13 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, instantiate the complete pipeline with production artifact, Git, Lima,
-Compose, and filesystem adapters and dispatch its `OperationRunner` from
-`cmd/aboxd`. Keep the packet open until the unchanged single-repository fixture
-passes through the real daemon and CLI, including detach and measured warm
-no-op assertions.
+Next, add the runtime-host Compose normalization adapter with explicit
+environment/secret transport and bind it through `BuildComposeConfig` to the
+fresh Lima result. Then instantiate the complete pipeline with verified
+artifact, Git, Lima, Compose, and filesystem adapters and dispatch its
+`OperationRunner` from `cmd/aboxd`. Keep the packet open until the unchanged
+single-repository fixture passes through the real daemon and CLI, including
+detach and measured warm no-op assertions.
 
 ## Original request
 

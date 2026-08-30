@@ -13,12 +13,17 @@ import (
 // Compose has produced the immutable RuntimeSpec they must execute against.
 type BuildReadyConfig func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) (ReadyConfig, error)
 
+// BuildComposeConfig binds Compose normalization to the freshly reconciled
+// runtime host. A production guest-command runner cannot be constructed before
+// the immutable Lima Spec and running instance have been re-observed.
+type BuildComposeConfig func(context.Context, PreparedAttempt, FoundationResult) (ComposeConfig, error)
+
 // PipelineConfig binds the existing concrete reconcilers into one complete
 // preparation-to-READY execution path.
 type PipelineConfig struct {
 	Preparation  PreparationConfig
 	Foundation   FoundationConfig
-	Compose      ComposeConfig
+	BuildCompose BuildComposeConfig
 	ComposeApply ComposeApplyConfig
 	BuildReady   BuildReadyConfig
 }
@@ -44,6 +49,9 @@ type Pipeline struct {
 // observing external state. Runtime-specific readiness construction remains
 // delayed until the freshly compiled and applied Compose result exists.
 func NewPipeline(config PipelineConfig) (*Pipeline, error) {
+	if config.BuildCompose == nil {
+		return nil, errors.New("configure Box up pipeline: Compose config builder is required")
+	}
 	if config.BuildReady == nil {
 		return nil, errors.New("configure Box up pipeline: READY config builder is required")
 	}
@@ -55,7 +63,11 @@ func NewPipeline(config PipelineConfig) (*Pipeline, error) {
 			return ReconcileFoundation(ctx, config.Foundation, attempt)
 		},
 		composeInputs: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult) (compose.RuntimeSpec, error) {
-			return ReconcileComposeInputs(ctx, config.Compose, attempt, foundation)
+			composeConfig, err := config.BuildCompose(ctx, attempt, foundation)
+			if err != nil {
+				return compose.RuntimeSpec{}, fmt.Errorf("reconcile Box pipeline: build Compose config: %w", err)
+			}
+			return ReconcileComposeInputs(ctx, composeConfig, attempt, foundation)
 		},
 		composeApply: func(ctx context.Context, attempt PreparedAttempt, spec compose.RuntimeSpec) (ComposeResult, error) {
 			return ReconcileCompose(ctx, config.ComposeApply, attempt, spec)
