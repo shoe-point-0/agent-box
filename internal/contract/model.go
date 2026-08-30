@@ -38,6 +38,7 @@ type Plan struct {
 	Compose          ComposePlan          `json:"compose"`
 	WorkspaceService WorkspaceServicePlan `json:"workspaceService"`
 	Mounts           []MountPlan          `json:"mounts"`
+	TCPPorts         []TCPPortPlan        `json:"tcpPorts"`
 	Policy           PolicyPlan           `json:"policy"`
 	Tools            ToolVersions         `json:"tools"`
 	PlanDigest       Digest               `json:"planDigest"`
@@ -83,6 +84,15 @@ type MountPlan struct {
 	Path     string   `json:"path"`
 	Services []string `json:"services"`
 	Writable bool     `json:"writable"`
+}
+
+// TCPPortPlan declares one stable Machine-loopback endpoint. The Machine port
+// is observed allocation state and therefore never enters the immutable Plan.
+type TCPPortPlan struct {
+	Name       string `json:"name"`
+	Service    string `json:"service"`
+	TargetPort int    `json:"targetPort"`
+	Allocate   string `json:"allocate"`
 }
 
 // PolicyPlan contains behavior-affecting policy already validated by the

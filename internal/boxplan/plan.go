@@ -216,7 +216,7 @@ func readPlan(path string) (contract.Plan, error) {
 }
 
 func absentOutput(desired contract.Plan) contract.PlanOutput {
-	operations := make([]contract.PlanOperation, 0, len(desired.Repositories)+3)
+	operations := make([]contract.PlanOperation, 0, len(desired.Repositories)+len(desired.TCPPorts)+3)
 	operations = append(operations, contract.PlanOperation{
 		Action: "create", Resource: "plan", Reason: "box-absent",
 		Description: "retain the compiled immutable Plan during reconciliation",
@@ -225,6 +225,12 @@ func absentOutput(desired contract.Plan) contract.PlanOutput {
 		operations = append(operations, contract.PlanOperation{
 			Action: "create", Resource: "repository/" + item.Name, Reason: "repository-absent",
 			Description: "create the private Git store and linked worktree during reconciliation",
+		})
+	}
+	for _, item := range desired.TCPPorts {
+		operations = append(operations, contract.PlanOperation{
+			Action: "create", Resource: "tcp-port/" + item.Name, Reason: "tcp-port-absent",
+			Description: "allocate and verify the stable Machine-loopback TCP endpoint during reconciliation",
 		})
 	}
 	operations = append(operations,

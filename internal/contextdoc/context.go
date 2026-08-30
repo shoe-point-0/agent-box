@@ -153,7 +153,7 @@ func validateInput(input Input) error {
 	if err := validateRoutes(observed.Routes); err != nil {
 		return err
 	}
-	if err := validatePorts(observed.Ports); err != nil {
+	if err := validatePorts(input.Plan.TCPPorts, observed.Ports); err != nil {
 		return err
 	}
 	if err := validateCommands(input.Commands); err != nil {
@@ -231,7 +231,14 @@ func validateRoutes(routes []contract.RouteContext) error {
 	return nil
 }
 
-func validatePorts(ports []contract.PortContext) error {
+func validatePorts(planned []contract.TCPPortPlan, ports []contract.PortContext) error {
+	if len(planned) != len(ports) {
+		return errors.New("generate context document: TCP port observations are incomplete")
+	}
+	plannedNames := make(map[string]struct{}, len(planned))
+	for _, port := range planned {
+		plannedNames[port.Name] = struct{}{}
+	}
 	seen := make(map[string]struct{}, len(ports))
 	for _, port := range ports {
 		if err := uniqueName(seen, port.Name, "port"); err != nil {
@@ -242,6 +249,9 @@ func validatePorts(ports []contract.PortContext) error {
 		}
 		if !port.Ready {
 			return fmt.Errorf("generate context document: port %q is not ready", port.Name)
+		}
+		if _, exists := plannedNames[port.Name]; !exists {
+			return fmt.Errorf("generate context document: port %q is not planned", port.Name)
 		}
 	}
 	return nil

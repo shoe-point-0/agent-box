@@ -42,6 +42,8 @@ const (
 	ReasonDirtyCheckoutReplacement  Reason = "dirty-checkout-replacement"
 	ReasonDirtyRepositoryRemoval    Reason = "dirty-repository-removal"
 	ReasonComposeChanged            Reason = "compose-configuration-changed"
+	ReasonTCPPortChanged            Reason = "tcp-port-configuration-changed"
+	ReasonTCPPortRemoved            Reason = "tcp-port-removed"
 	ReasonRouteChanged              Reason = "route-or-readiness-changed"
 	ReasonSetupJobChanged           Reason = "setup-job-changed"
 	ReasonSecretReferenceChanged    Reason = "secret-reference-changed"
@@ -55,6 +57,7 @@ type Kind string
 
 const (
 	KindRouteOrReadiness   Kind = "route-or-readiness"
+	KindTCPPort            Kind = "tcp-port"
 	KindCompose            Kind = "compose"
 	KindSetupJob           Kind = "setup-job"
 	KindWorktreeEdit       Kind = "worktree-edit"
@@ -109,6 +112,8 @@ func Classify(facts []Fact) Result {
 		switch fact.Kind {
 		case KindRouteOrReadiness:
 			changes = append(changes, change(ClassInPlace, ReasonRouteChanged, fact.Resource, "route or readiness configuration may be updated in place and probed again"))
+		case KindTCPPort:
+			changes = append(changes, change(ClassInPlace, ReasonTCPPortChanged, fact.Resource, "TCP endpoint allocation may be reconciled in place and probed again"))
 		case KindCompose:
 			changes = append(changes, change(ClassInPlace, ReasonComposeChanged, fact.Resource, "Compose service, build, or image configuration may be reconciled in place"))
 		case KindSetupJob:
@@ -197,6 +202,9 @@ func Compare(current, desired *contract.Plan, observed Observation) Result {
 		changes = append(changes, change(ClassInPlace, ReasonComposeChanged, "compose", "Compose service, build, image, mount, or policy configuration changed"))
 		structuralChange = true
 	}
+	before = len(changes)
+	changes = compareTCPPorts(changes, current.TCPPorts, desired.TCPPorts)
+	structuralChange = structuralChange || len(changes) != before
 	if current.Tools.Lima != desired.Tools.Lima || current.Tools.Docker != desired.Tools.Docker || current.Tools.Compose != desired.Tools.Compose {
 		changes = append(changes, change(ClassRestart, ReasonRuntimeToolsChanged, "runtime-tools", "runtime tool contract changes require restart and verification"))
 		structuralChange = true
@@ -222,7 +230,8 @@ func plansEqual(left, right *contract.Plan) bool {
 		left.WorkspaceService != right.WorkspaceService || left.Policy != right.Policy || left.Tools != right.Tools ||
 		left.PlanDigest != right.PlanDigest || left.Compose.ProjectName != right.Compose.ProjectName ||
 		len(left.Repositories) != len(right.Repositories) || len(left.Compose.Includes) != len(right.Compose.Includes) ||
-		!equalStrings(left.Compose.Profiles, right.Compose.Profiles) || len(left.Mounts) != len(right.Mounts) {
+		!equalStrings(left.Compose.Profiles, right.Compose.Profiles) || len(left.Mounts) != len(right.Mounts) ||
+		len(left.TCPPorts) != len(right.TCPPorts) {
 		return false
 	}
 	for index := range left.Repositories {
@@ -238,6 +247,11 @@ func plansEqual(left, right *contract.Plan) bool {
 	for index := range left.Mounts {
 		if left.Mounts[index].Path != right.Mounts[index].Path || left.Mounts[index].Writable != right.Mounts[index].Writable ||
 			!equalStrings(left.Mounts[index].Services, right.Mounts[index].Services) {
+			return false
+		}
+	}
+	for index := range left.TCPPorts {
+		if left.TCPPorts[index] != right.TCPPorts[index] {
 			return false
 		}
 	}
@@ -293,6 +307,34 @@ func repositoryByName(repositories []contract.PlanRepository, name string) (cont
 		}
 	}
 	return contract.PlanRepository{}, false
+}
+
+func compareTCPPorts(changes []Change, current, desired []contract.TCPPortPlan) []Change {
+	for _, existing := range current {
+		wanted, found := tcpPortByName(desired, existing.Name)
+		if !found {
+			changes = append(changes, change(ClassRemoval, ReasonTCPPortRemoved, "tcp-port/"+existing.Name, "removed TCP endpoint allocation must be released"))
+			continue
+		}
+		if existing != wanted {
+			changes = append(changes, change(ClassInPlace, ReasonTCPPortChanged, "tcp-port/"+existing.Name, "TCP endpoint target configuration changed"))
+		}
+	}
+	for _, wanted := range desired {
+		if _, found := tcpPortByName(current, wanted.Name); !found {
+			changes = append(changes, change(ClassInPlace, ReasonTCPPortChanged, "tcp-port/"+wanted.Name, "TCP endpoint allocation must be created and probed"))
+		}
+	}
+	return changes
+}
+
+func tcpPortByName(ports []contract.TCPPortPlan, name string) (contract.TCPPortPlan, bool) {
+	for _, port := range ports {
+		if port.Name == name {
+			return port, true
+		}
+	}
+	return contract.TCPPortPlan{}, false
 }
 
 func (observed Observation) dirty(name string) bool {

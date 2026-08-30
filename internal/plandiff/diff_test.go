@@ -23,6 +23,7 @@ func TestClassifyCoversReconcileBehaviorTable(t *testing.T) {
 		wantChanges int
 	}{
 		{"route or readiness configuration", plandiff.Fact{Kind: plandiff.KindRouteOrReadiness, Resource: "route/api"}, plandiff.ClassInPlace, plandiff.ReasonRouteChanged, 1},
+		{"TCP endpoint configuration", plandiff.Fact{Kind: plandiff.KindTCPPort, Resource: "tcp-port/database"}, plandiff.ClassInPlace, plandiff.ReasonTCPPortChanged, 1},
 		{"Compose service image or build configuration", plandiff.Fact{Kind: plandiff.KindCompose, Resource: "compose"}, plandiff.ClassInPlace, plandiff.ReasonComposeChanged, 1},
 		{"setup job input or command", plandiff.Fact{Kind: plandiff.KindSetupJob, Resource: "setup-job/install"}, plandiff.ClassInPlace, plandiff.ReasonSetupJobChanged, 1},
 		{"worktree edits", plandiff.Fact{Kind: plandiff.KindWorktreeEdit, Resource: "repository/repo"}, plandiff.ClassNoOp, plandiff.ReasonObservedStateOnly, 0},
@@ -72,6 +73,20 @@ func TestCompareExecutablePlanChanges(t *testing.T) {
 				plan.Compose.Includes[0].Digest = digest('b')
 			},
 			wantClass: plandiff.ClassInPlace, wantReason: plandiff.ReasonComposeChanged, wantChanges: 1,
+		},
+		{
+			name: "TCP endpoint configuration",
+			mutate: func(plan *contract.Plan) {
+				plan.TCPPorts[0].TargetPort++
+			},
+			wantClass: plandiff.ClassInPlace, wantReason: plandiff.ReasonTCPPortChanged, wantChanges: 1,
+		},
+		{
+			name: "TCP endpoint removal",
+			mutate: func(plan *contract.Plan) {
+				plan.TCPPorts = nil
+			},
+			wantClass: plandiff.ClassRemoval, wantReason: plandiff.ReasonTCPPortRemoved, wantChanges: 1,
 		},
 		{
 			name: "CPU or memory",
@@ -250,6 +265,7 @@ func basePlan() contract.Plan {
 		Compose:          contract.ComposePlan{ProjectName: "abox-task-test", Includes: []contract.Artifact{{Path: "/boxes/task/workspace/repo/compose.yaml", Digest: digest('2')}}, Profiles: []string{"development"}},
 		WorkspaceService: contract.WorkspaceServicePlan{Name: "workspace", Repository: "repo", WorkingDirectory: "repo"},
 		Mounts:           []contract.MountPlan{{Path: "/boxes/task/workspace/repo", Services: []string{"workspace"}, Writable: true}},
+		TCPPorts:         []contract.TCPPortPlan{{Name: "metrics", Service: "metrics", TargetPort: 9090, Allocate: "dynamic"}},
 		Policy:           contract.PolicyPlan{GitMetadata: "read-write", DockerSocket: "deny", MachineMounts: "declared-only", NetworkEgress: "allow"},
 		Tools:            contract.ToolVersions{AgentBox: "0.1.0", Git: "2.51.0", Lima: "2.0.0", Docker: "28.3.3", Compose: "2.39.1"},
 		PlanDigest:       digest('a'),

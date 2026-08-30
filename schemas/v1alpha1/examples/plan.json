@@ -51,6 +51,7 @@
       "writable": true
     }
   ],
+  "tcpPorts": [],
   "policy": {
     "gitMetadata": "read-write",
     "dockerSocket": "deny",

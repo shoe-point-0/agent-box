@@ -217,7 +217,6 @@ func TestMilestone1FeatureErrors(t *testing.T) {
 		{"caches", func(w *Workspace) { w.Spec.Caches = []Cache{{}} }, "spec.caches"},
 		{"setup", func(w *Workspace) { w.Spec.Setup = []SetupJob{{}} }, "spec.setup"},
 		{"routes", func(w *Workspace) { w.Spec.Routes = []Route{{}} }, "spec.routes"},
-		{"TCP ports", func(w *Workspace) { w.Spec.TCPPorts = []TCPPort{{}} }, "spec.tcpPorts"},
 		{"secrets", func(w *Workspace) { w.Spec.Secrets = []Secret{{}} }, "spec.secrets"},
 	}
 	for _, feature := range features {
@@ -229,6 +228,16 @@ func TestMilestone1FeatureErrors(t *testing.T) {
 				t.Fatalf("error = %v, want feature error at %s", err, feature.path)
 			}
 		})
+	}
+}
+
+func TestMilestone1AllowsTCPPortProjection(t *testing.T) {
+	t.Parallel()
+	workspace := &Workspace{Spec: WorkspaceSpec{TCPPorts: []TCPPort{{
+		Name: "database", Service: "postgres", TargetPort: 5432, Allocate: "dynamic",
+	}}}}
+	if err := CheckMilestone1Executable(workspace); err != nil {
+		t.Fatalf("CheckMilestone1Executable(TCP port) error = %v", err)
 	}
 }
 

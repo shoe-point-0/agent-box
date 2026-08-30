@@ -699,6 +699,7 @@ func planFixture() contract.PlanOutput {
 			Compose:          contract.ComposePlan{ProjectName: "abox-task-aaaaaaaa", Includes: []contract.Artifact{{Path: "/state/boxes/task-aaaaaaaa/workspace/repo/compose.yaml", Digest: digest}}, Profiles: []string{"development"}},
 			WorkspaceService: contract.WorkspaceServicePlan{Name: "app", Repository: "repo", WorkingDirectory: "repo"},
 			Mounts:           []contract.MountPlan{{Path: "/state/boxes/task-aaaaaaaa/workspace/repo", Services: []string{"app"}, Writable: true}},
+			TCPPorts:         []contract.TCPPortPlan{},
 			Policy:           contract.PolicyPlan{GitMetadata: "read-write", DockerSocket: "deny", MachineMounts: "declared-only", NetworkEgress: "allow"},
 			Tools:            contract.ToolVersions{AgentBox: "test", Git: "test", Lima: "test", Docker: "test", Compose: "test"},
 			PlanDigest:       digest,

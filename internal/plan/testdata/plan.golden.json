@@ -5,7 +5,7 @@
   "taskKey": "TASK-16",
   "manifest": {
     "path": "$ROOT/workspace/.abox/box.yaml",
-    "digest": "sha256:d75ca45f7f26119d182472af985155daff1f2a4e1982bcebcf99a270f66d1dbe"
+    "digest": "sha256:8886f129d3a85d895405a196664e0782af11ddc17a938d4d7a845929a504e3bb"
   },
   "repositories": [
     {
@@ -49,6 +49,14 @@
       "path": "/state/boxes/$BOX_ID/workspace/services/repo",
       "services": ["worker", "workspace"],
       "writable": true
+    }
+  ],
+  "tcpPorts": [
+    {
+      "name": "database",
+      "service": "postgres",
+      "targetPort": 5432,
+      "allocate": "dynamic"
     }
   ],
   "policy": {

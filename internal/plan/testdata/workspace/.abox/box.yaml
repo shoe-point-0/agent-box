@@ -28,6 +28,11 @@ spec:
     - repository: repo
       services: [worker, workspace, worker]
       mode: read-write
+  tcpPorts:
+    - name: database
+      service: postgres
+      targetPort: 5432
+      allocate: dynamic
   policy:
     gitMetadata: read-only
     dockerSocket: deny

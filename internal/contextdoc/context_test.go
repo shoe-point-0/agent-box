@@ -60,6 +60,7 @@ func TestWriteProducesSchemaValidGoldenFromLiveObservations(t *testing.T) {
 
 func TestGenerateSupportsAdditiveLiveRoutesAndPorts(t *testing.T) {
 	input := baseInput()
+	input.Plan.TCPPorts = []contract.TCPPortPlan{{Name: "postgres", Service: "postgres", TargetPort: 5432, Allocate: "dynamic"}}
 	input.Observations.Routes = []contract.RouteContext{{
 		Name: "api", URL: "http://api.auth-142-3m6y4k2p.abox.localhost:7777", Ready: true,
 	}}
@@ -94,6 +95,7 @@ func TestWriteRefusesIncompleteOrStaleGenerationWithoutReplacement(t *testing.T)
 			input.Observations.Routes = []contract.RouteContext{{Name: "api", URL: "http://api.example.invalid", Ready: false}}
 		}},
 		{"port readiness", func(input *contextdoc.Input) {
+			input.Plan.TCPPorts = []contract.TCPPortPlan{{Name: "db", Service: "db", TargetPort: 5432, Allocate: "dynamic"}}
 			input.Observations.Ports = []contract.PortContext{{Name: "db", Host: "127.0.0.1", Port: 20001, Ready: false}}
 		}},
 	}

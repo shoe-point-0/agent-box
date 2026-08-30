@@ -20,6 +20,7 @@ var expectedTables = []string{
 	"leases",
 	"operation_events",
 	"operations",
+	"port_allocations",
 	"reconciliation_compose_authority",
 	"reconciliation_generated_authority",
 	"reconciliation_git_authority",
@@ -395,7 +396,7 @@ func assertSchema(t *testing.T, db *sql.DB) {
 	if !slices.Equal(tables, expectedTables) {
 		t.Fatalf("tables = %v, want %v", tables, expectedTables)
 	}
-	for _, deferred := range []string{"routes", "port_allocations", "setup_stamps"} {
+	for _, deferred := range []string{"routes", "setup_stamps"} {
 		if slices.Contains(tables, deferred) {
 			t.Fatalf("deferred table %q exists in v1", deferred)
 		}

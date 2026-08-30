@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	CurrentSchemaVersion = 8
+	CurrentSchemaVersion = 9
 	busyTimeoutMillis    = 5_000
 	maxOpenConnections   = 8
 )

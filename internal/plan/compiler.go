@@ -93,7 +93,8 @@ func Compile(input Input) (contract.Plan, []byte, error) {
 			Repository:       input.Workspace.Spec.WorkspaceService.Repository,
 			WorkingDirectory: input.Workspace.Spec.WorkspaceService.WorkingDirectory,
 		},
-		Mounts: mounts,
+		Mounts:   mounts,
+		TCPPorts: compileTCPPorts(input.Workspace.Spec.TCPPorts),
 		Policy: contract.PolicyPlan{
 			GitMetadata:   input.Workspace.Spec.Policy.GitMetadata,
 			DockerSocket:  input.Workspace.Spec.Policy.DockerSocket,
@@ -289,6 +290,19 @@ func compileMounts(workspace *manifest.Workspace, facts repository.Facts) []cont
 	return mounts
 }
 
+func compileTCPPorts(ports []manifest.TCPPort) []contract.TCPPortPlan {
+	result := make([]contract.TCPPortPlan, 0, len(ports))
+	for _, port := range ports {
+		result = append(result, contract.TCPPortPlan{
+			Name: port.Name, Service: port.Service, TargetPort: port.TargetPort, Allocate: port.Allocate,
+		})
+	}
+	slices.SortFunc(result, func(left, right contract.TCPPortPlan) int {
+		return strings.Compare(left.Name, right.Name)
+	})
+	return result
+}
+
 func canonicalSet(values []string) []string {
 	set := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -373,6 +387,7 @@ type digestDocument struct {
 	Compose          contract.ComposePlan          `json:"compose"`
 	WorkspaceService contract.WorkspaceServicePlan `json:"workspaceService"`
 	Mounts           []contract.MountPlan          `json:"mounts"`
+	TCPPorts         []contract.TCPPortPlan        `json:"tcpPorts"`
 	Policy           contract.PolicyPlan           `json:"policy"`
 	Tools            contract.ToolVersions         `json:"tools"`
 }
@@ -382,7 +397,7 @@ func digestPlan(plan contract.Plan) (contract.Digest, error) {
 		SchemaVersion: plan.SchemaVersion, WorkspaceID: plan.WorkspaceID, BoxID: plan.BoxID,
 		TaskKey: plan.TaskKey, Manifest: plan.Manifest, Repositories: plan.Repositories,
 		RuntimeHost: plan.RuntimeHost, Compose: plan.Compose, WorkspaceService: plan.WorkspaceService,
-		Mounts: plan.Mounts, Policy: plan.Policy, Tools: plan.Tools,
+		Mounts: plan.Mounts, TCPPorts: plan.TCPPorts, Policy: plan.Policy, Tools: plan.Tools,
 	}
 	encoded, err := json.Marshal(document)
 	if err != nil {

@@ -461,7 +461,6 @@ func CheckMilestone1Executable(workspace *Workspace) error {
 		{len(workspace.Spec.Caches) > 0, "spec.caches", "caches"},
 		{len(workspace.Spec.Setup) > 0, "spec.setup", "setup jobs"},
 		{len(workspace.Spec.Routes) > 0, "spec.routes", "routes"},
-		{len(workspace.Spec.TCPPorts) > 0, "spec.tcpPorts", "TCP ports"},
 		{len(workspace.Spec.Secrets) > 0, "spec.secrets", "secrets"},
 	}
 	for _, check := range checks {
