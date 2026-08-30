@@ -105,6 +105,20 @@ Deliver the single-repository up vertical slice
 - Post-preparation `make check` passed: lint reported `0 issues`; module
   verification, all unit and race tests, vet, builds, smoke, shell checks, and
   Python automation tests were green. `sprout check m1-single-repo-up` passed.
+- Partial Git-authority slice: schema v5 adds one generation-scoped,
+  single-repository recovery record tied to an actual daemon `up` operation.
+  `SaveReconciliationGitAuthority` records intent before apply and permits only
+  monotonic addition of the exact private-store identity and locked-worktree
+  identity. A later daemon operation can continue the same immutable claim;
+  drift, proof replacement, and proof regression fail closed.
+- `go test -race ./internal/state`, `go vet ./internal/state`, and
+  `git diff --check` passed for the partial-authority slice. The tests exercise
+  claim/store/worktree progression, cross-operation recovery, drift and
+  regression refusal, schema migration from every retained fixture, and atomic
+  retirement of matching partial authority during READY publication.
+- Post-authority `make check` passed: lint reported `0 issues`; module
+  verification, all unit and race tests, vet, builds, smoke, shell checks, and
+  Python automation tests were green. `sprout check m1-single-repo-up` passed.
 - This evidence does not yet satisfy the cold/warm Box acceptance criteria: the
   prepared attempt is not yet consumed by concrete Git, Lima, filesystem,
   Compose, context, and READY operations in `cmd/aboxd`. The final READY
@@ -131,10 +145,17 @@ assembly. It deliberately refuses to infer ownership from deterministic names,
 paths, or cached component rows. Cold preparation is allowed only at generation
 zero; warm preparation requires the exact current-generation removal snapshot.
 
-Next, consume `up.PreparedAttempt` in concrete private-store and worktree
-operations, including durable partial-resource authority so a daemon crash
-between Git creation and READY publication can resume rather than collide with
-an unproven orphan. Then add Lima, filesystem, Compose, context, and READY
+The fourth coherent slice adds durable, monotonic partial authority for the
+private Git store and linked worktree. It is intentionally retired only inside
+the same transaction that publishes complete READY removal authority, so a
+failed publication retains the recovery record and a successful publication
+cannot leave two competing authority sources.
+
+Next, consume `up.PreparedAttempt` and the partial-authority store in concrete
+private-store and worktree reconcile operations. Persist the claim before
+mutation and each freshly verified identity immediately after its apply, then
+prove restart recovery against real Git without adopting a path from its name
+alone. Then add Lima, filesystem, Compose, context, and READY
 operations and wire the completed runner into `cmd/aboxd`. Keep the packet open
 until the unchanged single-repository fixture passes through the real daemon
 and CLI, including detach and measured warm no-op assertions.

@@ -88,6 +88,19 @@ func (s *Store) PublishReady(ctx context.Context, publication ReadyGeneration) e
 		if err := saveRemovalSnapshotTx(ctx, tx, snapshot, encodedSnapshot); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM reconciliation_git_authority
+			WHERE box_id = ? AND generation = ? AND plan_digest = ?`, publication.Plan.BoxID,
+			publication.Generation, publication.Plan.PlanDigest); err != nil {
+			return fmt.Errorf("publish READY generation: retire partial Git authority: %w", err)
+		}
+		var partialGitRows int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM reconciliation_git_authority
+			WHERE box_id = ? AND generation = ?`, publication.Plan.BoxID, publication.Generation).Scan(&partialGitRows); err != nil {
+			return fmt.Errorf("publish READY generation: verify retired partial Git authority: %w", err)
+		}
+		if partialGitRows != 0 {
+			return errors.New("publish READY generation: partial Git authority differs from Plan")
+		}
 		result, err := tx.ExecContext(ctx, `UPDATE boxes
 			SET recorded_state = 'ready', current_generation = ?, updated_at = ?
 			WHERE id = ? AND current_generation IN (?, ?)`, publication.Generation,
