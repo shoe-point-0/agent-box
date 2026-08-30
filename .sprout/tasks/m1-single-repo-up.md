@@ -139,6 +139,27 @@ Deliver the single-repository up vertical slice
   context, and READY operations in `cmd/aboxd`. The final READY
   transaction exists but is not wired to the filesystem readiness gate, and no
   runtime-host support claim is made.
+- Generated-Plan slice: schema v6 adds generation-scoped partial authority for
+  the generated Box root. `internal/up.ReconcileGeneratedPlan` writes the
+  immutable generation claim before filesystem mutation, retains the root
+  device/inode before writing `plan.json`, and resumes only after a fresh path
+  proof. Existing unclaimed roots, substituted root inodes, symlinked parent
+  paths, unsafe Plan files, and changed Plan content are refused rather than
+  adopted or overwritten.
+- READY publication now compares any partial generated-root authority with the
+  complete removal snapshot in the same transaction before retiring it. An
+  injected mismatch rolls back publication and leaves the recovery authority
+  intact. Migration tests pass from every schema fixture through schema v6.
+- `go test -race -count=10 ./internal/state ./internal/up`,
+  `go vet ./internal/state ./internal/up`, and `git diff --check` passed. The
+  focused up test interrupted after root authority persistence, resumed without
+  replacing the root, and measured a third reconciliation with zero additional
+  Plan writes. Post-slice `make check` passed with lint reporting `0 issues`,
+  all unit and race tests, vet, builds, smoke, shell, and automation checks
+  green; `sprout check --all` passed.
+- This slice still does not satisfy cold/warm Box acceptance: the generated
+  Plan and concrete Git reconciler are not yet assembled into the production
+  DAG, and Lima onward remains unwired.
 
 ## Outcome and follow-ups
 
@@ -172,10 +193,16 @@ freshly checked by the worktree boundary, and a retained worktree is observed
 rather than ensured; a deterministic path without matching retained identity
 is never adopted.
 
-Next, add the concrete generated Plan and Lima reconcile operations after the
-Git result, retaining their exact ownership evidence for READY publication.
-Then add filesystem, Compose, context, and READY operations and wire the
-completed runner into `cmd/aboxd`. Keep the packet open until the unchanged
+The sixth coherent slice materializes the immutable generated Plan under
+durable root authority. A crash after root creation can resume only when the
+retained inode still matches, and READY cannot silently replace that partial
+authority with a different removal root.
+
+Next, assemble generated Plan then Git as the first concrete production DAG
+operations and add the Lima create/start reconcile immediately after them,
+retaining exact Lima ownership evidence for READY publication. Then add
+filesystem, Compose, context, and READY operations and wire the completed
+runner into `cmd/aboxd`. Keep the packet open until the unchanged
 single-repository fixture passes through the real daemon and CLI, including
 detach and measured warm no-op assertions.
 
