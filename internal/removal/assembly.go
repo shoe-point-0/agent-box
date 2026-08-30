@@ -106,7 +106,7 @@ func AssembleCurrent(ctx context.Context, config AssemblyConfig) (*Coordinator, 
 func validateAssemblyIdentity(snapshot state.RemovalSnapshot, operation journal.Operation) error {
 	immutable := snapshot.ComposeSpec.Plan
 	if snapshot.BoxID != operation.BoxID || immutable.BoxID != snapshot.BoxID ||
-		snapshot.LimaSpec.BoxID != snapshot.BoxID || snapshot.LimaSpec.RuntimeHost.InstanceName != snapshot.BoxID ||
+		snapshot.LimaSpec.BoxID != snapshot.BoxID || snapshot.LimaSpec.RuntimeHost.InstanceName != immutable.RuntimeHost.InstanceName ||
 		snapshot.ComposeSpec.RuntimeHost.BoxID != snapshot.BoxID ||
 		snapshot.PlanDigest != immutable.PlanDigest || snapshot.LimaSpec.PlanDigest != snapshot.PlanDigest ||
 		snapshot.Generation != snapshot.LimaSpec.Generation || snapshot.Generation != snapshot.ComposeSpec.Generation {

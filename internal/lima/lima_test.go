@@ -97,7 +97,7 @@ func TestGenerateConfigRejectsUnsafeOrUnrepresentableInputs(t *testing.T) {
 	}{
 		{"wrong-driver", func(spec *lima.Spec) { spec.RuntimeHost.Driver = "lima-qemu" }},
 		{"fractional-cpu", func(spec *lima.Spec) { spec.RuntimeHost.CPUMillicores = 1500 }},
-		{"foreign-box-name", func(spec *lima.Spec) { spec.BoxID = "other-box" }},
+		{"missing-box-identity", func(spec *lima.Spec) { spec.BoxID = "" }},
 		{"relative-image", func(spec *lima.Spec) { spec.ImagePath = "guest.img" }},
 		{"duplicate-mount", func(spec *lima.Spec) { spec.Mounts[1].Path = spec.Mounts[0].Path }},
 		{"unverified-image", func(spec *lima.Spec) { spec.GuestImage.Component = toolchain.Utility }},
@@ -454,7 +454,7 @@ func testSpec(t *testing.T) lima.Spec {
 			{Path: "/home/user/box/git/repository.git", Writable: true},
 			{Path: "/home/user/box/workspace/repository", Writable: true},
 		},
-		BoxID: "task-a1b2c3d4", PlanDigest: digest([]byte("plan")), Generation: 7,
+		BoxID: "box-task-a1b2c3d4", PlanDigest: digest([]byte("plan")), Generation: 7,
 		GuestImage: toolchain.Identity{Component: toolchain.GuestImage, Version: "ubuntu-24.04", Digest: digest([]byte("guest-image"))},
 		ImagePath:  "/opt/agent-box/images/guest image.img",
 	}

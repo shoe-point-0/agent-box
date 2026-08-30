@@ -39,7 +39,8 @@ type LimaStep struct {
 // any Lima observation.
 func NewLimaStep(config LimaStepConfig) (*LimaStep, error) {
 	name := config.Spec.RuntimeHost.InstanceName
-	if config.Runtime == nil || name == "" || config.Spec.BoxID != name || config.Record.Name != name || len(config.Record.Metadata) == 0 {
+	if config.Runtime == nil || name == "" || config.Spec.BoxID == "" || config.Record.Name != name ||
+		config.Record.Metadata[ownership.BoxIDFact] != config.Spec.BoxID || len(config.Record.Metadata) == 0 {
 		return nil, errors.New("configure Lima removal: runtime specification, ownership record, and adapter are required")
 	}
 	record := config.Record

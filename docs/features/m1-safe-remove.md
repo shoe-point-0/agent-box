@@ -1,5 +1,5 @@
 <!-- sprout-task
-{"schema_version":1,"id":"m1-safe-remove","status":"open","created_at":"2026-08-29T06:48:36.249156679Z"}
+{"schema_version":1,"id":"m1-safe-remove","status":"implemented","created_at":"2026-08-29T06:48:36.249156679Z","implemented_at":"2026-08-30T05:45:13.364027059Z"}
 -->
 
 # Implement refusal-first Box removal
@@ -28,10 +28,10 @@ Implement refusal-first Box removal
 
 ## Acceptance criteria
 
-- [ ] Default removal refuses dirty or unpublished work and leaves every file and resource intact.
-- [ ] Explicit removal lists exact losses before confirmation and touches only the selected Box.
-- [ ] Rerunning after interruption safely converges.
-- [ ] Any drift in dirtiness, unpublished commits, inode identity, labels, or volume policy after preview forces a fresh refusal or confirmation before mutation.
+- [x] Default removal refuses dirty or unpublished work and leaves every file and resource intact.
+- [x] Explicit removal lists exact losses before confirmation and touches only the selected Box.
+- [x] Rerunning after interruption safely converges.
+- [x] Any drift in dirtiness, unpublished commits, inode identity, labels, or volume policy after preview forces a fresh refusal or confirmation before mutation.
 
 ## Technical approach
 
@@ -61,8 +61,8 @@ Implement refusal-first Box removal
 - [x] Inspect the relevant code, tests, and repository instructions.
 - [x] Refine the technical approach and acceptance criteria in this task before editing.
 - [x] Implement the refusal/confirmation/removal coordination boundary.
-- [ ] Run every verification item and address failures.
-- [ ] Record concrete validation evidence and completion notes in this task.
+- [x] Run every verification item and address failures.
+- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -261,8 +261,33 @@ Implement refusal-first Box removal
   `0 issues`; module verification, unit and race tests, vet, Linux builds, spike
   smoke, shell checks, and Python automation tests all passed. `limactl` remains
   unavailable on this Linux lane, so no live Lima teardown is claimed.
-- The task remains open: these results prove the CLI/transport contract but not
-  a disposable full-Box teardown through persisted production ownership.
+- `go test -race -count=10 ./internal/lima ./internal/state
+  ./internal/generatedstate ./internal/removal` passed after adding the final
+  assembled full-Box fixture. Each run materialized a compiled Plan, persisted
+  current-generation removal authority in real SQLite, created a real locked
+  private-store Git worktree with dirty, ignored, and unpublished data, and
+  exercised the operation runner with durable journal leases/events. Default
+  execution preserved every selected resource; explicit digest-bound execution
+  removed the exact Compose, Lima, worktree, private-store, and generated-state
+  inventory while byte-verifying an unrelated sibling Box and source checkout.
+  Post-preview dirtiness, unpublished-commit, worktree-inode, Compose-label, and
+  volume-driver-policy changes all refused before the first remover. An injected
+  post-delete Lima interruption changed the preview digest, and a fresh retry
+  converged without replaying already-absent Compose or Lima deletion.
+- The fixture exposed two previously masked integration defects and now guards
+  both. Lima removal ownership distinguishes the compiled `abox-<box-id>`
+  instance name from the Box ID stored in ownership metadata. Generated-state
+  preflight can inventory nonempty dependency-owned Git/workspace directories,
+  while final teardown accepts only an exact monotonic artifact shrink caused
+  by earlier leased stages; replacement artifacts and root-identity changes
+  still refuse.
+- `make check` passed after the full-Box slice: pinned lint reported `0 issues`;
+  module verification, all unit and race tests, vet, Linux builds, spike smoke,
+  shell checks, and Python automation tests passed. `go vet ./internal/lima
+  ./internal/state ./internal/generatedstate ./internal/removal` and `git diff
+  --check` also passed. The runtime-host and Compose boundary remains a
+  deterministic ownership-verifying fixture because `limactl` is unavailable;
+  no live Lima or Darwin claim is made.
 
 ## Outcome and follow-ups
 
@@ -349,11 +374,9 @@ Implement refusal-first Box removal
   `abox rm` now performs a mandatory preview operation, renders exact losses,
   then starts a distinct digest-authorized operation only when `--yes` is
   present; dirty-worktree, unpublished-commit, and volume loss each retain a
-  separate flag. Full disposable Box teardown evidence through the production
-  ownership snapshot remains required before any acceptance criterion can be
-  checked; that fixture must prove refusal, exact selected-Box loss, drift, and
-  interrupted retry through one assembled operation rather than inferring the
-  result from the already-passing leaf tests.
+  separate flag. The disposable assembled-operation fixture now proves refusal,
+  exact selected-Box loss, drift, and interrupted retry through persisted
+  production ownership rather than inferring those guarantees from leaf tests.
 
 ## Original request
 

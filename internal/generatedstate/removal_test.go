@@ -122,7 +122,7 @@ func TestManagerFreshObservationConvergesAfterInterruptedSuccessfulDelete(t *tes
 	}
 }
 
-func TestManagerRefusesNonemptyResourceDirectory(t *testing.T) {
+func TestManagerRefusesToRemoveNonemptyResourceDirectory(t *testing.T) {
 	t.Parallel()
 	fixture := newFixture(t)
 	workspace, err := fixture.provider.WorkspaceRoot(fixture.boxID)
@@ -132,8 +132,12 @@ func TestManagerRefusesNonemptyResourceDirectory(t *testing.T) {
 	canary := filepath.Join(workspace, "unexpected.txt")
 	mustWrite(t, canary, []byte("keep"))
 	manager := newManager(t, fixture.provider, generatedstate.SystemOperations())
-	if _, err := manager.ObserveRemoval(t.Context(), fixture.plan, fixture.record); err == nil {
-		t.Fatal("ObserveRemoval() accepted nonempty workspace root")
+	observed, err := manager.ObserveRemoval(t.Context(), fixture.plan, fixture.record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Remove(t.Context(), fixture.plan, fixture.record, observed); err == nil {
+		t.Fatal("Remove() accepted nonempty workspace root")
 	}
 	assertContents(t, canary, []byte("keep"))
 }

@@ -201,7 +201,7 @@ func validateRemovalSnapshot(snapshot RemovalSnapshot) error {
 		}
 	}
 	generation := strconv.FormatInt(snapshot.Generation, 10)
-	if snapshot.Lima.Name != snapshot.BoxID || snapshot.Lima.Metadata[ownership.BoxIDFact] != snapshot.BoxID ||
+	if snapshot.Lima.Name != snapshot.LimaSpec.RuntimeHost.InstanceName || snapshot.Lima.Metadata[ownership.BoxIDFact] != snapshot.BoxID ||
 		snapshot.Lima.Metadata["dev.abox.plan-digest"] != string(snapshot.PlanDigest) ||
 		snapshot.Lima.Metadata["dev.abox.generation"] != generation {
 		return errors.New("save removal ownership snapshot: Lima ownership is incomplete")
@@ -243,7 +243,7 @@ func validComposeRemovalLabels(labels map[string]string, boxID, project, planDig
 func validateLimaRemovalSpec(snapshot RemovalSnapshot) error {
 	spec := snapshot.LimaSpec
 	if !validToolchainIdentity(snapshot.LimaArtifact, toolchain.Lima) || snapshot.LimaArtifact.Version != lima.SupportedVersion ||
-		spec.BoxID != snapshot.BoxID || spec.RuntimeHost.InstanceName != snapshot.BoxID ||
+		spec.BoxID != snapshot.BoxID || spec.RuntimeHost.InstanceName != snapshot.ComposeSpec.Plan.RuntimeHost.InstanceName ||
 		spec.PlanDigest != snapshot.PlanDigest || spec.Generation != snapshot.Generation ||
 		!reflect.DeepEqual(spec.RuntimeHost, snapshot.ComposeSpec.Plan.RuntimeHost) ||
 		!reflect.DeepEqual(spec.Mounts, snapshot.ComposeSpec.Plan.Mounts) ||

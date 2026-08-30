@@ -149,13 +149,13 @@ func (m *Manager) ObserveRemoval(_ context.Context, immutable contract.Plan, rec
 			return Observation{}, fmt.Errorf("observe generated-state artifact %s: type is unsafe", target.kind)
 		}
 		if target.directory {
-			entries, readErr := os.ReadDir(target.path)
-			if readErr != nil {
+			if _, readErr := os.ReadDir(target.path); readErr != nil {
 				return Observation{}, fmt.Errorf("observe generated-state artifact %s: %w", target.kind, readErr)
 			}
-			if len(entries) != 0 {
-				return Observation{}, fmt.Errorf("observe generated-state artifact %s: directory is not empty", target.kind)
-			}
+			// Worktree and private-store removal own the contents. Recording the
+			// directory itself here lets the complete preflight run before those
+			// dependency stages; os.Remove still refuses it unless they converge
+			// the directory to empty before generated-state teardown.
 		}
 		identity, identityErr := ownership.InspectPath(target.path)
 		if identityErr != nil {

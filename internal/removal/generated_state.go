@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/generatedstate"
@@ -86,4 +87,41 @@ func (s *GeneratedStateStep) observe(ctx context.Context) (generatedstate.Observ
 		"artifacts":     string(artifacts),
 		"retainedState": "plan.json,diagnostics",
 	}}, nil
+}
+
+// validateDependencyTransition permits only a monotonic shrink of the exact
+// generated artifact inventory. Earlier worktree and private-store stages may
+// remove their now-empty parent directories after the full preview, but may not
+// add or replace an artifact or change the Box-root identity.
+func (*GeneratedStateStep) validateDependencyTransition(expected, actual Fact) error {
+	if !expected.Present || len(expected.Losses) != 0 || len(actual.Losses) != 0 {
+		return ErrInventoryDrift
+	}
+	if !actual.Present {
+		return nil
+	}
+	expectedEvidence := maps.Clone(expected.Evidence)
+	actualEvidence := maps.Clone(actual.Evidence)
+	expectedArtifactsJSON, expectedOK := expectedEvidence["artifacts"]
+	actualArtifactsJSON, actualOK := actualEvidence["artifacts"]
+	delete(expectedEvidence, "artifacts")
+	delete(actualEvidence, "artifacts")
+	if !expectedOK || !actualOK || !maps.Equal(expectedEvidence, actualEvidence) {
+		return ErrInventoryDrift
+	}
+	var expectedArtifacts, actualArtifacts []generatedstate.Artifact
+	if json.Unmarshal([]byte(expectedArtifactsJSON), &expectedArtifacts) != nil ||
+		json.Unmarshal([]byte(actualArtifactsJSON), &actualArtifacts) != nil {
+		return ErrInventoryDrift
+	}
+	allowed := make(map[generatedstate.Artifact]struct{}, len(expectedArtifacts))
+	for _, artifact := range expectedArtifacts {
+		allowed[artifact] = struct{}{}
+	}
+	for _, artifact := range actualArtifacts {
+		if _, ok := allowed[artifact]; !ok {
+			return ErrInventoryDrift
+		}
+	}
+	return nil
 }

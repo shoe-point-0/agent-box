@@ -74,6 +74,13 @@ type Step interface {
 	Remove(context.Context, Fact) error
 }
 
+// dependencyTransitionStep validates a fact change caused only by earlier
+// dependency stages in this same leased execution. It is deliberately private:
+// ordinary resources must still match the digest-bound preview exactly.
+type dependencyTransitionStep interface {
+	validateDependencyTransition(Fact, Fact) error
+}
+
 // Lease is the opaque exclusive mutation right supplied by the daemon journal.
 type Lease struct {
 	BoxID string
@@ -298,8 +305,16 @@ func (c *Coordinator) Execute(ctx context.Context, preview Preview, authorizatio
 			return c.failed(index, result.Completed, fmt.Errorf("reobserve immediately before removal: %w", err))
 		}
 		resource, err := normalizeResource(c.steps[index], fact)
-		if err != nil || resource.Digest != expected.Digest {
+		if err != nil {
 			return c.failed(index, result.Completed, errors.Join(err, ErrInventoryDrift))
+		}
+		if resource.Digest != expected.Digest {
+			transition, ok := c.steps[index].(dependencyTransitionStep)
+			if !ok || transition.validateDependencyTransition(
+				Fact{Present: expected.Present, Evidence: expected.Evidence, Losses: expected.Losses}, fact,
+			) != nil {
+				return c.failed(index, result.Completed, ErrInventoryDrift)
+			}
 		}
 		if err := context.Cause(executionContext); err != nil {
 			return c.failed(index, result.Completed, fmt.Errorf("verify removal lease: %w", err))

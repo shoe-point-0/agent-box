@@ -142,8 +142,8 @@ func compileConfig(spec Spec) (limaConfig, error) {
 	if spec.RuntimeHost.Driver != "lima-vz" {
 		return limaConfig{}, invalidSpec("runtime driver must be lima-vz")
 	}
-	if !validName(spec.RuntimeHost.InstanceName) || !validFact(spec.BoxID) || spec.RuntimeHost.InstanceName != spec.BoxID {
-		return limaConfig{}, invalidSpec("instance and Box identity must be equal, non-empty, and NUL-free")
+	if !validName(spec.RuntimeHost.InstanceName) || !validFact(spec.BoxID) {
+		return limaConfig{}, invalidSpec("instance and Box identity must be non-empty and NUL-free")
 	}
 	if spec.RuntimeHost.CPUMillicores <= 0 || spec.RuntimeHost.CPUMillicores%1000 != 0 {
 		return limaConfig{}, invalidSpec("CPU quantity must be a positive whole number of CPUs")
