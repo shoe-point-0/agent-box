@@ -242,6 +242,7 @@ type Invocation struct {
 	Dir     string
 	Env     map[string]string
 	Secrets []process.Secret
+	Stdin   []byte
 	Stdout  io.Writer
 	Stderr  io.Writer
 }
@@ -267,7 +268,7 @@ func (a Artifact) Run(ctx context.Context, runner Runner, invocation Invocation)
 	argv = append(argv, invocation.Args...)
 	return runner.Run(ctx, process.Command{
 		Argv: argv, Dir: invocation.Dir, Env: invocation.Env, Secrets: invocation.Secrets,
-		Stdout: invocation.Stdout, Stderr: invocation.Stderr,
+		Stdin: append([]byte(nil), invocation.Stdin...), Stdout: invocation.Stdout, Stderr: invocation.Stderr,
 	})
 }
 

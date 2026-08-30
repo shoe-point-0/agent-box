@@ -1,6 +1,7 @@
 package toolchain_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -65,13 +66,17 @@ func TestArtifactRunRechecksDigestBeforeExecution(t *testing.T) {
 	}
 
 	runner := &recordingRunner{}
+	stdin := []byte("guest input")
 	if _, err := verified.Lima.Run(t.Context(), runner, toolchain.Invocation{
-		Args: []string{"--version"}, Env: map[string]string{"LANG": "C"},
+		Args: []string{"--version"}, Env: map[string]string{"LANG": "C"}, Stdin: stdin,
 	}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if runner.calls != 1 || len(runner.command.Argv) != 2 || runner.command.Argv[1] != "--version" {
 		t.Fatalf("runner calls/argv = %d/%q", runner.calls, runner.command.Argv)
+	}
+	if !bytes.Equal(runner.command.Stdin, stdin) {
+		t.Fatalf("runner stdin = %q", runner.command.Stdin)
 	}
 
 	if err := os.WriteFile(entries[0].Candidate.Path, []byte("replacement\n"), 0o700); err != nil {

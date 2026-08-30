@@ -57,6 +57,19 @@ func TestRunnerResolvesBareExecutableOnlyFromSuppliedPath(t *testing.T) {
 	}
 }
 
+func TestRunnerTransportsStdinLiterally(t *testing.T) {
+	input := "line one\nline 'two' $HOME\x00tail"
+	command := helperCommand(t, t.TempDir(), "copy-stdin")
+	command.Stdin = []byte(input)
+	result, err := (Runner{}).Run(context.Background(), command)
+	if err != nil {
+		t.Fatalf("Run(copy stdin) error = %v", err)
+	}
+	if got := string(result.Stdout); got != input {
+		t.Fatalf("Run(copy stdin) output = %q, want %q", got, input)
+	}
+}
+
 func TestRunnerReturnsTypedExitAndRedactedPartialOutput(t *testing.T) {
 	secret := "exit-canary-73+/"
 	command := helperCommand(t, t.TempDir(), "emit-exit", secret, "23")
@@ -263,6 +276,8 @@ func TestProcessHelper(t *testing.T) {
 		_, _ = fmt.Fprintln(os.Stdout, os.Getenv("ALLOWED_VALUE"))
 		_, _ = fmt.Fprintln(os.Stdout, os.Getenv(arguments[2]))
 		_, _ = fmt.Fprintln(os.Stdout, workingDirectory)
+	case "copy-stdin":
+		_, _ = io.Copy(os.Stdout, os.Stdin)
 	case "exit":
 		code, _ := strconv.Atoi(arguments[1])
 		os.Exit(code)

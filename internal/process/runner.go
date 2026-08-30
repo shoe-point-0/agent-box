@@ -37,6 +37,7 @@ type Command struct {
 	Dir     string
 	Env     map[string]string
 	Secrets []Secret
+	Stdin   []byte
 	Stdout  io.Writer
 	Stderr  io.Writer
 }
@@ -143,6 +144,7 @@ func (r Runner) Run(ctx context.Context, command Command) (Result, error) {
 	cmd.Args = append([]string(nil), argv...)
 	cmd.Dir = command.Dir
 	cmd.Env = env
+	cmd.Stdin = bytes.NewReader(command.Stdin)
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderrWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

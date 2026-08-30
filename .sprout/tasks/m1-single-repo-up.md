@@ -365,6 +365,32 @@ Deliver the single-repository up vertical slice
   bounded runtime-host Compose command adapter (and the verified guest
   toolchain/environment contract it consumes), not an argv wrapper in
   `cmd/aboxd`.
+- Runtime-host command slice: the bounded process and verified-tool execution
+  boundaries now carry an owned stdin byte payload. `lima.Adapter.InvokeCommand`
+  uses that channel to provide a deterministic, size-limited complete child
+  environment to a clean `/usr/bin/env -i /bin/sh` bootstrap while keeping
+  every environment and secret value out of both `limactl` and guest bootstrap
+  argv. It rejects invalid environment names, NULs, oversized transport, and
+  any registered secret found in argv or the guest working directory.
+- The transport mechanism was checked against Lima v2.0.0's `shell.go`: its
+  SSH subprocess explicitly forwards `os.Stdin`, while command arguments are
+  assembled into the remote login-shell command. The implementation therefore
+  sends sensitive values only over stdin and keeps the fixed bootstrap and
+  workload arguments in the command channel.
+- `compose.GuestRunner` maps compiler environment and redaction registrations
+  onto that typed Lima command. `up.NewComposeConfigBuilder` constructs a new
+  runner from each fresh `FoundationResult.Lima.Spec`; a focused test bound two
+  calls through one shared builder to two different instance names without
+  retaining mutable Box identity.
+- `go test -race -count=10 ./internal/process ./internal/toolchain
+  ./internal/lima ./internal/compose ./internal/up` passed. The tests exercised
+  literal stdin including NUL bytes, artifact-layer forwarding, exact and
+  ambient-free shell environment behavior, secret redaction and argv refusal,
+  deterministic bounded script construction, partial result/error forwarding,
+  and per-attempt runtime binding. `go vet` for the same packages, `make lint`
+  (`0 issues`), and `git diff --check` passed. Post-slice `make check` passed
+  with module verification, all unit/race tests, vet, builds, smoke, shell, and
+  Python automation checks green.
 
 ## Outcome and follow-ups
 
@@ -437,13 +463,11 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, add the runtime-host Compose normalization adapter with explicit
-environment/secret transport and bind it through `BuildComposeConfig` to the
-fresh Lima result. Then instantiate the complete pipeline with verified
-artifact, Git, Lima, Compose, and filesystem adapters and dispatch its
-`OperationRunner` from `cmd/aboxd`. Keep the packet open until the unchanged
-single-repository fixture passes through the real daemon and CLI, including
-detach and measured warm no-op assertions.
+Next, instantiate the complete pipeline with verified artifact, guest-toolchain,
+Git, Lima, Compose, and filesystem adapters and dispatch its `OperationRunner`
+from `cmd/aboxd`. Keep the packet open until the unchanged single-repository
+fixture passes through the real daemon and CLI, including detach and measured
+warm no-op assertions.
 
 ## Original request
 

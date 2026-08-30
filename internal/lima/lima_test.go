@@ -10,7 +10,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -194,6 +196,32 @@ func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 		if len(call) > 0 && call[0] == "list" && !slices.Equal(call, []string{"list", "--tty=false", "--format=json", "--all-fields"}) {
 			t.Fatalf("list argv = %q", call)
 		}
+	}
+}
+
+func TestInvokeCommandTransportsEnvironmentAndSecretsOutsideArgv(t *testing.T) {
+	adapter, runner, spec := testAdapter(t)
+	runner.config = configDocument(t, spec)
+	runner.status = "Running"
+	const secret = "guest-secret-canary"
+	_, err := adapter.InvokeCommand(t.Context(), spec, lima.GuestCommand{
+		Argv: []string{"/usr/bin/docker", "compose", "version"}, Workdir: spec.Mounts[0].Path,
+		Environment: map[string]string{"HOME": "/runtime/home", "TOKEN": secret},
+		Secrets:     []process.Secret{{Value: secret}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := runner.call("shell")
+	for _, argument := range call {
+		if strings.Contains(argument, secret) || strings.Contains(argument, "/runtime/home") {
+			t.Fatalf("shell argv contains transported environment value: %q", call)
+		}
+	}
+	stdin, secrets := runner.shellTransport()
+	if !bytes.Contains(stdin, []byte(secret)) || !bytes.Contains(stdin, []byte("/runtime/home")) ||
+		!reflect.DeepEqual(secrets, []process.Secret{{Value: secret}}) {
+		t.Fatalf("shell stdin/secrets = %q/%#v", stdin, secrets)
 	}
 }
 
@@ -581,6 +609,8 @@ type fakeRunner struct {
 	fail               map[string]error
 	transition         map[string]string
 	suppressTransition map[string]bool
+	shellStdin         []byte
+	shellSecrets       []process.Secret
 }
 
 func (r *fakeRunner) Run(_ context.Context, command process.Command) (process.Result, error) {
@@ -627,6 +657,8 @@ func (r *fakeRunner) Run(_ context.Context, command process.Command) (process.Re
 			r.status = next
 		}
 	case "shell":
+		r.shellStdin = append([]byte(nil), command.Stdin...)
+		r.shellSecrets = slices.Clone(command.Secrets)
 		result.Stdout = []byte("guest-output")
 		if command.Stdout != nil {
 			_, _ = command.Stdout.Write(result.Stdout)
@@ -668,6 +700,12 @@ func (r *fakeRunner) callsCopy() [][]string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.calls)
+}
+
+func (r *fakeRunner) shellTransport() ([]byte, []process.Secret) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]byte(nil), r.shellStdin...), slices.Clone(r.shellSecrets)
 }
 
 func cloneDocument(input map[string]any) map[string]any {

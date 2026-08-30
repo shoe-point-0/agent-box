@@ -350,6 +350,42 @@ func (a *Adapter) Invoke(ctx context.Context, spec Spec, workdir string, argv []
 	return result, nil
 }
 
+// InvokeCommand executes a guest command with an explicit complete child
+// environment. Environment values travel over stdin and never in limactl's or
+// the guest bootstrap process's argv.
+func (a *Adapter) InvokeCommand(ctx context.Context, spec Spec, command GuestCommand) (process.Result, error) {
+	if err := a.checkSpecAndVersion(ctx, spec); err != nil {
+		return process.Result{}, err
+	}
+	if len(command.Argv) == 0 || !filepath.IsAbs(command.Workdir) || filepath.Clean(command.Workdir) != command.Workdir {
+		return process.Result{}, &Error{Kind: InvalidSpecification, Operation: "invoke", Resource: spec.RuntimeHost.InstanceName, Err: errors.New("argv and a clean absolute guest workdir are required")}
+	}
+	guestArgv, stdin, err := compileGuestInvocation(command)
+	if err != nil {
+		return process.Result{}, &Error{Kind: InvalidSpecification, Operation: "invoke", Resource: spec.RuntimeHost.InstanceName, Err: err}
+	}
+	before, err := a.inspect(ctx, spec.RuntimeHost.InstanceName)
+	if err != nil {
+		return process.Result{}, err
+	}
+	if _, err := validateObservation("invoke", spec, before); err != nil {
+		return process.Result{}, err
+	}
+	if before.State != Running {
+		return process.Result{}, &Error{Kind: InvalidState, Operation: "invoke", Resource: spec.RuntimeHost.InstanceName, Observed: before.State, Err: errors.New("instance is not running")}
+	}
+	args := []string{"shell", "--tty=false", "--workdir=" + command.Workdir, spec.RuntimeHost.InstanceName, "--"}
+	args = append(args, guestArgv...)
+	result, runErr := a.runInvocation(ctx, toolchain.Invocation{
+		Args: args, Dir: a.dir, Env: cloneMap(a.env), Secrets: cloneSecrets(command.Secrets),
+		Stdin: stdin, Stdout: command.Stdout, Stderr: command.Stderr,
+	})
+	if runErr != nil {
+		return result, classifyRunError("invoke", spec.RuntimeHost.InstanceName, before.State, ctx, runErr)
+	}
+	return result, nil
+}
+
 // Capture invokes a guest command without streaming and defensively copies its
 // bounded output into a Lima-owned observation type.
 func (a *Adapter) Capture(ctx context.Context, spec Spec, workdir string, argv []string) (Capture, error) {
@@ -512,9 +548,13 @@ func (a *Adapter) run(ctx context.Context, args ...string) (process.Result, erro
 }
 
 func (a *Adapter) runWithWriters(ctx context.Context, stdout, stderr io.Writer, args ...string) (process.Result, error) {
-	return a.lima.Run(ctx, a.runner, toolchain.Invocation{
+	return a.runInvocation(ctx, toolchain.Invocation{
 		Args: args, Dir: a.dir, Env: cloneMap(a.env), Stdout: stdout, Stderr: stderr,
 	})
+}
+
+func (a *Adapter) runInvocation(ctx context.Context, invocation toolchain.Invocation) (process.Result, error) {
+	return a.lima.Run(ctx, a.runner, invocation)
 }
 
 func classifyRunError(operation, resource string, observed State, ctx context.Context, err error) error {
