@@ -34,6 +34,11 @@ type fakeDaemon struct {
 	planError         error
 	planRequest       daemon.PlanRequest
 	events            []daemonclient.Event
+	removeEvents      [][]daemonclient.Event
+	removeFailures    []*contract.Failure
+	removeErrors      []error
+	removeRequests    []daemon.MutationRequest
+	removeKeys        []string
 	request           daemon.MutationRequest
 	key               string
 	closed            bool
@@ -66,6 +71,28 @@ func (f *fakeDaemon) Up(_ context.Context, request daemon.MutationRequest, key s
 		}
 	}
 	return f.upFailure, f.upError
+}
+
+func (f *fakeDaemon) Remove(_ context.Context, request daemon.MutationRequest, key string, consume func(daemonclient.Event) error) (*contract.Failure, error) {
+	index := len(f.removeRequests)
+	f.removeRequests = append(f.removeRequests, request)
+	f.removeKeys = append(f.removeKeys, key)
+	if index < len(f.removeEvents) {
+		for _, event := range f.removeEvents[index] {
+			if err := consume(event); err != nil {
+				return nil, err
+			}
+		}
+	}
+	var operationFailure *contract.Failure
+	if index < len(f.removeFailures) {
+		operationFailure = f.removeFailures[index]
+	}
+	var operationError error
+	if index < len(f.removeErrors) {
+		operationError = f.removeErrors[index]
+	}
+	return operationFailure, operationError
 }
 
 func (f *fakeDaemon) List(context.Context) (contract.ListOutput, *contract.Failure, error) {
@@ -103,12 +130,12 @@ func TestHelpExposesOnlyImplementedCommands(t *testing.T) {
 	if code := run(context.Background(), []string{"help"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("help code = %d", code)
 	}
-	for _, command := range []string{"init", "doctor", "list", "plan", "up", "version", "help"} {
+	for _, command := range []string{"init", "doctor", "list", "plan", "up", "rm", "version", "help"} {
 		if !strings.Contains(stdout.String(), "  "+command) {
 			t.Errorf("help does not expose %q: %q", command, stdout.String())
 		}
 	}
-	for _, unavailable := range []string{"status", "shell", "exec", "logs", "routes", "publish", "down", "rm"} {
+	for _, unavailable := range []string{"status", "shell", "exec", "logs", "routes", "publish", "down"} {
 		if strings.Contains(stdout.String(), "  "+unavailable+" ") {
 			t.Errorf("help claims unavailable command %q", unavailable)
 		}

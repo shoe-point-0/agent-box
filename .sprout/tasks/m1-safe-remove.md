@@ -235,8 +235,19 @@ Implement refusal-first Box removal
   issues`; module verification, all unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests passed. `sprout check
   m1-safe-remove` and `sprout check --all` also passed.
-- The task remains open: these results do not prove a live `abox rm` command or
-  production `aboxd` removal assembly.
+- `go test -race -count=10 ./cmd/abox` passed after adding the user-facing
+  `abox rm` boundary. CLI fixtures proved preview-only removal makes exactly one
+  authorization-free request, renders every exact loss without terminal-control
+  ambiguity (including a newline-bearing path), and exits with the safety code.
+  The authorized path makes a distinct second operation carrying the exact
+  preview digest, `--yes`, and each independent discard grant. Malformed daemon
+  previews are rejected as protocol failures before authorization.
+- `go vet ./cmd/abox`, `git diff --check`, and `make check` passed for the CLI
+  slice. The full gate reported `0 issues` and passed module verification, all
+  unit and race tests, vet, Linux builds, spike smoke, shell checks, and Python
+  automation tests.
+- The task remains open: these results prove the CLI/transport contract but not
+  production `aboxd` removal assembly or a disposable full-Box teardown.
 
 ## Outcome and follow-ups
 
@@ -312,11 +323,13 @@ Implement refusal-first Box removal
   save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
   mutation. `m1-single-repo-up` must add the real reconciliation assembly and
   save this snapshot only after all owned resources reconcile successfully.
-  The next removal slice should construct the production Lima and Compose
-  adapters from verified daemon toolchain authority, dispatch `remove` from
-  `cmd/aboxd` into `OperationRunner`, and add `abox rm`. Full disposable Box
-  teardown evidence remains required before any acceptance criterion can be
-  checked.
+  `abox rm` now performs a mandatory preview operation, renders exact losses,
+  then starts a distinct digest-authorized operation only when `--yes` is
+  present; dirty-worktree, unpublished-commit, and volume loss each retain a
+  separate flag. The next removal slice must construct production Lima and
+  Compose adapters from verified daemon toolchain authority and dispatch
+  `remove` from `cmd/aboxd` into `OperationRunner`. Full disposable Box teardown
+  evidence remains required before any acceptance criterion can be checked.
 
 ## Original request
 

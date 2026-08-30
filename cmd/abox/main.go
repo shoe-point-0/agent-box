@@ -36,6 +36,7 @@ type daemonAPI interface {
 	List(context.Context) (contract.ListOutput, *contract.Failure, error)
 	Plan(context.Context, daemon.PlanRequest) (contract.PlanOutput, *contract.Failure, error)
 	Up(context.Context, daemon.MutationRequest, string, func(daemonclient.Event) error) (*contract.Failure, error)
+	Remove(context.Context, daemon.MutationRequest, string, func(daemonclient.Event) error) (*contract.Failure, error)
 	Close()
 }
 
@@ -226,6 +227,9 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps 
 			return contract.ExitInternal
 		}
 		return contract.ExitOK
+	}
+	if args[0] == "rm" {
+		return runRemove(ctx, args[1:], stdout, stderr, deps)
 	}
 	if args[0] != "up" {
 		return reportFailure(stdout, stderr, false, failure(contract.CodeCLIUsage, "unknown command"))
@@ -516,6 +520,7 @@ Commands:
   list     list recorded Boxes and observed drift
   plan     show proposed reconciliation operations without changing state
   up       submit a versioned up request to aboxd
+  rm       preview and explicitly authorize refusal-first Box removal
   version  print build version
   help     show this help
 
