@@ -324,6 +324,24 @@ Deliver the single-repository up vertical slice
   Docker-in-Lima claim. The complete runner is not yet dispatched by
   `cmd/aboxd`, and the cold/warm CLI and client-detachment acceptance criteria
   remain open.
+- Complete-runner slice: `internal/up.Pipeline` now executes preparation,
+  generated/Git/Lima foundation reconciliation, Compose compilation, Compose
+  apply/observation, filesystem/context readiness, and atomic READY publication
+  in one dependency-ordered call. `AssemblePipelineCoordinator` places that
+  entire call inside the existing fenced daemon lease, so preparation and every
+  mutation run under one daemon-owned cancellation lifetime.
+- Runtime-specific READY adapter construction is deliberately delayed until the
+  fresh `compose.RuntimeSpec` exists. `go test -race -count=10 ./internal/up`
+  passed: the focused runner tests proved exact stage order, fresh-result
+  forwarding, and immediate stop at each injected boundary failure. `go vet
+  ./internal/up` and `git diff --check` passed.
+- Post-slice `make check` passed with lint reporting `0 issues`; module
+  verification, all unit/race tests, vet, builds, smoke, shell, and Python
+  automation checks were green. `sprout check m1-single-repo-up` and `sprout
+  check --all` passed.
+- The pipeline is not yet instantiated by `cmd/aboxd`; production artifact,
+  Lima, Compose, and filesystem adapter assembly plus the real cold/warm and
+  detached-client smoke remain open.
 
 ## Outcome and follow-ups
 
@@ -396,10 +414,11 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, compose preparation, foundation, Compose input/apply, filesystem, context,
-and READY into one concrete runner and dispatch it from `cmd/aboxd`. Keep the
-packet open until the unchanged single-repository fixture passes through the
-real daemon and CLI, including detach and measured warm no-op assertions.
+Next, instantiate the complete pipeline with production artifact, Git, Lima,
+Compose, and filesystem adapters and dispatch its `OperationRunner` from
+`cmd/aboxd`. Keep the packet open until the unchanged single-repository fixture
+passes through the real daemon and CLI, including detach and measured warm
+no-op assertions.
 
 ## Original request
 
