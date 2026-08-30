@@ -20,7 +20,7 @@ func TestWorkspaceAdapterUsesFixedArgvAndDecodesObservations(t *testing.T) {
 		{Stdout: []byte("A\n")},
 		{Stdout: []byte("N\n")},
 		{Stdout: []byte("F 640\nprobe-bytes")},
-		{}, {}, {},
+		{}, {}, {}, {},
 	}}
 	adapter, err := filesystem.NewWorkspaceAdapter(host, workspaceRuntime(root))
 	if err != nil {
@@ -49,9 +49,14 @@ func TestWorkspaceAdapterUsesFixedArgvAndDecodesObservations(t *testing.T) {
 	if err := adapter.Remove(t.Context(), "immutable-id", target); err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}
+	watchTarget := filepath.Join(filepath.Dir(path), "watch-target")
+	watchReady := filepath.Join(filepath.Dir(path), "watch-ready")
+	if err := adapter.Watch(t.Context(), "immutable-id", watchTarget, watchReady); err != nil {
+		t.Fatalf("Watch() error = %v", err)
+	}
 
-	if len(host.calls) != 6 {
-		t.Fatalf("calls = %d, want 6", len(host.calls))
+	if len(host.calls) != 7 {
+		t.Fatalf("calls = %d, want 7", len(host.calls))
 	}
 	for _, call := range host.calls {
 		if len(call) < 9 || !reflect.DeepEqual(call[:7], []string{
@@ -86,6 +91,9 @@ func TestWorkspaceAdapterRejectsRequestsOutsideOwnedProbeNonce(t *testing.T) {
 		{name: "cross nonce rename", run: func() error {
 			other := filepath.Join(root, ".abox-probe", strings.Repeat("02", 16), "target")
 			return adapter.Rename(t.Context(), "id", valid, other)
+		}},
+		{name: "invalid watch names", run: func() error {
+			return adapter.Watch(t.Context(), "id", valid, filepath.Join(filepath.Dir(valid), "watch-ready"))
 		}},
 	}
 	for _, test := range tests {

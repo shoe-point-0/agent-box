@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
@@ -31,8 +32,8 @@ func TestProbeVerifierChecksBothDirectionsAndCleansEveryWorktree(t *testing.T) {
 	if err := verifier.Verify(t.Context(), probePlan(worktrees, true), workspaceObservation("immutable-container-id")); err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if len(workspace.calls) != 14 {
-		t.Fatalf("workspace calls = %d, want 14", len(workspace.calls))
+	if len(workspace.calls) != 16 {
+		t.Fatalf("workspace calls = %d, want 16", len(workspace.calls))
 	}
 	for _, call := range workspace.calls {
 		if call.containerID != "immutable-container-id" {
@@ -88,6 +89,7 @@ func TestProbeVerifierCleansNonceAndRedactsEveryWorkspaceFailure(t *testing.T) {
 		{operation: "write", layer: "workspace-write"},
 		{operation: "rename", layer: "workspace-rename"},
 		{operation: "remove", layer: "workspace-delete"},
+		{operation: "watch", layer: "workspace-watch-setup"},
 	}
 	for _, test := range tests {
 		t.Run(test.operation, func(t *testing.T) {
@@ -305,4 +307,28 @@ func (w *sharedWorkspace) Remove(_ context.Context, containerID, path string) er
 		return w.err
 	}
 	return os.Remove(path)
+}
+
+func (w *sharedWorkspace) Watch(ctx context.Context, containerID, target, ready string) error {
+	w.calls = append(w.calls, workspaceCall{operation: "watch", containerID: containerID, path: target})
+	if w.failOperation == "watch" {
+		return w.err
+	}
+	if err := os.WriteFile(ready, nil, 0o600); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if _, err := os.Lstat(target); err == nil {
+				return nil
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		}
+	}
 }

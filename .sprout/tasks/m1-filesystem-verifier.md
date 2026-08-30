@@ -158,6 +158,21 @@ Verify mounted filesystem contracts
   dependency checks, lint with `0 issues`, builds, smoke, and automation tests.
   `sprout check --all` and `git diff --check` passed. This is real Linux
   Docker/Compose bind-mount evidence, not Lima, VZ, or VirtioFS evidence.
+- Native workspace watcher delivery: `go test -race -count=10
+  ./internal/filesystem/...` passed ten unchanged real Compose-container runs.
+  Each probe starts BusyBox `inotifyd` inside the immutable workspace-container
+  ID, proves watch installation with an in-container handshake, then requires a
+  native create/modify/close-write event for the exact Machine-created probe
+  file within one second. The fixed script receives all paths through positional
+  argv, owns its FIFO and child processes, and removes readiness/handshake state
+  on every return path. The integration test verifies no probe artifacts,
+  watcher processes, or Compose containers remain.
+- Watcher setup, delivery, malformed request, and command failures retain the
+  existing bounded redacted error contract. `make check` passed after
+  this slice, including full tests and race tests, `go vet`, dependency checks,
+  lint with `0 issues`, builds, smoke, and automation tests. This establishes
+  native Linux inotify delivery through the tested Docker bind mount only; it
+  does not establish VirtioFS or Darwin watcher behavior.
 
 ## Outcome and follow-ups
 
@@ -165,8 +180,9 @@ In progress. Machine path identity protects Lima and Compose mutation, the
 four-layer exact comparison collects through fresh live inspection, and the
 nonce-scoped bidirectional byte/mode/rename/delete lifecycle is implemented
 behind a fixed-command immutable-container adapter and has passed unchanged
-through a real Linux Compose container. Remaining work is watcher and
-undeclared-canary probes, the managed Git exclude, and readiness integration.
+through a real Linux Compose container. Native watcher delivery now passes the
+same real-container path. Remaining work is undeclared-canary probes, the
+managed Git exclude, and readiness integration.
 Real Lima execution remains unavailable on this Machine and must not be
 inferred from fixtures or Docker evidence.
 

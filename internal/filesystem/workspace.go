@@ -33,6 +33,45 @@ printf '%s' "$2" > "$1"
 chmod "$3" "$1"`
 	renameProbeScript = `mv -- "$1" "$2"`
 	removeProbeScript = `rm -- "$1"`
+	watchProbeScript  = `umask 077
+directory=${1%/*}
+target=${1##*/}
+ready=$2
+handshake=watch-handshake
+fifo=/tmp/abox-watch-$$
+watcher=
+producer=
+cleanup() {
+	if [ -n "$producer" ]; then kill "$producer" 2>/dev/null || :; fi
+	if [ -n "$watcher" ]; then kill "$watcher" 2>/dev/null || :; fi
+	rm -f -- "$fifo" "$directory/$handshake" "$ready"
+}
+trap cleanup EXIT HUP INT TERM
+mkfifo -m 600 "$fifo"
+exec 3<>"$fifo"
+inotifyd - "$directory":ncw >"$fifo" &
+watcher=$!
+(
+	while :; do
+		: >"$directory/$handshake"
+		sleep 0.01
+	done
+) &
+producer=$!
+tab=$(printf '	')
+while IFS="$tab" read -r events watched subfile <&3; do
+	if [ "$subfile" = "$handshake" ]; then break; fi
+done
+kill "$producer" 2>/dev/null || :
+wait "$producer" 2>/dev/null || :
+producer=
+rm -f -- "$directory/$handshake"
+: >"$ready"
+while IFS="$tab" read -r events watched subfile <&3; do
+	if [ "$subfile" != "$target" ]; then continue; fi
+	case "$events" in *n*|*c*|*w*) exit 0 ;; esac
+done
+exit 1`
 )
 
 // WorkspaceCommandHost is the bounded guest-command boundary implemented by
@@ -89,6 +128,17 @@ func (a *WorkspaceAdapter) Remove(ctx context.Context, containerID, path string)
 		return failure(InvalidObservation, "workspace-remove", "probe request is invalid")
 	}
 	return a.mutate(ctx, containerID, "remove", removeProbeScript, path)
+}
+
+// Watch blocks until the workspace container's native inotify watcher receives
+// a create, modify, or close-write event for target. The ready file is created
+// only after an in-container handshake proves the watch is active.
+func (a *WorkspaceAdapter) Watch(ctx context.Context, containerID, target, ready string) error {
+	if !safeContainerID(containerID) || !validProbePath(target) || !validProbePath(ready) ||
+		filepath.Dir(target) != filepath.Dir(ready) || filepath.Base(target) != watchTargetName || filepath.Base(ready) != watchReadyName {
+		return failure(InvalidObservation, "workspace-watch", "probe request is invalid")
+	}
+	return a.mutate(ctx, containerID, "watch", watchProbeScript, target, ready)
 }
 
 func (a *WorkspaceAdapter) mutate(ctx context.Context, containerID, operation, script string, arguments ...string) error {

@@ -11,14 +11,20 @@ import (
 	"path/filepath"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 )
 
 const (
-	probeDirectory  = ".abox-probe"
-	probeNonceBytes = 16
+	probeDirectory       = ".abox-probe"
+	probeNonceBytes      = 16
+	watchReadyName       = "watch-ready"
+	watchTargetName      = "watch-target"
+	watchSetupTimeout    = 2 * time.Second
+	watchDeliveryTimeout = time.Second
+	watchPollInterval    = 5 * time.Millisecond
 )
 
 // ProbeFile is the bounded workspace-service view of one probe file. Data must
@@ -38,11 +44,13 @@ type WorkspaceProbe interface {
 	Write(context.Context, string, string, []byte, fs.FileMode) error
 	Rename(context.Context, string, string, string) error
 	Remove(context.Context, string, string) error
+	Watch(context.Context, string, string, string) error
 }
 
-// ProbeVerifier checks bidirectional bytes, modes, atomic rename visibility,
-// and deletion visibility under a nonce-scoped directory in every worktree.
-// Every created nonce is removed on all return paths.
+// ProbeVerifier checks bidirectional bytes, modes, atomic rename and deletion
+// visibility, and native workspace watcher delivery under a nonce-scoped
+// directory in every worktree. Every created nonce is removed on all return
+// paths.
 type ProbeVerifier struct {
 	workspace WorkspaceProbe
 	random    func([]byte) error
@@ -158,7 +166,73 @@ func (v *ProbeVerifier) verifyWorktree(ctx context.Context, containerID, worktre
 	if err := v.machineToWorkspace(ctx, containerID, root, machineBytes); err != nil {
 		return err
 	}
+	if err := v.machineToWorkspaceWatcher(ctx, containerID, root, machineBytes); err != nil {
+		return err
+	}
 	return v.workspaceToMachine(ctx, containerID, root, workspaceBytes)
+}
+
+func (v *ProbeVerifier) machineToWorkspaceWatcher(ctx context.Context, containerID, root string, data []byte) error {
+	ready := filepath.Join(root, watchReadyName)
+	target := filepath.Join(root, watchTargetName)
+	watchContext, cancel := context.WithCancel(ctx)
+	result := make(chan error, 1)
+	go func() {
+		result <- v.workspace.Watch(watchContext, containerID, target, ready)
+	}()
+	stop := func() error {
+		cancel()
+		return <-result
+	}
+
+	setupTimer := time.NewTimer(watchSetupTimeout)
+	ticker := time.NewTicker(watchPollInterval)
+	defer setupTimer.Stop()
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-result:
+			cancel()
+			return probeFailure(ctx, "workspace-watch-setup", err)
+		case <-ctx.Done():
+			_ = stop()
+			return probeFailure(ctx, "workspace-watch-setup", ctx.Err())
+		case <-setupTimer.C:
+			_ = stop()
+			return probeFailure(ctx, "workspace-watch-setup", errors.New("watcher setup timed out"))
+		case <-ticker.C:
+			observed, err := observeMachine(ready)
+			if err != nil || (observed.Exists && !observed.Regular) {
+				_ = stop()
+				return probeFailure(ctx, "workspace-watch-setup", err)
+			}
+			if observed.Regular {
+				goto ready
+			}
+		}
+	}
+
+ready:
+	if err := writeProbeFile(target, data, 0o600); err != nil {
+		_ = stop()
+		return probeFailure(ctx, "machine-watch-write", err)
+	}
+	deliveryTimer := time.NewTimer(watchDeliveryTimeout)
+	defer deliveryTimer.Stop()
+	select {
+	case err := <-result:
+		cancel()
+		if err != nil {
+			return probeFailure(ctx, "workspace-watch-delivery", err)
+		}
+		return nil
+	case <-ctx.Done():
+		_ = stop()
+		return probeFailure(ctx, "workspace-watch-delivery", ctx.Err())
+	case <-deliveryTimer.C:
+		_ = stop()
+		return probeFailure(ctx, "workspace-watch-delivery", errors.New("watcher delivery timed out"))
+	}
 }
 
 func (v *ProbeVerifier) machineToWorkspace(ctx context.Context, containerID, root string, data []byte) error {

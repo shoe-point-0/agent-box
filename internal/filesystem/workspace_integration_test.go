@@ -72,6 +72,13 @@ func TestProbeVerifierAgainstRealComposeWorkspaceContainer(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(worktree, ".abox-probe")); !os.IsNotExist(err) {
 		t.Fatalf("probe artifacts remain after real container execution: %v", err)
 	}
+	processes, err := exec.Command(docker, "top", containerID).Output()
+	if err != nil {
+		t.Fatalf("inspect workspace processes after probe: %v", err)
+	}
+	if strings.Contains(string(processes), "inotifyd") || strings.Contains(string(processes), "abox-watch") {
+		t.Fatalf("watcher process remains after probe: %s", processes)
+	}
 
 	if output, err := exec.Command(docker, append(composeArgs, "down", "--remove-orphans")...).CombinedOutput(); err != nil {
 		t.Fatalf("tear down Compose filesystem fixture: %v: %s", err, output)
