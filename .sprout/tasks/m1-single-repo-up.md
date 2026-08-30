@@ -24,6 +24,7 @@ Deliver the single-repository up vertical slice
 
 - Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
+- Final Darwin hardware evidence input is required for the remaining cold/warm `abox up demo` and detached-client acceptance criteria; the Linux lane must not repeatedly select this packet after the verified implementation has reached the real Apple Silicon VZ hardware gate.
 
 ## Acceptance criteria
 
