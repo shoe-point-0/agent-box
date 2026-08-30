@@ -59,6 +59,10 @@ volumes:
 	spec := compose.RuntimeSpec{
 		Plan: compiled, Generation: generation, DockerPath: docker, Workdir: outputDirectory, Compiled: generated,
 	}
+	spec.PathEvidence, err = compose.RecordRuntimePaths(compiled, generated)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cleaned := false
 	t.Cleanup(func() {
 		if !cleaned {

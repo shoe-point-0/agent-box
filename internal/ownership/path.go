@@ -1,9 +1,11 @@
 package ownership
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 )
@@ -20,6 +22,20 @@ type FileIdentity struct {
 type PathRecord struct {
 	CanonicalPath string
 	Identity      FileIdentity
+}
+
+// PathChainRecord binds one canonical path to every filesystem object used to
+// reach it. Recording only the leaf is insufficient: an attacker can rename an
+// ancestor and replace it while preserving the original leaf inode elsewhere.
+type PathChainRecord struct {
+	CanonicalPath string
+	Ancestors     []PathRecord
+}
+
+// PathSetRecord is the exact, sorted set of paths admitted to one external
+// apply. Callers revalidate it immediately before mutation.
+type PathSetRecord struct {
+	Paths []PathChainRecord
 }
 
 // PathProof authorizes mutation below one verified canonical ownership root.
@@ -40,6 +56,57 @@ func InspectPath(path string) (FileIdentity, error) {
 		return FileIdentity{}, fmt.Errorf("inspect path identity: %w", err)
 	}
 	return fileIdentity(info)
+}
+
+// RecordPathSet captures every ancestor of each exact canonical path with
+// lstat. It rejects symlinks rather than recording their resolved targets.
+func RecordPathSet(paths []string) (PathSetRecord, error) {
+	if len(paths) == 0 {
+		return PathSetRecord{}, errors.New("record path set: path set is empty")
+	}
+	ordered := append([]string(nil), paths...)
+	slices.Sort(ordered)
+	for index, path := range ordered {
+		if index > 0 && path == ordered[index-1] {
+			return PathSetRecord{}, errors.New("record path set: duplicate path")
+		}
+		if err := validateCanonicalString(path); err != nil {
+			return PathSetRecord{}, fmt.Errorf("record path set: %w", err)
+		}
+	}
+
+	record := PathSetRecord{Paths: make([]PathChainRecord, 0, len(ordered))}
+	for _, path := range ordered {
+		chain, err := recordPathChain(path)
+		if err != nil {
+			return PathSetRecord{}, err
+		}
+		record.Paths = append(record.Paths, chain)
+	}
+	return record, nil
+}
+
+// VerifyPathSet requires exact expected/recorded membership and unchanged
+// device/inode identity for every ancestor. Errors intentionally omit paths so
+// potentially sensitive Machine locations do not leak into normal output.
+func VerifyPathSet(expected []string, recorded PathSetRecord) error {
+	ordered := append([]string(nil), expected...)
+	slices.Sort(ordered)
+	if len(ordered) == 0 || len(ordered) != len(recorded.Paths) {
+		return refuse("path set", "expected and recorded path sets differ")
+	}
+	for index, path := range ordered {
+		if index > 0 && path == ordered[index-1] {
+			return refuse("path set", "expected path set contains a duplicate")
+		}
+		if path != recorded.Paths[index].CanonicalPath {
+			return refuse("path set", "expected and recorded path sets differ")
+		}
+		if err := verifyPathChain(recorded.Paths[index]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ProvePath requires an absolute canonical target strictly below an absolute
@@ -154,6 +221,65 @@ func verifyCanonicalPath(path string) error {
 		return fmt.Errorf("path contains a symbolic link")
 	}
 	return nil
+}
+
+func recordPathChain(path string) (PathChainRecord, error) {
+	components := pathComponents(path)
+	chain := PathChainRecord{CanonicalPath: path, Ancestors: make([]PathRecord, 0, len(components))}
+	for _, component := range components {
+		info, err := os.Lstat(component)
+		if err != nil {
+			return PathChainRecord{}, fmt.Errorf("record path set: inspect component: %w", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return PathChainRecord{}, errors.New("record path set: component is a symbolic link")
+		}
+		identity, err := fileIdentity(info)
+		if err != nil {
+			return PathChainRecord{}, fmt.Errorf("record path set: %w", err)
+		}
+		chain.Ancestors = append(chain.Ancestors, PathRecord{CanonicalPath: component, Identity: identity})
+	}
+	return chain, nil
+}
+
+func verifyPathChain(record PathChainRecord) error {
+	if err := validateCanonicalString(record.CanonicalPath); err != nil {
+		return refuse("path set", "recorded path is not canonical")
+	}
+	components := pathComponents(record.CanonicalPath)
+	if len(components) != len(record.Ancestors) {
+		return refuse("path set", "recorded ancestor chain is incomplete")
+	}
+	for index, component := range components {
+		recorded := record.Ancestors[index]
+		if recorded.CanonicalPath != component || recorded.Identity == (FileIdentity{}) {
+			return refuse("path set", "recorded ancestor chain differs")
+		}
+		info, err := os.Lstat(component)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return refuse("path set", "path component cannot be observed safely")
+		}
+		identity, err := fileIdentity(info)
+		if err != nil || identity != recorded.Identity {
+			return refuse("path set", "path component filesystem identity changed")
+		}
+	}
+	return nil
+}
+
+func pathComponents(path string) []string {
+	components := []string{path}
+	for current := path; ; {
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		components = append(components, parent)
+		current = parent
+	}
+	slices.Reverse(components)
+	return components
 }
 
 func validateCanonicalString(path string) error {

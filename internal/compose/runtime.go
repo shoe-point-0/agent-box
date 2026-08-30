@@ -75,12 +75,19 @@ type RuntimeInvoker interface {
 // RuntimeSpec binds a compiler result to one immutable runtime host and Plan.
 // Runtime commands never infer project identity from a directory or environment.
 type RuntimeSpec struct {
-	RuntimeHost lima.Spec
-	Plan        contract.Plan
-	Generation  int64
-	DockerPath  string
-	Workdir     string
-	Compiled    Result
+	RuntimeHost  lima.Spec
+	Plan         contract.Plan
+	Generation   int64
+	DockerPath   string
+	Workdir      string
+	Compiled     Result
+	PathEvidence ownership.PathSetRecord
+}
+
+// RecordRuntimePaths captures the complete Machine path set consumed by a
+// Compose apply: declared binds, repository inputs, and generated files.
+func RecordRuntimePaths(compiled contract.Plan, generated Result) (ownership.PathSetRecord, error) {
+	return ownership.RecordPathSet(runtimePaths(compiled, generated))
 }
 
 type PortBinding struct {
@@ -376,6 +383,9 @@ func validateRuntimeSpec(spec RuntimeSpec) error {
 	if spec.Compiled.ProjectName != spec.Plan.Compose.ProjectName || len(spec.Compiled.ResolvedModel) == 0 || spec.Compiled.ResolvedModelDigest == "" {
 		return errors.New("compiler evidence is incomplete or has inconsistent identity")
 	}
+	if err := ownership.VerifyPathSet(runtimePaths(spec.Plan, spec.Compiled), spec.PathEvidence); err != nil {
+		return fmt.Errorf("runtime path evidence: %w", err)
+	}
 	if filepath.Dir(spec.Compiled.RootPath) != spec.Workdir || filepath.Dir(spec.Compiled.OverridePath) != spec.Workdir || filepath.Dir(spec.Compiled.ResolvedModelPath) != spec.Workdir {
 		return errors.New("generated files are outside the runtime working directory")
 	}
@@ -396,6 +406,17 @@ func validateRuntimeSpec(spec RuntimeSpec) error {
 		}
 	}
 	return nil
+}
+
+func runtimePaths(compiled contract.Plan, generated Result) []string {
+	paths := make([]string, 0, len(compiled.Mounts)+len(compiled.Compose.Includes)+3)
+	for _, mount := range compiled.Mounts {
+		paths = append(paths, mount.Path)
+	}
+	for _, include := range compiled.Compose.Includes {
+		paths = append(paths, include.Path)
+	}
+	return append(paths, generated.RootPath, generated.OverridePath, generated.ResolvedModelPath)
 }
 
 func cleanRuntimePath(path string) bool {

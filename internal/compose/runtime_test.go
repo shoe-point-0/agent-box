@@ -3,12 +3,15 @@ package compose_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"os"
 	"slices"
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/lima"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
 	aboxprocess "github.com/shoe-point-0/agent-box/internal/process"
 )
 
@@ -26,6 +29,10 @@ func TestRuntimePullBuildAndPolicyPreflightCommandContract(t *testing.T) {
 	}
 	spec := compose.RuntimeSpec{
 		Plan: compiled, Generation: generation, DockerPath: "/usr/bin/docker", Workdir: outputDirectory, Compiled: generated,
+	}
+	spec.PathEvidence, err = compose.RecordRuntimePaths(compiled, generated)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	for _, test := range []struct {
@@ -72,6 +79,18 @@ func TestRuntimePullBuildAndPolicyPreflightCommandContract(t *testing.T) {
 	runtime, _ := compose.NewRuntime(invoker)
 	if _, err := runtime.Pull(t.Context(), spec); err == nil || len(invoker.calls) != 1 {
 		t.Fatalf("Pull(policy drift) error = %v calls = %d, want refusal before mutation", err, len(invoker.calls))
+	}
+
+	if err := os.Rename(generated.RootPath, generated.RootPath+".original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(generated.RootPath, []byte("services: {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	invoker = &contractRuntimeInvoker{normalized: generated.ResolvedModel}
+	runtime, _ = compose.NewRuntime(invoker)
+	if _, err := runtime.Pull(t.Context(), spec); !errors.Is(err, ownership.ErrNotOwned) || len(invoker.calls) != 0 {
+		t.Fatalf("Pull(replaced path) error = %v calls = %d, want ownership refusal before guest invocation", err, len(invoker.calls))
 	}
 }
 

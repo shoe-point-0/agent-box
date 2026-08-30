@@ -78,6 +78,116 @@ func TestPathProofRejectsForgedStaleAndSymlinkTargets(t *testing.T) {
 	}
 }
 
+func TestPathSetRecordsAndRevalidatesEveryAncestor(t *testing.T) {
+	t.Parallel()
+
+	root := canonicalTempRoot(t)
+	first := makeDirectory(t, filepath.Join(root, "workspace", "first"))
+	second := filepath.Join(root, "generated", "compose.yaml")
+	if err := os.MkdirAll(filepath.Dir(second), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("services: {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	record, err := ownership.RecordPathSet([]string{second, first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ownership.VerifyPathSet([]string{first, second}, record); err != nil {
+		t.Fatalf("VerifyPathSet() error = %v", err)
+	}
+	if len(record.Paths) != 2 || record.Paths[0].CanonicalPath != second || record.Paths[1].CanonicalPath != first {
+		t.Fatalf("recorded set is not sorted and exact: %+v", record.Paths)
+	}
+	for _, chain := range record.Paths {
+		if len(chain.Ancestors) < 2 || chain.Ancestors[0].CanonicalPath != string(filepath.Separator) ||
+			chain.Ancestors[len(chain.Ancestors)-1].CanonicalPath != chain.CanonicalPath {
+			t.Fatalf("ancestor chain is incomplete: %+v", chain)
+		}
+	}
+}
+
+func TestPathSetRefusesSetDriftAndConcurrentSubstitution(t *testing.T) {
+	t.Parallel()
+
+	t.Run("membership", func(t *testing.T) {
+		root := canonicalTempRoot(t)
+		first := makeDirectory(t, filepath.Join(root, "first"))
+		second := makeDirectory(t, filepath.Join(root, "second"))
+		record, err := ownership.RecordPathSet([]string{first})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, expected := range [][]string{{first, second}, {second}, {first, first}} {
+			if err := ownership.VerifyPathSet(expected, record); !errors.Is(err, ownership.ErrNotOwned) {
+				t.Fatalf("VerifyPathSet(%q) error = %v, want ownership refusal", expected, err)
+			}
+		}
+	})
+
+	t.Run("renamed-ancestor", func(t *testing.T) {
+		root := canonicalTempRoot(t)
+		parent := makeDirectory(t, filepath.Join(root, "workspace"))
+		target := makeDirectory(t, filepath.Join(parent, "repo"))
+		record, err := ownership.RecordPathSet([]string{target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		moved := filepath.Join(root, "workspace-original")
+		if err := os.Rename(parent, moved); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(target, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := ownership.VerifyPathSet([]string{target}, record); !errors.Is(err, ownership.ErrNotOwned) {
+			t.Fatalf("VerifyPathSet() error = %v, want ancestor-substitution refusal", err)
+		}
+		if _, err := os.Stat(filepath.Join(moved, "repo")); err != nil {
+			t.Fatalf("original target changed after refusal: %v", err)
+		}
+	})
+
+	t.Run("symlink-substitution", func(t *testing.T) {
+		root := canonicalTempRoot(t)
+		parent := makeDirectory(t, filepath.Join(root, "generated"))
+		target := filepath.Join(parent, "compose.yaml")
+		if err := os.WriteFile(target, []byte("original\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		record, err := ownership.RecordPathSet([]string{target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(parent, parent+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(parent+"-original", parent); err != nil {
+			t.Fatal(err)
+		}
+		if err := ownership.VerifyPathSet([]string{target}, record); !errors.Is(err, ownership.ErrNotOwned) {
+			t.Fatalf("VerifyPathSet() error = %v, want symlink-substitution refusal", err)
+		}
+	})
+}
+
+func TestRecordPathSetRejectsUnsafeInputs(t *testing.T) {
+	t.Parallel()
+	root := canonicalTempRoot(t)
+	target := makeDirectory(t, filepath.Join(root, "target"))
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, paths := range [][]string{nil, {"relative"}, {target, target}, {link}} {
+		if _, err := ownership.RecordPathSet(paths); err == nil {
+			t.Fatalf("RecordPathSet(%q) unexpectedly succeeded", paths)
+		}
+	}
+}
+
 func TestGitWorktreeProofRequiresPathRegistrationAndLock(t *testing.T) {
 	t.Parallel()
 
