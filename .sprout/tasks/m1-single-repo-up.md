@@ -94,11 +94,22 @@ Deliver the single-repository up vertical slice
   removal-authority rows and left the Box at generation zero in `planning`.
 - Post-slice `make check` passed: lint reported `0 issues`, module verification,
   all unit and race tests, vet, builds, smoke, and automation tests were green.
+- Attempt-preparation slice: `go test -race ./internal/up ./internal/state`,
+  `go vet ./internal/up ./internal/state`, and `git diff --check` passed. The
+  daemon can now reconstruct the selected Box intent from SQLite after request
+  detachment, recompile the immutable Plan through the read-only planning
+  boundary, derive only centralized Box paths, and select generation 1 only
+  when no current generation exists. An exact warm Plan reuses its persisted
+  generation and complete removal authority; a current generation with missing
+  or drifted authority fails closed with a stable ownership/identity conflict.
+- Post-preparation `make check` passed: lint reported `0 issues`; module
+  verification, all unit and race tests, vet, builds, smoke, shell checks, and
+  Python automation tests were green. `sprout check m1-single-repo-up` passed.
 - This evidence does not yet satisfy the cold/warm Box acceptance criteria: the
-  concrete Git, Plan, Lima, filesystem, Compose, context, READY-state, and
-  removal-snapshot operations are not yet assembled into `cmd/aboxd`. The final
-  READY transaction now exists but is not wired to the filesystem readiness
-  gate, and no runtime-host support claim is made.
+  prepared attempt is not yet consumed by concrete Git, Lima, filesystem,
+  Compose, context, and READY operations in `cmd/aboxd`. The final READY
+  transaction exists but is not wired to the filesystem readiness gate, and no
+  runtime-host support claim is made.
 
 ## Outcome and follow-ups
 
@@ -115,12 +126,18 @@ updates only cached component observations, enforces monotonic generations,
 and supports exact warm retries without allowing immutable generation evidence
 to drift.
 
-Next, build the production attempt assembler that loads and resolves the
-manifest, materializes the Plan and repository, and feeds concrete Lima,
-filesystem, Compose, context, and READY operations into the existing fenced
-coordinator. Keep the packet open until the unchanged single-repository fixture
-passes through the real daemon and CLI, including detach and measured warm
-no-op assertions.
+The third coherent slice adds the read-only front half of production attempt
+assembly. It deliberately refuses to infer ownership from deterministic names,
+paths, or cached component rows. Cold preparation is allowed only at generation
+zero; warm preparation requires the exact current-generation removal snapshot.
+
+Next, consume `up.PreparedAttempt` in concrete private-store and worktree
+operations, including durable partial-resource authority so a daemon crash
+between Git creation and READY publication can resume rather than collide with
+an unproven orphan. Then add Lima, filesystem, Compose, context, and READY
+operations and wire the completed runner into `cmd/aboxd`. Keep the packet open
+until the unchanged single-repository fixture passes through the real daemon
+and CLI, including detach and measured warm no-op assertions.
 
 ## Original request
 

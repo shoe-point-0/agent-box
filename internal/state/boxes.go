@@ -21,6 +21,47 @@ type BoxRecord struct {
 	ComposeRecordedState *string
 }
 
+// BoxIntent is the immutable request identity and current generation selected
+// by a daemon-owned mutation operation. It is coordination state, not evidence
+// that any external Box resource exists.
+type BoxIntent struct {
+	ID                string
+	WorkspaceID       string
+	TaskKey           string
+	ManifestPath      string
+	ManifestDigest    string
+	RecordedState     string
+	CurrentGeneration int64
+}
+
+// BoxIntentByID returns the persisted identity needed to reconstruct a running
+// operation after the client request has detached. found is false for an
+// unknown Box; no external resource is observed or inferred here.
+func (s *Store) BoxIntentByID(ctx context.Context, boxID string) (intent BoxIntent, found bool, err error) {
+	err = s.View(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `SELECT
+			b.id, b.workspace_id, b.task_key, w.manifest_path, w.manifest_digest,
+			b.recorded_state, b.current_generation
+			FROM boxes AS b JOIN workspaces AS w ON w.id = b.workspace_id
+			WHERE b.id = ?`, boxID).Scan(
+			&intent.ID, &intent.WorkspaceID, &intent.TaskKey, &intent.ManifestPath,
+			&intent.ManifestDigest, &intent.RecordedState, &intent.CurrentGeneration,
+		)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("query Box intent: %w", err)
+		}
+		found = true
+		return nil
+	})
+	if err != nil {
+		return BoxIntent{}, false, fmt.Errorf("read Box intent: %w", err)
+	}
+	return intent, found, nil
+}
+
 // CurrentPlanRecord identifies the retained immutable Plan for a materialized
 // Box generation. Database presence remains a cache, not external ownership.
 type CurrentPlanRecord struct {

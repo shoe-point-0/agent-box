@@ -108,6 +108,35 @@ func TestMigrateEverySchemaFixture(t *testing.T) {
 	}
 }
 
+func TestBoxIntentByIDReturnsPersistedDetachedOperationIdentity(t *testing.T) {
+	store := openTestStore(t)
+	if err := store.Update(t.Context(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`INSERT INTO workspaces
+			(id, manifest_path, manifest_digest, created_at, updated_at)
+			VALUES ('workspace-intent', '/workspace/.abox/box.yaml', 'sha256:manifest', 1, 1)`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`INSERT INTO boxes
+			(id, workspace_id, task_key, recorded_state, current_generation, created_at, updated_at)
+			VALUES ('box-intent', 'workspace-intent', 'TASK-1', 'ready', 3, 1, 1)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	intent, found, err := store.BoxIntentByID(t.Context(), "box-intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || intent.ID != "box-intent" || intent.WorkspaceID != "workspace-intent" ||
+		intent.TaskKey != "TASK-1" || intent.ManifestPath != "/workspace/.abox/box.yaml" ||
+		intent.ManifestDigest != "sha256:manifest" || intent.RecordedState != "ready" || intent.CurrentGeneration != 3 {
+		t.Fatalf("BoxIntentByID() = %+v, found=%t", intent, found)
+	}
+	if _, found, err := store.BoxIntentByID(t.Context(), "missing"); err != nil || found {
+		t.Fatalf("missing BoxIntentByID() found=%t error=%v", found, err)
+	}
+}
+
 func TestOwnershipViolationRollsBackTransaction(t *testing.T) {
 	t.Parallel()
 	store := openTestStore(t)
