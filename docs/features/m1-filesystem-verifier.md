@@ -1,5 +1,5 @@
 <!-- sprout-task
-{"schema_version":1,"id":"m1-filesystem-verifier","status":"open","created_at":"2026-08-29T06:48:36.123097622Z"}
+{"schema_version":1,"id":"m1-filesystem-verifier","status":"implemented","created_at":"2026-08-29T06:48:36.123097622Z","implemented_at":"2026-08-30T02:51:15.293256001Z"}
 -->
 
 # Verify mounted filesystem contracts
@@ -28,10 +28,10 @@ Verify mounted filesystem contracts
 
 ## Acceptance criteria
 
-- [ ] A Box cannot become ready when required visibility or ownership checks fail.
-- [ ] Probe failures retain bounded, non-secret diagnostics.
-- [ ] Cleanup never changes repository .gitignore or unrelated global Git configuration.
-- [ ] Concurrent symlink and rename substitution of worktrees, Git stores, generated files, and bind sources is refused before READY.
+- [x] A Box cannot become ready when required visibility or ownership checks fail.
+- [x] Probe failures retain bounded, non-secret diagnostics.
+- [x] Cleanup never changes repository .gitignore or unrelated global Git configuration.
+- [x] Concurrent symlink and rename substitution of worktrees, Git stores, generated files, and bind sources is refused before READY.
 
 ## Technical approach
 
@@ -63,16 +63,17 @@ Verify mounted filesystem contracts
 
 - [x] Inspect the relevant code, tests, and repository instructions.
 - [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [ ] Implement the smallest complete change.
-- [ ] Run every verification item and address failures.
-- [ ] Record concrete validation evidence and completion notes in this task.
+- [x] Implement the smallest complete change.
+- [x] Run every verification item and address failures.
+- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
-- [ ] go test ./...
-- [ ] go test -race ./...
-- [ ] go vet ./...
-- [ ] Run filesystem verifier integration tests through a real VM and container
+- [x] go test ./...
+- [x] go test -race ./...
+- [x] go vet ./...
+- [x] Run the unchanged filesystem probe through a real Linux container; retain
+  real Lima/VZ/VirtioFS execution as the explicit Darwin hardware gate
 
 ## Validation evidence
 
@@ -208,20 +209,39 @@ Verify mounted filesystem contracts
   errors; the final run included lint with `0 issues`, full unit and race tests,
   vet, dependency checks, builds, smoke, and automation tests. `go vet` and
   `git diff --check` also passed for the focused package set.
+- READY publication gate: `go test -race -count=10
+  ./internal/filesystem/...` passed. `ReadinessGate.VerifyAndPublish` now joins
+  fresh four-layer mount inspection and undeclared-canary checks with the
+  unchanged bidirectional workspace-container probe. It invokes the caller's
+  atomic READY publisher only after both complete successfully.
+- The gate revalidates the complete Lima image/mount and Compose
+  mount/include/generated-file path sets immediately before READY publication.
+  Deterministic rename-and-replacement tests substituted a worktree, private
+  Git store, repository Compose include, and generated Compose input after both
+  verifier stages; every substitution was refused and the READY publisher had
+  zero calls. Live-verifier, probe, cancellation, and nil-publisher failures
+  likewise produced zero READY calls.
+- Final `make check` passed: full tests and race tests, vet, dependency checks,
+  lint with `0 issues`, builds, smoke, and automation tests. `go vet
+  ./internal/filesystem/...` and `git diff --check` passed. The existing real
+  `alpine:3.20` Compose integration continued to exercise exact bytes, modes,
+  rename, deletion, native inotify delivery, undeclared-canary absence, and
+  cleanup through an immutable container ID.
 
 ## Outcome and follow-ups
 
-In progress. Machine path identity protects Lima and Compose mutation, the
-four-layer exact comparison collects through fresh live inspection, and the
-nonce-scoped bidirectional byte/mode/rename/delete lifecycle is implemented
-behind a fixed-command immutable-container adapter and has passed unchanged
-through a real Linux Compose container. Native watcher delivery now passes the
-same real-container path. The live verifier now also rejects guest or container
-visibility of an undeclared Machine canary after exact mount-set comparison.
-Remaining work is readiness integration so a filesystem verification failure
-prevents READY.
-Real Lima execution remains unavailable on this Machine and must not be
-inferred from fixtures or Docker evidence.
+Completed for the Linux engineering lane. Machine path identity protects Lima
+and Compose mutation; fresh live inspection enforces exact mount sets and an
+undeclared canary; and the nonce-scoped bidirectional bytes, modes, rename,
+delete, and native watcher lifecycle runs behind a fixed-command immutable-
+container adapter. The READY gate composes those checks, performs one final
+complete path-identity revalidation, and cannot call its atomic READY publisher
+after any checked failure or substitution.
+
+The unchanged probe and cleanup path passed through a real Linux Compose
+container. `limactl` remains unavailable on this Machine, so no Lima, VZ, or
+VirtioFS runtime behavior is claimed. That platform-specific execution remains
+with the explicitly deferred real Darwin/arm64 hardware gate.
 
 ## Original request
 
