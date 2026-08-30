@@ -21,7 +21,7 @@ import (
 // WorktreeObserver supplies fresh registration, branch, status, ignored-file,
 // common-directory, and filesystem identity evidence without mutation.
 type WorktreeObserver interface {
-	Observe(context.Context, repository.Facts, contract.Plan, gitstore.Record) (worktree.Observation, error)
+	ObserveRemoval(context.Context, repository.Facts, contract.Plan, gitstore.Record) (worktree.Observation, error)
 }
 
 // PublicationObserver supplies conservative reachability evidence from trusted
@@ -98,16 +98,20 @@ func (s *WorktreeStep) Remove(ctx context.Context, expected Fact) error {
 }
 
 func (s *WorktreeStep) observe(ctx context.Context) (worktree.Observation, Fact, error) {
-	observed, err := s.worktrees.Observe(ctx, s.facts, s.plan, s.store)
+	observed, err := s.worktrees.ObserveRemoval(ctx, s.facts, s.plan, s.store)
 	if err != nil {
 		return worktree.Observation{}, Fact{}, fmt.Errorf("observe worktree removal %s: %w", s.facts.Name, err)
 	}
-	if observed.Repository != s.facts.Name || !observed.Registered ||
-		observed.WorktreeIdentity == (ownership.FileIdentity{}) || observed.StoreIdentity == (ownership.FileIdentity{}) ||
+	if observed.Repository != s.facts.Name || observed.StoreIdentity == (ownership.FileIdentity{}) ||
 		observed.CanonicalPath == "" || !filepath.IsAbs(observed.CanonicalPath) || filepath.Clean(observed.CanonicalPath) != observed.CanonicalPath ||
 		observed.CanonicalCommon == "" || !filepath.IsAbs(observed.CanonicalCommon) || filepath.Clean(observed.CanonicalCommon) != observed.CanonicalCommon ||
-		observed.Dirty != (len(observed.ChangedPaths)+len(observed.IgnoredPaths) != 0) {
+		observed.Dirty != (len(observed.ChangedPaths)+len(observed.IgnoredPaths) != 0) ||
+		observed.Registered != (observed.WorktreeIdentity != (ownership.FileIdentity{})) ||
+		observed.Registered && !observed.BranchPresent || !observed.BranchPresent && observed.Commit != "" {
 		return worktree.Observation{}, Fact{}, errors.New("observe worktree removal: worktree evidence is incomplete")
+	}
+	if !observed.BranchPresent {
+		return observed, Fact{Present: false}, nil
 	}
 	statuses, err := s.publications.Check(ctx, s.store, []publication.Reference{{
 		Name: "refs/heads/" + observed.Branch, Commit: observed.Commit,
@@ -133,13 +137,16 @@ func (s *WorktreeStep) observe(ctx context.Context) (worktree.Observation, Fact,
 	slices.SortFunc(losses, compareLoss)
 	losses = slices.CompactFunc(losses, func(left, right Loss) bool { return compareLoss(left, right) == 0 })
 
-	fact := Fact{Present: true, Evidence: map[string]string{
+	evidence := map[string]string{
 		"branch": observed.Branch, "commit": observed.Commit,
 		"commonDir": observed.CanonicalCommon, "path": observed.CanonicalPath,
-		"lockReason":       observed.LockReason,
-		"worktreeIdentity": formatIdentity(observed.WorktreeIdentity),
-		"storeIdentity":    formatIdentity(observed.StoreIdentity),
-	}, Losses: losses}
+		"lockReason":    observed.LockReason,
+		"storeIdentity": formatIdentity(observed.StoreIdentity),
+	}
+	if observed.Registered {
+		evidence["worktreeIdentity"] = formatIdentity(observed.WorktreeIdentity)
+	}
+	fact := Fact{Present: true, Evidence: evidence, Losses: losses}
 	return observed, fact, nil
 }
 

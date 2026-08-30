@@ -25,7 +25,7 @@ func TestWorktreeStepFeedsExactGitLossesIntoDefaultRefusal(t *testing.T) {
 		Repository: "repo", CanonicalPath: filepath.Join(root, "workspace", "repo"),
 		CanonicalCommon: filepath.Join(root, "git", "repo.git"), Branch: "abox/task/repo",
 		Commit: "2222222222222222222222222222222222222222", LockReason: "owned by Agent Box box-one",
-		Registered: true, Dirty: true, ChangedPaths: []string{"tracked.txt", "untracked\n.txt"},
+		Registered: true, BranchPresent: true, Dirty: true, ChangedPaths: []string{"tracked.txt", "untracked\n.txt"},
 		IgnoredPaths:     []string{filepath.Join("cache", "ignored.bin")},
 		WorktreeIdentity: ownership.FileIdentity{Device: 1, Inode: 2}, StoreIdentity: ownership.FileIdentity{Device: 1, Inode: 3},
 	}
@@ -413,7 +413,7 @@ type stubWorktreeObserver struct {
 	observation worktree.Observation
 }
 
-func (s *stubWorktreeObserver) Observe(context.Context, repository.Facts, contract.Plan, gitstore.Record) (worktree.Observation, error) {
+func (s *stubWorktreeObserver) ObserveRemoval(context.Context, repository.Facts, contract.Plan, gitstore.Record) (worktree.Observation, error) {
 	return s.observation, nil
 }
 

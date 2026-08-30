@@ -89,8 +89,20 @@ Implement refusal-first Box removal
   worktree. The removal adapter test proved those paths and conservative
   publication commit IDs enter the digest-bound coordinator inventory and that
   default execution refuses before lease or remover calls.
+- `go test -race -count=10 ./internal/worktree ./internal/removal
+  ./internal/machinegit ./internal/publication` passed after adding the concrete
+  Git remover. Disposable real-Git fixtures proved that an exactly observed,
+  locked worktree containing untracked and ignored files is removed with its
+  expected generated branch while its private store remains; an injected
+  branch-delete interruption leaves an observable branch-only state that a
+  fresh retry removes; and replacing the registered path after observation
+  refuses removal without changing the replacement or generated branch.
+- `make check` passed after the concrete Git removal slice: pinned lint reported
+  `0 issues`; all unit and race tests, vet, Linux builds, spike smoke, shell
+  checks, and Python automation tests passed. `sprout check m1-safe-remove`,
+  `sprout check --all`, and `git diff --check` also passed.
 - The task remains open: these results prove the coordinator slice, not a live
-  `abox rm` command or concrete Git/Lima/Compose teardown integration.
+  `abox rm` command or concrete Lima/Compose/private-store teardown integration.
 
 ## Outcome and follow-ups
 
@@ -103,11 +115,16 @@ Implement refusal-first Box removal
   boundary, a mutation-free worktree observation API, and a worktree removal
   adapter that combines registration, branch, common-directory, inode, dirty,
   ignored-file, and trusted publication evidence into exact coordinator facts.
-- Next slice must implement the adapter's concrete ownership-proved,
-  interruption-safe Git remover, including the worktree-removed/branch-remains
-  retry state. Compose, Lima, private-store, generated-state, daemon, and CLI
-  integration plus disposable runtime teardown evidence remain required before
-  any acceptance criterion can be checked.
+- Added an ownership-proved concrete Git remover. It uses Git's locked-worktree
+  force primitive only after exact typed reobservation, compare-and-deletes the
+  generated branch at its expected commit, verifies terminal absence, and
+  models the worktree-removed/branch-remains interruption state for fresh
+  preview and retry.
+- Next slice must implement concrete Compose teardown observation/removal,
+  including exact container/network/volume ownership and volume-loss policy.
+  Lima, private-store, generated-state, daemon, and CLI integration plus
+  disposable runtime teardown evidence remain required before any acceptance
+  criterion can be checked.
 
 ## Original request
 

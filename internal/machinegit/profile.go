@@ -283,6 +283,16 @@ func (c Client) RemoveWorktree(ctx context.Context, repository, path string) (pr
 	return c.run(ctx, repository, noTransport, "worktree", "remove", "--", path)
 }
 
+// RemoveOwnedWorktree removes a caller-proved Agent Box worktree even when it
+// is dirty and locked. Git requires --force twice for a locked worktree; this
+// narrow primitive must only be called after typed ownership and loss checks.
+func (c Client) RemoveOwnedWorktree(ctx context.Context, repository, path string) (process.Result, error) {
+	if err := validateCanonicalPath("worktree", path); err != nil {
+		return process.Result{}, err
+	}
+	return c.run(ctx, repository, noTransport, "worktree", "remove", "--force", "--force", "--", path)
+}
+
 // DeleteBranch removes a generated ref only if it still names expectedCommit.
 func (c Client) DeleteBranch(ctx context.Context, repository, branch, expectedCommit string) (process.Result, error) {
 	if !validBranch(branch) {

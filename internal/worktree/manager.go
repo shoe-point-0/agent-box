@@ -34,6 +34,7 @@ type Git interface {
 	Status(context.Context, string) (machinegit.Result, error)
 	IgnoredFiles(context.Context, string) (machinegit.Result, error)
 	RemoveWorktree(context.Context, string, string) (machinegit.Result, error)
+	RemoveOwnedWorktree(context.Context, string, string) (machinegit.Result, error)
 	DeleteBranch(context.Context, string, string, string) (machinegit.Result, error)
 }
 
@@ -53,6 +54,7 @@ type Observation struct {
 	Commit           string
 	LockReason       string
 	Registered       bool
+	BranchPresent    bool
 	Dirty            bool
 	ChangedPaths     []string
 	IgnoredPaths     []string
@@ -152,6 +154,100 @@ func (m Manager) Observe(ctx context.Context, facts repository.Facts, immutable 
 		return Observation{}, conflict(facts.Name, "expected Git registration is absent")
 	}
 	return m.observe(ctx, facts, store, registered, ownerReason(immutable.BoxID))
+}
+
+// ObserveRemoval returns the complete live worktree state, including the
+// interruption state where Git removed the worktree but its generated branch
+// remains. An absent worktree and absent branch is a successful terminal state;
+// an unregistered path is never adopted or removed.
+func (m Manager) ObserveRemoval(ctx context.Context, facts repository.Facts, immutable contract.Plan, store gitstore.Record) (Observation, error) {
+	if m.Git == nil {
+		return Observation{}, errors.New("observe linked worktree removal: Git adapter is required")
+	}
+	if err := m.validateInput(facts, immutable, store); err != nil {
+		return Observation{}, err
+	}
+	if err := verifyStoreIdentity(store); err != nil {
+		return Observation{}, conflict(facts.Name, err.Error())
+	}
+	if relative, err := m.Git.UsesRelativeWorktrees(ctx, store.GitCommonDir); err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree removal %s: inspect relative-worktree mode: %w", facts.Name, err)
+	} else if relative {
+		return Observation{}, &RelativeWorktreesError{Repository: facts.Name}
+	}
+	registrations, err := m.registrations(ctx, store.GitCommonDir)
+	if err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree removal %s: observe registrations: %w", facts.Name, err)
+	}
+	registered, exists, err := selectRegistration(registrations, facts.WorktreePath, facts.Branch)
+	if err != nil {
+		return Observation{}, conflict(facts.Name, err.Error())
+	}
+	if exists {
+		return m.observe(ctx, facts, store, registered, ownerReason(immutable.BoxID))
+	}
+	if _, err := os.Lstat(facts.WorktreePath); err == nil {
+		return Observation{}, conflict(facts.Name, "planned path exists without the expected Git registration")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Observation{}, fmt.Errorf("observe linked worktree removal %s: inspect absent path: %w", facts.Name, err)
+	}
+	result, err := m.Git.LookupBranch(ctx, store.GitCommonDir, facts.Branch)
+	if errors.Is(err, machinegit.ErrBranchNotFound) {
+		return Observation{
+			Repository: facts.Name, CanonicalPath: facts.WorktreePath, CanonicalCommon: store.GitCommonDir,
+			Branch: facts.Branch, StoreIdentity: store.Identity,
+		}, nil
+	}
+	if err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree removal %s: inspect generated branch: %w", facts.Name, err)
+	}
+	commit := trimLine(result.Stdout)
+	if !validCommit(commit) {
+		return Observation{}, conflict(facts.Name, "generated branch has an invalid commit")
+	}
+	return Observation{
+		Repository: facts.Name, CanonicalPath: facts.WorktreePath, CanonicalCommon: store.GitCommonDir,
+		Branch: facts.Branch, Commit: commit, BranchPresent: true, StoreIdentity: store.Identity,
+	}, nil
+}
+
+// Remove destroys only the exact freshly observed Agent Box registration and
+// generated branch. The branch-only state is deliberately supported so a retry
+// converges after interruption between Git's worktree and ref mutations.
+func (m Manager) Remove(ctx context.Context, facts repository.Facts, immutable contract.Plan, store gitstore.Record, expected Observation) error {
+	fresh, err := m.ObserveRemoval(ctx, facts, immutable, store)
+	if err != nil {
+		return err
+	}
+	if !equalObservation(fresh, expected) {
+		return conflict(facts.Name, "worktree removal evidence changed")
+	}
+	if !fresh.Registered && !fresh.BranchPresent {
+		return nil
+	}
+	if fresh.Registered {
+		if _, err := m.Git.RemoveOwnedWorktree(ctx, store.GitCommonDir, facts.WorktreePath); err != nil {
+			return fmt.Errorf("remove linked worktree %s: %w", facts.Name, err)
+		}
+		fresh, err = m.ObserveRemoval(ctx, facts, immutable, store)
+		if err != nil {
+			return fmt.Errorf("verify linked worktree removal %s: %w", facts.Name, err)
+		}
+		if fresh.Registered || !fresh.BranchPresent || fresh.Commit != expected.Commit {
+			return conflict(facts.Name, "worktree removal did not leave the expected generated branch")
+		}
+	}
+	if _, err := m.Git.DeleteBranch(ctx, store.GitCommonDir, facts.Branch, fresh.Commit); err != nil {
+		return fmt.Errorf("remove linked worktree branch %s: %w", facts.Name, err)
+	}
+	terminal, err := m.ObserveRemoval(ctx, facts, immutable, store)
+	if err != nil {
+		return fmt.Errorf("verify linked worktree branch removal %s: %w", facts.Name, err)
+	}
+	if terminal.Registered || terminal.BranchPresent {
+		return conflict(facts.Name, "generated branch remains after removal")
+	}
+	return nil
 }
 
 // Ensure returns a fresh observation of a matching worktree or creates, locks,
@@ -342,10 +438,20 @@ func (m Manager) observe(ctx context.Context, facts repository.Facts, store gits
 	return Observation{
 		Repository: facts.Name, CanonicalPath: facts.WorktreePath, CanonicalCommon: commonDir,
 		Branch: facts.Branch, Commit: registered.Head, LockReason: registered.LockReason,
-		Registered: true, Dirty: len(changed) != 0 || len(ignored) != 0,
+		Registered: true, BranchPresent: true, Dirty: len(changed) != 0 || len(ignored) != 0,
 		ChangedPaths: changed, IgnoredPaths: ignored,
 		WorktreeIdentity: worktreeIdentity, StoreIdentity: store.Identity,
 	}, nil
+}
+
+func equalObservation(left, right Observation) bool {
+	return left.Repository == right.Repository && left.CanonicalPath == right.CanonicalPath &&
+		left.CanonicalCommon == right.CanonicalCommon && left.Branch == right.Branch &&
+		left.Commit == right.Commit && left.LockReason == right.LockReason &&
+		left.Registered == right.Registered && left.BranchPresent == right.BranchPresent &&
+		left.Dirty == right.Dirty && slices.Equal(left.ChangedPaths, right.ChangedPaths) &&
+		slices.Equal(left.IgnoredPaths, right.IgnoredPaths) &&
+		left.WorktreeIdentity == right.WorktreeIdentity && left.StoreIdentity == right.StoreIdentity
 }
 
 func parseNULPaths(output []byte) ([]string, error) {

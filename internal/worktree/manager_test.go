@@ -15,6 +15,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/manifest"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/process"
@@ -88,6 +89,104 @@ func TestEnsureRealGitLifecycleObservationAndNoOp(t *testing.T) {
 	}
 	if adapter.adds != 1 || adapter.locks != 1 {
 		t.Fatal("read-only observation recreated or relocked the worktree")
+	}
+}
+
+func TestRemoveRealGitDiscardsAuthorizedLockedWorktreeAndBranch(t *testing.T) {
+	fixture := newFixture(t, false)
+	manager := Manager{Git: fixture.client, WorkspaceRoot: fixture.workspaceRoot}
+	if _, err := manager.Ensure(t.Context(), fixture.facts, fixture.plan, fixture.store); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(fixture.facts.WorktreePath, "untracked.txt"), "discard\n")
+	mustWrite(t, filepath.Join(fixture.facts.GitStorePath, "info", "exclude"), "ignored/\n")
+	mustMkdir(t, filepath.Join(fixture.facts.WorktreePath, "ignored"))
+	mustWrite(t, filepath.Join(fixture.facts.WorktreePath, "ignored", "cache.bin"), "discard\n")
+
+	observed, err := manager.ObserveRemoval(t.Context(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !observed.Registered || !observed.BranchPresent || !observed.Dirty {
+		t.Fatalf("removal observation = %#v", observed)
+	}
+	if err := manager.Remove(t.Context(), fixture.facts, fixture.plan, fixture.store, observed); err != nil {
+		t.Fatal(err)
+	}
+	assertAbsent(t, fixture.facts.WorktreePath)
+	if _, err := fixture.client.LookupBranch(t.Context(), fixture.facts.GitStorePath, fixture.facts.Branch); !errors.Is(err, machinegit.ErrBranchNotFound) {
+		t.Fatalf("generated branch remains: %v", err)
+	}
+	if _, err := os.Stat(fixture.facts.GitStorePath); err != nil {
+		t.Fatalf("private store was removed: %v", err)
+	}
+	terminal, err := manager.ObserveRemoval(t.Context(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil || terminal.Registered || terminal.BranchPresent {
+		t.Fatalf("terminal removal observation = %#v, %v", terminal, err)
+	}
+}
+
+func TestRemoveRealGitRetryDeletesBranchLeftByInterruption(t *testing.T) {
+	fixture := newFixture(t, false)
+	adapter := &failingDeleteBranchGit{Client: fixture.client}
+	manager := Manager{Git: adapter, WorkspaceRoot: fixture.workspaceRoot}
+	if _, err := manager.Ensure(t.Context(), fixture.facts, fixture.plan, fixture.store); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := manager.ObserveRemoval(t.Context(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Remove(t.Context(), fixture.facts, fixture.plan, fixture.store, observed); err == nil || !strings.Contains(err.Error(), "injected branch deletion failure") {
+		t.Fatalf("first Remove() error = %v", err)
+	}
+	assertAbsent(t, fixture.facts.WorktreePath)
+
+	remainder, err := manager.ObserveRemoval(t.Context(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remainder.Registered || !remainder.BranchPresent || remainder.Commit != observed.Commit || remainder.WorktreeIdentity != (ownership.FileIdentity{}) {
+		t.Fatalf("interrupted removal observation = %#v", remainder)
+	}
+	if err := manager.Remove(t.Context(), fixture.facts, fixture.plan, fixture.store, remainder); err != nil {
+		t.Fatal(err)
+	}
+	if adapter.deletes != 2 {
+		t.Fatalf("branch delete calls = %d, want 2", adapter.deletes)
+	}
+	if _, err := adapter.LookupBranch(t.Context(), fixture.facts.GitStorePath, fixture.facts.Branch); !errors.Is(err, machinegit.ErrBranchNotFound) {
+		t.Fatalf("generated branch remains after retry: %v", err)
+	}
+}
+
+func TestRemoveRealGitRefusesReplacedRegisteredPath(t *testing.T) {
+	fixture := newFixture(t, false)
+	manager := Manager{Git: fixture.client, WorkspaceRoot: fixture.workspaceRoot}
+	if _, err := manager.Ensure(t.Context(), fixture.facts, fixture.plan, fixture.store); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := manager.ObserveRemoval(t.Context(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := fixture.facts.WorktreePath + "-moved"
+	if err := os.Rename(fixture.facts.WorktreePath, moved); err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, fixture.facts.WorktreePath)
+	marker := filepath.Join(fixture.facts.WorktreePath, "foreign.txt")
+	mustWrite(t, marker, "preserve\n")
+
+	if err := manager.Remove(t.Context(), fixture.facts, fixture.plan, fixture.store, observed); err == nil {
+		t.Fatal("Remove() accepted a replaced registered path")
+	}
+	contents, err := os.ReadFile(marker)
+	if err != nil || string(contents) != "preserve\n" {
+		t.Fatalf("replacement path changed: %q, %v", contents, err)
+	}
+	if _, err := fixture.client.LookupBranch(t.Context(), fixture.facts.GitStorePath, fixture.facts.Branch); err != nil {
+		t.Fatalf("generated branch was removed: %v", err)
 	}
 }
 
@@ -436,6 +535,19 @@ func (g *failingObservationGit) WorktreeCommonDir(ctx context.Context, path stri
 		return machinegit.Result{}, errors.New("injected common-directory observation failure")
 	}
 	return g.Client.WorktreeCommonDir(ctx, path)
+}
+
+type failingDeleteBranchGit struct {
+	machinegit.Client
+	deletes int
+}
+
+func (g *failingDeleteBranchGit) DeleteBranch(ctx context.Context, repository, branch, expectedCommit string) (machinegit.Result, error) {
+	g.deletes++
+	if g.deletes == 1 {
+		return machinegit.Result{}, errors.New("injected branch deletion failure")
+	}
+	return g.Client.DeleteBranch(ctx, repository, branch, expectedCommit)
 }
 
 func requireGit(t *testing.T) string {
