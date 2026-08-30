@@ -79,6 +79,7 @@ type PlanBox func(context.Context, PlanRequest) (contract.PlanOutput, error)
 type Config struct {
 	RuntimeDir string
 	Journal    *journal.Journal
+	Writers    *WriterGate
 	Run        Runner
 	List       ListBoxes
 	Plan       PlanBox
@@ -88,6 +89,7 @@ type Config struct {
 // exact socket identity.
 type Server struct {
 	journal    *journal.Journal
+	writers    *WriterGate
 	run        Runner
 	list       ListBoxes
 	plan       PlanBox
@@ -114,6 +116,9 @@ type Server struct {
 func Start(config Config) (_ *Server, returnErr error) {
 	if config.Journal == nil {
 		return nil, errors.New("start daemon: operation journal is nil")
+	}
+	if config.Writers == nil {
+		return nil, errors.New("start daemon: Box writer gate is nil")
 	}
 	if config.Run == nil {
 		return nil, errors.New("start daemon: operation runner is nil")
@@ -147,7 +152,7 @@ func Start(config Config) (_ *Server, returnErr error) {
 
 	operationContext, cancelOperations := context.WithCancel(context.Background())
 	server := &Server{
-		journal: config.Journal, run: config.Run, list: config.List, plan: config.Plan,
+		journal: config.Journal, writers: config.Writers, run: config.Run, list: config.List, plan: config.Plan,
 		listener: newPeerListener(unixListener, uint32(os.Geteuid())), lock: prepared.lock,
 		socketPath: prepared.socketPath, socket: socket,
 		operationContext: operationContext, cancelOperations: cancelOperations,
@@ -420,7 +425,20 @@ func (s *Server) execute(operation journal.Operation, input json.RawMessage) {
 		_, err = s.journal.AppendEvent(s.operationContext, operation.ID, kind, encoded, time.Now().UTC())
 		return err
 	}
-	failure := s.run(s.operationContext, operation, input, emit)
+	var failure *contract.Failure
+	if operation.Kind == "remove" {
+		// Removal owns the same gate through its fenced Quiescer and therefore
+		// must not admit itself as a writer before it closes the barrier.
+		failure = s.run(s.operationContext, operation, input, emit)
+	} else {
+		release, err := s.writers.Enter(s.operationContext, operation.BoxID)
+		if err != nil {
+			failure = &contract.Failure{Code: contract.CodeInfrastructureApplyFailed}
+		} else {
+			failure = s.run(s.operationContext, operation, input, emit)
+			release()
+		}
+	}
 	state := journal.StateSucceeded
 	errorCode := ""
 	terminalDetails := operationResult{APIVersion: contract.DaemonAPIVersion, State: state}

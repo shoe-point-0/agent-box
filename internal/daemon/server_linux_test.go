@@ -66,7 +66,7 @@ func TestUnixServerSecurityHandshakeAndLifecycle(t *testing.T) {
 
 	store, operationJournal := openJournal(t)
 	defer func() { _ = store.Close() }()
-	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Run: func(context.Context, journal.Operation, json.RawMessage, Emit) *contract.Failure { return nil }, List: emptyList, Plan: emptyPlan}); err == nil {
+	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Writers: NewWriterGate(), Run: func(context.Context, journal.Operation, json.RawMessage, Emit) *contract.Failure { return nil }, List: emptyList, Plan: emptyPlan}); err == nil {
 		t.Fatal("second Start() acquired the daemon runtime")
 	}
 
@@ -99,7 +99,7 @@ func TestRuntimeRefusesSymlinksAndStaleSocketPaths(t *testing.T) {
 	if err := os.Symlink(target, symlink); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Start(Config{RuntimeDir: symlink, Journal: operationJournal, Run: runner, List: emptyList, Plan: emptyPlan}); err == nil {
+	if _, err := Start(Config{RuntimeDir: symlink, Journal: operationJournal, Writers: NewWriterGate(), Run: runner, List: emptyList, Plan: emptyPlan}); err == nil {
 		t.Fatal("Start() accepted a symlink runtime directory")
 	}
 
@@ -111,7 +111,7 @@ func TestRuntimeRefusesSymlinksAndStaleSocketPaths(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("not a socket"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Run: runner, List: emptyList, Plan: emptyPlan}); err == nil || !strings.Contains(err.Error(), "refusing stale or active endpoint") {
+	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Writers: NewWriterGate(), Run: runner, List: emptyList, Plan: emptyPlan}); err == nil || !strings.Contains(err.Error(), "refusing stale or active endpoint") {
 		t.Fatalf("Start() stale-path error = %v", err)
 	}
 	contents, err := os.ReadFile(stale)
@@ -296,7 +296,8 @@ func TestRestartedDaemonRefusesUnownedRunningOperation(t *testing.T) {
 	var executions atomic.Int32
 	server, err := Start(Config{
 		RuntimeDir: filepath.Join(root, "runtime"), Journal: operationJournal,
-		List: emptyList, Plan: emptyPlan,
+		Writers: NewWriterGate(),
+		List:    emptyList, Plan: emptyPlan,
 		Run: func(context.Context, journal.Operation, json.RawMessage, Emit) *contract.Failure {
 			executions.Add(1)
 			return nil
@@ -385,7 +386,7 @@ func TestShutdownTimeoutRetainsLockUntilRetryCompletes(t *testing.T) {
 	assertPath(t, server.SocketPath(), os.ModeSocket, 0o600)
 	store, operationJournal := openJournal(t)
 	defer func() { _ = store.Close() }()
-	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Run: runner, List: emptyList, Plan: emptyPlan}); err == nil {
+	if _, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Writers: NewWriterGate(), Run: runner, List: emptyList, Plan: emptyPlan}); err == nil {
 		t.Fatal("second daemon acquired lock after incomplete shutdown")
 	}
 
@@ -419,7 +420,7 @@ func startTestServer(t *testing.T, runner Runner) (*Server, *http.Client, string
 	}
 	runtimeDir := filepath.Join(root, "runtime")
 	store, operationJournal := openJournalAt(t, filepath.Join(root, "state", "state.db"))
-	server, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Run: runner, List: emptyList, Plan: emptyPlan})
+	server, err := Start(Config{RuntimeDir: runtimeDir, Journal: operationJournal, Writers: NewWriterGate(), Run: runner, List: emptyList, Plan: emptyPlan})
 	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)

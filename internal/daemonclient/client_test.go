@@ -41,6 +41,7 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	}
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: filepath.Join(root, "runtime"), Journal: operationJournal,
+		Writers: daemon.NewWriterGate(),
 		List: func(context.Context) (contract.ListOutput, error) {
 			return contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{}}, nil
 		},

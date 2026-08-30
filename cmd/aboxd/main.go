@@ -99,9 +99,11 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "aboxd: configure Machine Git profile: %v\n", err)
 		return contract.ExitInfrastructure
 	}
+	writers := daemon.NewWriterGate()
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
+		Writers:    writers,
 		List:       boxInventory.List,
 		Plan: func(ctx context.Context, request daemon.PlanRequest) (contract.PlanOutput, error) {
 			gitPath, toolVersions, observeErr := observeToolVersions(ctx, applicationRoot)

@@ -163,6 +163,17 @@ Implement refusal-first Box removal
 - `make check` passed after the durable lifecycle slice: pinned lint reported
   `0 issues`; module verification, all unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests passed.
+- `go test -race -count=10 ./internal/daemon ./internal/removal ./cmd/aboxd`
+  passed after adding daemon writer quiescence. Every ordinary daemon mutation
+  now enters a per-Box writer gate; removal can use its journal lease to close
+  admission, drain already-admitted writers, and resume only with the same
+  lease token. Race fixtures proved drain-before-success, refusal of new writers
+  while fenced, cancellation rollback, wrong-token refusal, and unrelated-Box
+  isolation.
+- `make check`, `sprout check m1-safe-remove`, `sprout check --all`, and
+  `git diff --check` passed after the writer-gate slice. Pinned lint reported
+  `0 issues`; module verification, unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests all passed.
 - The task remains open: these results do not prove a live `abox rm` command or
   complete daemon removal integration.
 
@@ -210,10 +221,14 @@ Implement refusal-first Box removal
   coordinator's execution context and is checked before every later side
   effect. Removal transitions now have a concrete redacted operation-event
   recorder.
-- Next slice must add daemon writer quiescence and assemble the concrete steps
-  from the retained Plan plus persisted ownership state before exposing CLI
-  `abox rm`. Full disposable Box teardown evidence remains required before any
-  acceptance criterion can be checked.
+- Added daemon-local per-Box writer admission. Journaled non-removal mutations
+  enter the gate, while the removal operation bypasses self-admission and uses
+  its fenced journal lease to quiesce and drain that same gate before teardown.
+- Next slice must persist and load the complete ownership snapshot needed to
+  assemble concrete steps from the retained Plan; the current state schema does
+  not retain required inode, Lima metadata, or Compose resource ID/label facts.
+  Then expose CLI `abox rm`. Full disposable Box teardown evidence remains
+  required before any acceptance criterion can be checked.
 
 ## Original request
 
