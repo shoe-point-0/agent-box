@@ -89,7 +89,7 @@ func (v *LiveVerifier) Verify(ctx context.Context, spec LiveSpec) (Observation, 
 	}
 	for _, container := range containers {
 		data, err := v.invoke(ctx, spec, "container-mountinfo", []string{
-			spec.Runtime.DockerPath, "exec", container.ID, containerMountInfoReader, "/proc/self/mountinfo",
+			spec.Runtime.DockerPath, "exec", "--", container.ID, containerMountInfoReader, "/proc/self/mountinfo",
 		})
 		if err != nil {
 			return observed, err

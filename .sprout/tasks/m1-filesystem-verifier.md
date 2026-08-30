@@ -140,17 +140,35 @@ Verify mounted filesystem contracts
   The current workspace boundary fixture shares the real test filesystem; it is
   not container or VirtioFS evidence. The fixed-command workspace adapter and
   unchanged real-container execution remain required before completion.
+- Fixed-command workspace-container boundary: `go test -race -count=10
+  ./internal/filesystem/...` passed, including ten executions of the unchanged
+  bidirectional probe lifecycle through a real Compose-managed `alpine:3.20`
+  workspace container. The fixture runs as the Machine UID/GID and bind-mounts
+  the worktree at its identical absolute path; exact bytes, modes, rename, and
+  deletion visibility passed in both directions and teardown left no container
+  or `.abox-probe` residue.
+- The adapter addresses only the immutable Docker ID, terminates Docker option
+  parsing explicitly, accepts only nonce-owned probe paths and generated probe
+  payloads/modes, and invokes constant `/bin/sh` scripts with all paths and data
+  passed as positional argv. Unit tests prove fixed argv, malformed/truncated
+  output refusal, cancellation classification, bounded redacted failures, and
+  zero command calls for invalid or cross-nonce requests. The mountinfo
+  collector now also terminates Docker option parsing before immutable IDs.
+- `make check` passed for this slice: full tests and race tests, `go vet`,
+  dependency checks, lint with `0 issues`, builds, smoke, and automation tests.
+  `sprout check --all` and `git diff --check` passed. This is real Linux
+  Docker/Compose bind-mount evidence, not Lima, VZ, or VirtioFS evidence.
 
 ## Outcome and follow-ups
 
 In progress. Machine path identity protects Lima and Compose mutation, the
 four-layer exact comparison collects through fresh live inspection, and the
 nonce-scoped bidirectional byte/mode/rename/delete lifecycle is implemented
-behind an immutable-container workspace boundary. Remaining work is the fixed
-workspace-container command adapter, watcher and undeclared-canary probes, the
-managed Git exclude, readiness integration, and unchanged real-container
-execution. Real Lima execution remains unavailable on this Machine and must
-not be inferred from fixtures or Docker evidence.
+behind a fixed-command immutable-container adapter and has passed unchanged
+through a real Linux Compose container. Remaining work is watcher and
+undeclared-canary probes, the managed Git exclude, and readiness integration.
+Real Lima execution remains unavailable on this Machine and must not be
+inferred from fixtures or Docker evidence.
 
 ## Original request
 

@@ -43,8 +43,8 @@ func TestLiveVerifierCollectsFreshMountInfoByImmutableContainerID(t *testing.T) 
 	}
 	wantCalls := [][]string{
 		{"/usr/bin/cat", "--", "/proc/self/mountinfo"},
-		{"/usr/bin/docker", "exec", "container-0", "/bin/cat", "/proc/self/mountinfo"},
-		{"/usr/bin/docker", "exec", "container-1", "/bin/cat", "/proc/self/mountinfo"},
+		{"/usr/bin/docker", "exec", "--", "container-0", "/bin/cat", "/proc/self/mountinfo"},
+		{"/usr/bin/docker", "exec", "--", "container-1", "/bin/cat", "/proc/self/mountinfo"},
 	}
 	if !slices.EqualFunc(host.calls, wantCalls, slices.Equal[[]string]) {
 		t.Fatalf("calls = %#v, want %#v", host.calls, wantCalls)
@@ -173,8 +173,8 @@ func (h *collectorHost) InspectMounts(context.Context, lima.Spec) ([]lima.MountO
 func (h *collectorHost) Capture(_ context.Context, _ lima.Spec, _ string, argv []string) (lima.Capture, error) {
 	h.calls = append(h.calls, append([]string(nil), argv...))
 	key := "guest"
-	if len(argv) >= 3 && argv[1] == "exec" {
-		key = argv[2]
+	if len(argv) >= 4 && argv[1] == "exec" {
+		key = argv[3]
 	}
 	return h.outputs[key], h.invokeErr[key]
 }
