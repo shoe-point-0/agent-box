@@ -240,6 +240,24 @@ Deliver the single-repository up vertical slice
   observations, and generated Compose path evidence. Compose compilation and
   resource apply must therefore precede filesystem verification; bypassing
   that order would turn generated intent into fake live evidence.
+- Partial Compose-authority slice: schema v8 adds one generation-scoped
+  recovery record for the exact `compose.RuntimeSpec` consumed by apply and the
+  resource identities observed afterward. Intent is durable before Compose may
+  mutate; container, network, and volume proof can only be added monotonically
+  or transferred unchanged to a later running daemon operation.
+- READY publication now compares complete partial Compose authority with the
+  Compose removal specification and resource records in the same transaction.
+  Exact authority is retired; a mismatched runtime ID rolls back publication
+  and leaves the recovery record intact. Migration tests pass from every
+  retained schema fixture through schema v8.
+- `go test -race -count=10 ./internal/state`, `go vet ./internal/state`, and
+  `git diff --check` passed. Post-slice `make check` passed with lint reporting
+  `0 issues`; module verification, all unit/race tests, vet, builds, smoke,
+  shell, and Python automation checks were green.
+- This slice deliberately does not call `compose.Runtime.Apply`: durable intent
+  now exists for crash recovery, but the concrete reconciler must still apply,
+  freshly observe, retain immutable IDs, and prove warm identity before
+  filesystem readiness can consume the result.
 
 ## Outcome and follow-ups
 
@@ -292,8 +310,14 @@ freshly proven. Re-normalization is mandatory on warm runs, while byte-identical
 generated evidence is no longer rewritten and therefore keeps the path identity
 that later readiness and removal checks consume.
 
-Next, add durable partial authority for Compose resource identities and apply
-the compiled project through `compose.Runtime`. Then invoke filesystem
+The tenth coherent slice establishes the Compose apply recovery ledger. It
+binds generated inputs and immutable runtime-host identity before mutation and
+ensures READY cannot silently replace partial runtime ownership with a
+different live resource set.
+
+Next, consume that ledger in `internal/up.ReconcileCompose`: persist or transfer
+intent, invoke `compose.Runtime.Apply`, retain the freshly observed resource
+records, and re-prove retained IDs on warm recovery. Then invoke filesystem
 readiness with that fresh runtime observation, add context and READY operations,
 and wire the completed runner into `cmd/aboxd`. Keep the packet open until the
 unchanged single-repository fixture passes through the real daemon and CLI,

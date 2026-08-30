@@ -20,6 +20,7 @@ var expectedTables = []string{
 	"leases",
 	"operation_events",
 	"operations",
+	"reconciliation_compose_authority",
 	"reconciliation_generated_authority",
 	"reconciliation_git_authority",
 	"reconciliation_lima_authority",
