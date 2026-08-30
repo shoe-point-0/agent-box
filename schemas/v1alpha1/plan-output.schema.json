@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plan-output.schema.json",
+  "title": "Agent Box Plan Output v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "plan", "classification", "reason", "operations"],
+  "properties": {
+    "schemaVersion": {"const": "abox.plan-output/v1alpha1"},
+    "plan": {"$ref": "plan.schema.json"},
+    "classification": {"type": "string", "enum": ["no-op", "in-place", "growth", "removal", "restart", "conflict"]},
+    "reason": {"type": "string", "minLength": 1},
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "resource", "reason", "description", "restart", "destructive", "conflict"],
+        "properties": {
+          "action": {"type": "string", "enum": ["create", "update", "restart", "grow", "remove", "conflict"]},
+          "resource": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "restart": {"type": "boolean"},
+          "destructive": {"type": "boolean"},
+          "conflict": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

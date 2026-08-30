@@ -28,12 +28,17 @@ type fakeDaemon struct {
 	listOutput        contract.ListOutput
 	listFailure       *contract.Failure
 	listError         error
+	planOutput        contract.PlanOutput
+	planFailure       *contract.Failure
+	planError         error
+	planRequest       daemon.PlanRequest
 	events            []daemonclient.Event
 	request           daemon.MutationRequest
 	key               string
 	closed            bool
 	handshakes        int
 	listCalls         int
+	planCalls         int
 }
 
 func (f *fakeDaemon) Handshake(context.Context) (*contract.Failure, error) {
@@ -67,6 +72,12 @@ func (f *fakeDaemon) List(context.Context) (contract.ListOutput, *contract.Failu
 	return f.listOutput, f.listFailure, f.listError
 }
 
+func (f *fakeDaemon) Plan(_ context.Context, request daemon.PlanRequest) (contract.PlanOutput, *contract.Failure, error) {
+	f.planCalls++
+	f.planRequest = request
+	return f.planOutput, f.planFailure, f.planError
+}
+
 func (f *fakeDaemon) Close() { f.closed = true }
 
 func TestRunReportsVersion(t *testing.T) {
@@ -91,12 +102,12 @@ func TestHelpExposesOnlyImplementedCommands(t *testing.T) {
 	if code := run(context.Background(), []string{"help"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("help code = %d", code)
 	}
-	for _, command := range []string{"init", "list", "up", "version", "help"} {
+	for _, command := range []string{"init", "list", "plan", "up", "version", "help"} {
 		if !strings.Contains(stdout.String(), "  "+command) {
 			t.Errorf("help does not expose %q: %q", command, stdout.String())
 		}
 	}
-	for _, unavailable := range []string{"plan", "status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
+	for _, unavailable := range []string{"status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
 		if strings.Contains(stdout.String(), "  "+unavailable+" ") {
 			t.Errorf("help claims unavailable command %q", unavailable)
 		}
@@ -307,6 +318,56 @@ func TestListEmptyAndArguments(t *testing.T) {
 	}
 }
 
+func TestPlanRendersHumanImplicationsAndVersionedJSON(t *testing.T) {
+	t.Parallel()
+	_, cwd, manifest := manifestFixture(t)
+	output := planFixture()
+	client := &fakeDaemon{planOutput: output}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"plan", "TASK-1"}, &stdout, &stderr, testDependencies(cwd, client)); code != contract.ExitOK {
+		t.Fatalf("human plan code = %d; stderr=%q", code, stderr.String())
+	}
+	want := "Box task-aaaaaaaa: restart (changes-required)\n" +
+		"ACTION    RESOURCE         IMPACT                REASON\n" +
+		"restart   runtime-host     restart               runtime-resources-changed\n" +
+		"conflict  repository/repo  destructive,conflict  dirty-checkout-replacement\n"
+	if got := stdout.String(); got != want {
+		t.Fatalf("human plan = %q, want %q", got, want)
+	}
+	if client.planCalls != 1 || client.planRequest.ManifestPath != manifest || client.planRequest.TaskKey != "TASK-1" || !client.closed {
+		t.Fatalf("plan request/calls/closed = %#v/%d/%v", client.planRequest, client.planCalls, client.closed)
+	}
+
+	client = &fakeDaemon{planOutput: output}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runWith(t.Context(), []string{"plan", "TASK-1", "--json"}, &stdout, &stderr, testDependencies(cwd, client)); code != contract.ExitOK || stderr.Len() != 0 {
+		t.Fatalf("JSON plan code/stderr = %d/%q", code, stderr.String())
+	}
+	validateJSONLine(t, compileCLISchema(t, "plan-output"), bytes.TrimSpace(stdout.Bytes()))
+}
+
+func TestPlanArgumentsAndNoOpRendering(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"plan"}, {"plan", "TASK", "extra"}, {"plan", "--json", "--json", "TASK"}, {"plan", "--help", "TASK"}} {
+		var stdout, stderr bytes.Buffer
+		if code := runWith(t.Context(), args, &stdout, &stderr, dependencies{}); code != contract.ExitUsage {
+			t.Errorf("runWith(%v) code = %d, want %d", args, code, contract.ExitUsage)
+		}
+	}
+	output := planFixture()
+	output.Classification = "no-op"
+	output.Reason = "plan-digests-match"
+	output.Operations = []contract.PlanOperation{}
+	var stdout bytes.Buffer
+	if err := renderPlan(&stdout, output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "Box task-aaaaaaaa: no-op (plan-digests-match)\nNo changes.\n"; got != want {
+		t.Fatalf("no-op rendering = %q, want %q", got, want)
+	}
+}
+
 func TestUpDiscoversManifestAndRendersHumanProgressOnStderr(t *testing.T) {
 	t.Parallel()
 	root, nested, manifest := manifestFixture(t)
@@ -511,6 +572,33 @@ func listFixture() contract.ListOutput {
 		{ID: "box-stale", WorkspaceID: "ws-stale", TaskKey: "TASK-X", ManifestPath: "/work/stale/.abox/box.yaml", State: "stale", RecordedState: "ready", Drift: []string{"runtime host record is missing for a materialized generation"}},
 		{ID: "box-stopped", WorkspaceID: "ws-stopped", TaskKey: "TASK-S", ManifestPath: "/work/stopped/.abox/box.yaml", State: "stopped", RecordedState: "stopped", Drift: []string{}},
 	}}
+}
+
+func planFixture() contract.PlanOutput {
+	digest := contract.Digest("sha256:" + strings.Repeat("a", 64))
+	return contract.PlanOutput{
+		SchemaVersion: contract.PlanOutputSchemaVersion,
+		Plan: contract.Plan{
+			SchemaVersion: contract.PlanSchemaVersion, WorkspaceID: "ws_aaaaaaaa", BoxID: "task-aaaaaaaa", TaskKey: "TASK-1",
+			Manifest: contract.Artifact{Path: "/work/.abox/box.yaml", Digest: digest},
+			Repositories: []contract.PlanRepository{{
+				Name: "repo", SourcePath: "/work", BaseCommit: strings.Repeat("b", 40), Branch: "abox/TASK-1/repo",
+				WorktreePath: "/state/boxes/task-aaaaaaaa/workspace/repo", GitCommonDir: "/state/boxes/task-aaaaaaaa/git/repo.git",
+			}},
+			RuntimeHost:      contract.RuntimeHostPlan{Driver: "lima-qemu", InstanceName: "abox-task-aaaaaaaa", CPUMillicores: 2000, MemoryBytes: 4 << 30, DiskBytes: 20 << 30},
+			Compose:          contract.ComposePlan{ProjectName: "abox-task-aaaaaaaa", Includes: []contract.Artifact{{Path: "/state/boxes/task-aaaaaaaa/workspace/repo/compose.yaml", Digest: digest}}, Profiles: []string{"development"}},
+			WorkspaceService: contract.WorkspaceServicePlan{Name: "app", Repository: "repo", WorkingDirectory: "repo"},
+			Mounts:           []contract.MountPlan{{Path: "/state/boxes/task-aaaaaaaa/workspace/repo", Services: []string{"app"}, Writable: true}},
+			Policy:           contract.PolicyPlan{GitMetadata: "read-write", DockerSocket: "deny", MachineMounts: "declared-only", NetworkEgress: "allow"},
+			Tools:            contract.ToolVersions{AgentBox: "test", Git: "test", Lima: "test", Docker: "test", Compose: "test"},
+			PlanDigest:       digest,
+		},
+		Classification: "restart", Reason: "changes-required",
+		Operations: []contract.PlanOperation{
+			{Action: "restart", Resource: "runtime-host", Reason: "runtime-resources-changed", Description: "restart required", Restart: true},
+			{Action: "conflict", Resource: "repository/repo", Reason: "dirty-checkout-replacement", Description: "dirty worktree cannot be replaced", Destructive: true, Conflict: true},
+		},
+	}
 }
 
 func testDependencies(cwd string, client daemonAPI) dependencies {

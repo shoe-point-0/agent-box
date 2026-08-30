@@ -44,6 +44,13 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 		List: func(context.Context) (contract.ListOutput, error) {
 			return contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{}}, nil
 		},
+		Plan: func(context.Context, daemon.PlanRequest) (contract.PlanOutput, error) {
+			return contract.PlanOutput{
+				SchemaVersion: contract.PlanOutputSchemaVersion,
+				Plan:          contract.Plan{SchemaVersion: contract.PlanSchemaVersion},
+				Operations:    []contract.PlanOperation{},
+			}, nil
+		},
 		Run: func(_ context.Context, _ journal.Operation, _ json.RawMessage, emit daemon.Emit) *contract.Failure {
 			if err := emit("reconcile.started", map[string]string{"step": "test"}); err != nil {
 				return &contract.Failure{Code: contract.CodeInternalInvariant}
@@ -79,8 +86,14 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	planned, failure, err := client.Plan(t.Context(), daemon.PlanRequest{
+		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-1", ManifestPath: manifest,
+	})
+	if err != nil || failure != nil || planned.SchemaVersion != contract.PlanOutputSchemaVersion || planned.Operations == nil {
+		t.Fatalf("Plan() = %#v, %#v, %v", planned, failure, err)
+	}
 	var events []daemonclient.Event
-	failure, err := client.Up(t.Context(), daemon.MutationRequest{
+	failure, err = client.Up(t.Context(), daemon.MutationRequest{
 		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-1",
 		ManifestPath: manifest, ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
 	}, "client-test-1", func(event daemonclient.Event) error {

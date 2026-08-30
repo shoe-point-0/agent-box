@@ -8,14 +8,24 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/shoe-point-0/agent-box/internal/boxlist"
+	"github.com/shoe-point-0/agent-box/internal/boxplan"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
+	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/journal"
+	"github.com/shoe-point-0/agent-box/internal/machinegit"
+	"github.com/shoe-point-0/agent-box/internal/paths"
+	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
+	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/state"
 	"github.com/shoe-point-0/agent-box/internal/version"
 )
@@ -76,10 +86,30 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "aboxd: create Box inventory: %v\n", err)
 		return contract.ExitInternal
 	}
+	applicationRoot := filepath.Dir(stateDatabase)
+	pathProvider, err := paths.New(applicationRoot, filepath.Join(applicationRoot, "cache"), filepath.Dir(userPaths.LogFile))
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "aboxd: configure Box paths: %v\n", err)
+		return contract.ExitInternal
+	}
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
 		List:       boxInventory.List,
+		Plan: func(ctx context.Context, request daemon.PlanRequest) (contract.PlanOutput, error) {
+			gitPath, toolVersions, observeErr := observeToolVersions(ctx, applicationRoot)
+			if observeErr != nil {
+				return contract.PlanOutput{}, observeErr
+			}
+			service := boxplan.Service{
+				State: store, Paths: pathProvider, Runtime: plancompiler.RuntimeFacts{Driver: runtimeDriver()}, Tools: toolVersions,
+				Git: machinegit.Client{GitPath: gitPath, Home: applicationRoot, Path: os.Getenv("PATH"), Executor: process.Runner{}},
+			}
+			return service.Compile(ctx, boxplan.Request{
+				WorkspaceID: identity.WorkspaceID(request.WorkspaceID), BoxID: identity.BoxID(request.BoxID),
+				TaskKey: request.TaskKey, ManifestPath: request.ManifestPath,
+			})
+		},
 		Run: func(context.Context, journal.Operation, json.RawMessage, daemon.Emit) *contract.Failure {
 			return &contract.Failure{Code: contract.CodeFeatureNotSupported}
 		},
@@ -101,4 +131,60 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		return contract.ExitInfrastructure
 	}
 	return contract.ExitOK
+}
+
+func runtimeDriver() string {
+	if runtime.GOOS == "darwin" {
+		return "lima-vz"
+	}
+	return "lima-qemu"
+}
+
+type toolObservationError struct{ message string }
+
+func (e *toolObservationError) Error() string                 { return e.message }
+func (e *toolObservationError) ErrorCode() contract.ErrorCode { return contract.CodePrerequisiteFailed }
+
+func observeToolVersions(ctx context.Context, directory string) (string, contract.ToolVersions, error) {
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return "", contract.ToolVersions{}, &toolObservationError{message: "observe tool versions: git executable not found"}
+	}
+	gitPath, err = filepath.Abs(gitPath)
+	if err != nil {
+		return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: canonicalize Git path: %v", err)}
+	}
+	type probe struct {
+		name   string
+		argv   []string
+		prefix string
+	}
+	probes := []probe{
+		{name: "Git", argv: []string{gitPath, "--version"}, prefix: "git version "},
+		{name: "Lima", argv: []string{"limactl", "--version"}, prefix: "limactl version "},
+		{name: "Docker", argv: []string{"docker", "--version"}, prefix: "Docker version "},
+		{name: "Compose", argv: []string{"docker", "compose", "version", "--short"}},
+	}
+	versions := make([]string, 0, len(probes))
+	for _, current := range probes {
+		result, runErr := (process.Runner{}).Run(ctx, process.Command{
+			Argv: current.argv, Dir: directory,
+			Env: map[string]string{"PATH": os.Getenv("PATH"), "HOME": directory, "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+		})
+		if runErr != nil || result.StdoutTruncated || result.StderrTruncated {
+			return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: %s unavailable", current.name)}
+		}
+		value := strings.TrimSpace(string(result.Stdout))
+		value = strings.TrimPrefix(value, current.prefix)
+		if current.name == "Docker" {
+			value = strings.TrimSuffix(strings.Split(value, ",")[0], ",")
+		}
+		if value == "" || strings.ContainsAny(value, "\x00\r\n") {
+			return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: %s returned invalid output", current.name)}
+		}
+		versions = append(versions, value)
+	}
+	return gitPath, contract.ToolVersions{
+		AgentBox: version.Current().Version, Git: versions[0], Lima: versions[1], Docker: versions[2], Compose: versions[3],
+	}, nil
 }

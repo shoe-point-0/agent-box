@@ -123,6 +123,31 @@ func (c *Client) List(ctx context.Context) (contract.ListOutput, *contract.Failu
 	return output, nil, nil
 }
 
+// Plan returns one bounded, strictly decoded read-only reconciliation plan.
+func (c *Client) Plan(ctx context.Context, request daemon.PlanRequest) (contract.PlanOutput, *contract.Failure, error) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return contract.PlanOutput{}, nil, fmt.Errorf("encode plan request: %w", err)
+	}
+	response, err := c.do(ctx, http.MethodPost, "/v1/boxes:plan", body, "")
+	if err != nil {
+		return contract.PlanOutput{}, nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		failure, failureErr := decodeFailure(response)
+		return contract.PlanOutput{}, failure, failureErr
+	}
+	var output contract.PlanOutput
+	if err := decodeOne(response.Body, &output); err != nil {
+		return contract.PlanOutput{}, nil, fmt.Errorf("%w: decode Box plan: %v", ErrProtocol, err)
+	}
+	if output.SchemaVersion != contract.PlanOutputSchemaVersion || output.Plan.SchemaVersion != contract.PlanSchemaVersion || output.Operations == nil {
+		return contract.PlanOutput{}, nil, fmt.Errorf("%w: invalid Box plan envelope", ErrProtocol)
+	}
+	return output, nil, nil
+}
+
 // Up submits or reattaches to one idempotent mutation and resumes a broken event
 // stream by durable sequence. Returning a Failure means the daemon completed or
 // rejected the request with a stable symbolic code.

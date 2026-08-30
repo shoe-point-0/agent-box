@@ -33,6 +33,7 @@ const (
 type daemonAPI interface {
 	Handshake(context.Context) (*contract.Failure, error)
 	List(context.Context) (contract.ListOutput, *contract.Failure, error)
+	Plan(context.Context, daemon.PlanRequest) (contract.PlanOutput, *contract.Failure, error)
 	Up(context.Context, daemon.MutationRequest, string, func(daemonclient.Event) error) (*contract.Failure, error)
 	Close()
 }
@@ -126,6 +127,57 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps 
 				return contract.ExitInternal
 			}
 		} else if err := renderList(stdout, output); err != nil {
+			return contract.ExitInternal
+		}
+		return contract.ExitOK
+	}
+	if args[0] == "plan" {
+		options, parseFailure := parsePlan(args[1:])
+		if parseFailure != nil {
+			return reportFailure(stdout, stderr, options.json, parseFailure)
+		}
+		if options.help {
+			return writePlanHelp(stdout)
+		}
+		cwd, err := deps.getwd()
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodePrerequisiteFailed, "cannot resolve current directory"))
+		}
+		manifestPath, _, manifestFailure := resolveManifest(cwd, options.manifestPath)
+		if manifestFailure != nil {
+			return reportFailure(stdout, stderr, options.json, manifestFailure)
+		}
+		workspaceID, err := identity.Workspace(manifestPath)
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodeManifestInvalid, "manifest path is not canonical"))
+		}
+		boxID, err := identity.Box(workspaceID, options.taskKey)
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodeCLIUsage, "task key is invalid"))
+		}
+		paths, err := deps.userPaths()
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodePrerequisiteFailed, "cannot resolve user-scoped daemon paths"))
+		}
+		client, connectFailure := connect(ctx, paths, deps)
+		if connectFailure != nil {
+			return reportFailure(stdout, stderr, options.json, connectFailure)
+		}
+		defer client.Close()
+		output, planFailure, transportErr := client.Plan(ctx, daemon.PlanRequest{
+			WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: options.taskKey, ManifestPath: manifestPath,
+		})
+		if transportErr != nil {
+			return reportFailure(stdout, stderr, options.json, classifyTransport(transportErr))
+		}
+		if planFailure != nil {
+			return reportFailure(stdout, stderr, options.json, planFailure)
+		}
+		if options.json {
+			if err := json.NewEncoder(stdout).Encode(output); err != nil {
+				return contract.ExitInternal
+			}
+		} else if err := renderPlan(stdout, output); err != nil {
 			return contract.ExitInternal
 		}
 		return contract.ExitOK
@@ -416,6 +468,7 @@ func writeHelp(writer io.Writer) int {
 Commands:
   init     create a strict starter manifest without provisioning
   list     list recorded Boxes and observed drift
+  plan     show proposed reconciliation operations without changing state
   up       submit a versioned up request to aboxd
   version  print build version
   help     show this help

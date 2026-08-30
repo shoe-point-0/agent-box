@@ -21,6 +21,36 @@ type BoxRecord struct {
 	ComposeRecordedState *string
 }
 
+// CurrentPlanRecord identifies the retained immutable Plan for a materialized
+// Box generation. Database presence remains a cache, not external ownership.
+type CurrentPlanRecord struct {
+	Path string
+}
+
+// CurrentPlan returns the retained Plan path for boxID without creating or
+// updating any state. found is false when the Box has no current generation.
+func (s *Store) CurrentPlan(ctx context.Context, boxID string) (record CurrentPlanRecord, found bool, err error) {
+	err = s.View(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `SELECT g.plan_path
+			FROM boxes AS b
+			JOIN box_generations AS g
+			  ON g.box_id = b.id AND g.generation = b.current_generation
+			WHERE b.id = ?`, boxID).Scan(&record.Path)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("query current Plan: %w", err)
+		}
+		found = true
+		return nil
+	})
+	if err != nil {
+		return CurrentPlanRecord{}, false, fmt.Errorf("read current Plan: %w", err)
+	}
+	return record, found, nil
+}
+
 // BoxRecords returns a stable identity-ordered snapshot in one read
 // transaction. It does not refresh observations or mutate external resources.
 func (s *Store) BoxRecords(ctx context.Context) (records []BoxRecord, err error) {

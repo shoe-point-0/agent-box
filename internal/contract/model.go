@@ -11,13 +11,14 @@ import (
 )
 
 const (
-	PlanSchemaVersion    = "abox.plan/v1alpha1"
-	ContextSchemaVersion = "abox.context/v1alpha1"
-	OutputSchemaVersion  = "abox.output/v1alpha1"
-	ListSchemaVersion    = "abox.list/v1alpha1"
-	EventSchemaVersion   = "abox.event/v1alpha1"
-	ErrorSchemaVersion   = "abox.error/v1alpha1"
-	DaemonAPIVersion     = "abox.api/v1alpha1"
+	PlanSchemaVersion       = "abox.plan/v1alpha1"
+	ContextSchemaVersion    = "abox.context/v1alpha1"
+	OutputSchemaVersion     = "abox.output/v1alpha1"
+	ListSchemaVersion       = "abox.list/v1alpha1"
+	PlanOutputSchemaVersion = "abox.plan-output/v1alpha1"
+	EventSchemaVersion      = "abox.event/v1alpha1"
+	ErrorSchemaVersion      = "abox.error/v1alpha1"
+	DaemonAPIVersion        = "abox.api/v1alpha1"
 )
 
 // Digest identifies canonical content using an algorithm-prefixed digest.
@@ -216,6 +217,28 @@ type ListBox struct {
 	State         string   `json:"state"`
 	RecordedState string   `json:"recordedState"`
 	Drift         []string `json:"drift"`
+}
+
+// PlanOutput is the stable read-only result of compiling desired intent and
+// comparing it with currently retained and observed Box state.
+type PlanOutput struct {
+	SchemaVersion  string          `json:"schemaVersion"`
+	Plan           Plan            `json:"plan"`
+	Classification string          `json:"classification"`
+	Reason         string          `json:"reason"`
+	Operations     []PlanOperation `json:"operations"`
+}
+
+// PlanOperation describes proposed work and its safety implications. Plan
+// rendering never executes an operation.
+type PlanOperation struct {
+	Action      string `json:"action"`
+	Resource    string `json:"resource"`
+	Reason      string `json:"reason"`
+	Description string `json:"description"`
+	Restart     bool   `json:"restart"`
+	Destructive bool   `json:"destructive"`
+	Conflict    bool   `json:"conflict"`
 }
 
 // Event is a streaming CLI command's versioned NDJSON envelope. Details retain

@@ -64,12 +64,24 @@ type Runner func(context.Context, journal.Operation, json.RawMessage, Emit) *con
 // observations but receive no mutation or reconciliation capability.
 type ListBoxes func(context.Context) (contract.ListOutput, error)
 
+// PlanRequest identifies one read-only desired-state compilation.
+type PlanRequest struct {
+	WorkspaceID  string `json:"workspaceId"`
+	BoxID        string `json:"boxId"`
+	TaskKey      string `json:"taskKey"`
+	ManifestPath string `json:"manifestPath"`
+}
+
+// PlanBox compiles and compares desired state without mutation capability.
+type PlanBox func(context.Context, PlanRequest) (contract.PlanOutput, error)
+
 // Config contains explicit daemon-owned paths and operation dependencies.
 type Config struct {
 	RuntimeDir string
 	Journal    *journal.Journal
 	Run        Runner
 	List       ListBoxes
+	Plan       PlanBox
 }
 
 // Server owns one listener, HTTP server, daemon operation context, lock, and
@@ -78,6 +90,7 @@ type Server struct {
 	journal    *journal.Journal
 	run        Runner
 	list       ListBoxes
+	plan       PlanBox
 	httpServer *http.Server
 	listener   net.Listener
 	lock       *os.File
@@ -108,6 +121,9 @@ func Start(config Config) (_ *Server, returnErr error) {
 	if config.List == nil {
 		return nil, errors.New("start daemon: Box list service is nil")
 	}
+	if config.Plan == nil {
+		return nil, errors.New("start daemon: Box plan service is nil")
+	}
 	prepared, err := prepareRuntime(config.RuntimeDir)
 	if err != nil {
 		return nil, fmt.Errorf("start daemon: %w", err)
@@ -131,7 +147,7 @@ func Start(config Config) (_ *Server, returnErr error) {
 
 	operationContext, cancelOperations := context.WithCancel(context.Background())
 	server := &Server{
-		journal: config.Journal, run: config.Run, list: config.List,
+		journal: config.Journal, run: config.Run, list: config.List, plan: config.Plan,
 		listener: newPeerListener(unixListener, uint32(os.Geteuid())), lock: prepared.lock,
 		socketPath: prepared.socketPath, socket: socket,
 		operationContext: operationContext, cancelOperations: cancelOperations,
@@ -216,6 +232,7 @@ func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/handshake", s.handleHandshake)
 	mux.HandleFunc("GET /v1/boxes", s.handleList)
+	mux.HandleFunc("POST /v1/boxes:plan", s.handlePlan)
 	mux.HandleFunc("POST /v1/boxes:up", s.handleUp)
 	mux.HandleFunc("GET /v1/operations/{id}/events", s.handleEvents)
 	return s.requireCompatibleAPI(mux)
@@ -254,6 +271,38 @@ func (s *Server) handleList(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if output.SchemaVersion != contract.ListSchemaVersion || output.Boxes == nil {
+		writeFailure(writer, http.StatusInternalServerError, internalFailure())
+		return
+	}
+	writeJSON(writer, http.StatusOK, output)
+}
+
+func (s *Server) handlePlan(writer http.ResponseWriter, request *http.Request) {
+	var input PlanRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, maxRequestBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeFailure(writer, http.StatusBadRequest, requestFailure("invalid plan request"))
+		return
+	}
+	if err := ensureJSONEOF(decoder); err != nil || validatePlanRequest(input) != nil {
+		writeFailure(writer, http.StatusBadRequest, requestFailure("invalid plan request"))
+		return
+	}
+	output, err := s.plan(request.Context(), input)
+	if err != nil {
+		code := contract.CodeManifestInvalid
+		var coded interface{ ErrorCode() contract.ErrorCode }
+		if errors.As(err, &coded) && coded.ErrorCode().Valid() {
+			code = coded.ErrorCode()
+		}
+		writeFailure(writer, http.StatusUnprocessableEntity, contract.Failure{
+			SchemaVersion: contract.ErrorSchemaVersion, Code: code,
+			Message: "cannot compile read-only plan", Retryable: false,
+		})
+		return
+	}
+	if output.SchemaVersion != contract.PlanOutputSchemaVersion || output.Operations == nil || output.Plan.SchemaVersion != contract.PlanSchemaVersion {
 		writeFailure(writer, http.StatusInternalServerError, internalFailure())
 		return
 	}
@@ -530,6 +579,18 @@ func validateMutationRequest(request MutationRequest) error {
 	}
 	if request.ManifestDigest == "" || len(request.ManifestDigest) > maxOpaqueBytes || strings.IndexByte(request.ManifestDigest, 0) >= 0 {
 		return errors.New("manifest digest is invalid")
+	}
+	return nil
+}
+
+func validatePlanRequest(request PlanRequest) error {
+	workspaceID, err := identity.Workspace(request.ManifestPath)
+	if err != nil || workspaceID.String() != request.WorkspaceID {
+		return errors.New("workspace identity does not match manifest path")
+	}
+	boxID, err := identity.Box(workspaceID, request.TaskKey)
+	if err != nil || boxID.String() != request.BoxID {
+		return errors.New("box identity does not match workspace and task")
 	}
 	return nil
 }
