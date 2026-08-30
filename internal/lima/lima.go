@@ -161,6 +161,30 @@ func (a *Adapter) Inspect(ctx context.Context, spec Spec) (Observation, error) {
 	return a.inspect(ctx, spec.RuntimeHost.InstanceName)
 }
 
+// ObserveRemoval returns only an absent instance or an instance whose immutable
+// config and embedded ownership metadata match both the Plan and persisted
+// record. It is read-only and exists so a removal preview never treats a name
+// match as ownership evidence.
+func (a *Adapter) ObserveRemoval(ctx context.Context, spec Spec, recorded ownership.LimaInstanceRecord) (Observation, error) {
+	if err := a.checkSpecAndVersion(ctx, spec); err != nil {
+		return Observation{}, err
+	}
+	if err := validateRecordedIdentity(spec, recorded); err != nil {
+		return Observation{}, err
+	}
+	observed, err := a.inspect(ctx, spec.RuntimeHost.InstanceName)
+	if err != nil || observed.State == Absent {
+		return observed, err
+	}
+	if _, err := validateObservation("observe-removal", spec, observed); err != nil {
+		return observed, err
+	}
+	if _, err := ownership.ProveLimaInstance(recorded, observed.ownership()); err != nil {
+		return observed, err
+	}
+	return observed, nil
+}
+
 // InspectMounts returns a defensive copy from fresh live Lima inspection. It
 // exists as a narrow boundary for readiness checks that must not trust the
 // generated configuration used to create the instance.
@@ -271,6 +295,9 @@ func (a *Adapter) Delete(ctx context.Context, spec Spec, recorded ownership.Lima
 	if err := a.checkSpecAndVersion(ctx, spec); err != nil {
 		return Observation{}, err
 	}
+	if err := validateRecordedIdentity(spec, recorded); err != nil {
+		return Observation{}, err
+	}
 	before, err := a.inspect(ctx, spec.RuntimeHost.InstanceName)
 	if err != nil {
 		return Observation{}, err
@@ -281,15 +308,19 @@ func (a *Adapter) Delete(ctx context.Context, spec Spec, recorded ownership.Lima
 	if _, err := validateObservation("delete", spec, before); err != nil {
 		return before, err
 	}
-	expectedRecord := recordedIdentity(spec)
-	if recorded.Name != expectedRecord.Name || !equalFacts(recorded.Metadata, expectedRecord.Metadata) {
-		return before, &ownership.ProofError{Resource: "lima instance", Fact: "recorded identity differs from immutable Plan"}
-	}
 	if _, err := ownership.ProveLimaInstance(recorded, before.ownership()); err != nil {
 		return before, err
 	}
 	_, runErr := a.run(ctx, "delete", "--tty=false", spec.RuntimeHost.InstanceName)
 	return a.afterMutation(ctx, "delete", spec, runErr, true)
+}
+
+func validateRecordedIdentity(spec Spec, recorded ownership.LimaInstanceRecord) error {
+	expected := recordedIdentity(spec)
+	if recorded.Name != expected.Name || !equalFacts(recorded.Metadata, expected.Metadata) {
+		return &ownership.ProofError{Resource: "lima instance", Fact: "recorded identity differs from immutable Plan"}
+	}
+	return nil
 }
 
 // Invoke executes an argv command through Lima's guest control channel.

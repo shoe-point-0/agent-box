@@ -214,6 +214,66 @@ func TestDeleteRequiresRecordedIdentityAndEmbeddedMetadata(t *testing.T) {
 	}
 }
 
+func TestObserveRemovalRequiresPlanConfigAndRecordedLiveOwnership(t *testing.T) {
+	t.Parallel()
+	adapter, runner, spec := testAdapter(t)
+	runner.config = configDocument(t, spec)
+	runner.status = "Running"
+	recorded := recordFor(spec)
+
+	observed, err := adapter.ObserveRemoval(t.Context(), spec, recorded)
+	if err != nil || observed.State != lima.Running || observed.Metadata[ownership.BoxIDFact] != spec.BoxID {
+		t.Fatalf("ObserveRemoval() = %#v, %v", observed, err)
+	}
+	if runner.count("delete") != 0 {
+		t.Fatal("ObserveRemoval() mutated Lima")
+	}
+
+	runner.config["memory"] = "8589934592B"
+	_, err = adapter.ObserveRemoval(t.Context(), spec, recorded)
+	assertKind(t, err, lima.ConfigMismatch)
+	runner.config = configDocument(t, spec)
+	recorded.Metadata[ownership.BoxIDFact] = "forged-box"
+	_, err = adapter.ObserveRemoval(t.Context(), spec, recorded)
+	if !errors.Is(err, ownership.ErrNotOwned) {
+		t.Fatalf("ObserveRemoval(forged record) error = %v, want ownership refusal", err)
+	}
+}
+
+func TestDeleteInterruptedAfterAbsenceConvergesWithoutReplay(t *testing.T) {
+	t.Parallel()
+	adapter, runner, spec := testAdapter(t)
+	runner.config = configDocument(t, spec)
+	runner.status = "Stopped"
+	runner.fail["delete"] = &process.CancellationError{Cause: context.Canceled}
+
+	observed, err := adapter.Delete(t.Context(), spec, recordFor(spec))
+	assertKind(t, err, lima.Canceled)
+	if observed.State != lima.Absent || runner.count("delete") != 1 {
+		t.Fatalf("interrupted Delete() = %#v, %v, calls = %d", observed, err, runner.count("delete"))
+	}
+	delete(runner.fail, "delete")
+	observed, err = adapter.Delete(t.Context(), spec, recordFor(spec))
+	if err != nil || observed.State != lima.Absent || runner.count("delete") != 1 {
+		t.Fatalf("retry Delete() = %#v, %v, calls = %d", observed, err, runner.count("delete"))
+	}
+}
+
+func TestDeleteRejectsForgedRecordEvenWhenInstanceIsAbsent(t *testing.T) {
+	t.Parallel()
+	adapter, runner, spec := testAdapter(t)
+	recorded := recordFor(spec)
+	recorded.Metadata[ownership.BoxIDFact] = "forged-box"
+
+	_, err := adapter.Delete(t.Context(), spec, recorded)
+	if !errors.Is(err, ownership.ErrNotOwned) {
+		t.Fatalf("Delete(absent, forged record) error = %v, want ownership refusal", err)
+	}
+	if runner.count("list") != 0 || runner.count("delete") != 0 {
+		t.Fatalf("forged record reached Lima inventory/delete: calls = %v", runner.callsCopy())
+	}
+}
+
 func TestCreateRejectsTamperedGeneratedConfigBeforeLimactl(t *testing.T) {
 	t.Parallel()
 	adapter, runner, spec := testAdapter(t)

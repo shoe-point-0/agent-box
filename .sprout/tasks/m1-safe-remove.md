@@ -116,8 +116,19 @@ Implement refusal-first Box removal
   module verification, all unit and race tests, vet, Linux builds, spike smoke,
   shell checks, and Python automation tests passed. `sprout check
   m1-safe-remove`, `sprout check --all`, and `git diff --check` also passed.
-- The task remains open: these results prove the coordinator slice, not a live
-  `abox rm` command or concrete Lima/private-store teardown integration.
+- `go test -race -count=10 ./internal/lima ./internal/removal` passed after
+  adding the concrete Lima removal step. The typed adapter fixture proved the
+  read-only preview accepts only the immutable Plan config plus exact persisted
+  and live ownership metadata, refuses config/metadata drift before deletion,
+  and reobserves terminal absence after an interrupted delete without replaying
+  `limactl delete`. The coordinator fixture proved state/metadata drift refusal,
+  default non-mutation, and fresh-preview convergence after delete-side failure.
+- `make check` passed after the Lima slice: pinned lint reported `0 issues`;
+  module verification, all unit and race tests, vet, Linux builds, spike smoke,
+  shell checks, and Python automation tests passed. This Linux lane does not
+  have `limactl`, so the slice makes no live Lima or Darwin runtime claim.
+- The task remains open: these results do not prove a live `abox rm` command or
+  concrete private-store teardown integration.
 
 ## Outcome and follow-ups
 
@@ -142,10 +153,15 @@ Implement refusal-first Box removal
   recorded set so interrupted `compose down` retries converge without adopting
   replacement resources. A live Docker fixture exercises refusal, partial
   teardown, retry, and selected-project terminal absence.
-- Next slice must implement concrete Lima teardown observation/removal and its
-  interruption recovery. Private-store, generated-state, daemon, and CLI
-  integration plus full disposable Box teardown evidence remain required
-  before any acceptance criterion can be checked.
+- Added an ownership-proved Lima step over the pinned typed adapter. Preview
+  binds exact instance name, lifecycle state, Lima status/version, and embedded
+  metadata; deletion independently revalidates the immutable config and
+  ownership record, verifies terminal absence, and permits a fresh retry to
+  converge after an interrupted successful delete.
+- Next slice must implement ownership-proved private-store teardown and its
+  interrupted-delete recovery. Generated-state, daemon, and CLI integration
+  plus full disposable Box teardown evidence remain required before any
+  acceptance criterion can be checked.
 
 ## Original request
 
