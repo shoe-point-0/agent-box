@@ -190,6 +190,24 @@ Verify mounted filesystem contracts
   checks, lint with `0 issues`, builds, smoke, and automation tests. Guest
   absence remains fixture evidence because `limactl` is unavailable; this is
   not Lima, VZ, or VirtioFS evidence.
+- Managed Git exclude: `go test -race -count=10 ./internal/machinegit/...
+  ./internal/paths/... ./internal/repository/... ./internal/gitstore/...
+  ./internal/worktree/... ./internal/publication/... ./internal/boxplan/...
+  ./cmd/aboxd/...` passed. Daemon startup now atomically materializes the exact
+  `.abox-probe/` policy at the Agent Box application root, requires an
+  owner-only real parent and owner-only regular policy file, and passes its
+  canonical path explicitly as command-scoped `core.excludesFile` while
+  continuing to disable user-global and system Git configuration. Thirty-two
+  concurrent preparers produced one complete policy file and no temporary
+  residue under the race detector.
+- The real-Git test proved `.abox-probe/<nonce>` is ignored while an unrelated
+  untracked file remains visible, and byte-compared the repository `.gitignore`
+  and an ambient user-global `.gitconfig` before and after the operation.
+  Foreign pre-existing managed-exclude content is refused without mutation.
+- `make check` passed after correcting two initially reported unchecked close
+  errors; the final run included lint with `0 issues`, full unit and race tests,
+  vet, dependency checks, builds, smoke, and automation tests. `go vet` and
+  `git diff --check` also passed for the focused package set.
 
 ## Outcome and follow-ups
 
@@ -200,7 +218,8 @@ behind a fixed-command immutable-container adapter and has passed unchanged
 through a real Linux Compose container. Native watcher delivery now passes the
 same real-container path. The live verifier now also rejects guest or container
 visibility of an undeclared Machine canary after exact mount-set comparison.
-Remaining work is the managed Git exclude and readiness integration.
+Remaining work is readiness integration so a filesystem verification failure
+prevents READY.
 Real Lima execution remains unavailable on this Machine and must not be
 inferred from fixtures or Docker evidence.
 

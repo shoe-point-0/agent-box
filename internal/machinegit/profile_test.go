@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/process"
@@ -101,6 +102,107 @@ func TestRealGitAdversarialExecutionProfile(t *testing.T) {
 		t.Fatalf("ResolveCommit(imported) = %q, %v, want %s", result.Stdout, err, tip)
 	}
 	assertAbsent(t, marker)
+}
+
+func TestManagedExcludesIgnoreOnlyProbeArtifacts(t *testing.T) {
+	gitPath := realGitPath(t)
+	root := t.TempDir()
+	repository := filepath.Join(root, "repository")
+	mustRawGit(t, gitPath, root, "init", "--initial-branch=main", repository)
+	gitignore := filepath.Join(repository, ".gitignore")
+	mustWrite(t, gitignore, "# repository policy\n", 0o600)
+	mustRawGit(t, gitPath, repository, "add", ".gitignore")
+	mustRawGit(t, gitPath, repository, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")
+
+	userHome := filepath.Join(root, "user-home")
+	mustMkdir(t, userHome)
+	globalConfig := filepath.Join(userHome, ".gitconfig")
+	mustWrite(t, globalConfig, "[user]\n\tname = Preserve Me\n", 0o600)
+	gitignoreBefore, _ := os.ReadFile(gitignore)
+	globalBefore, _ := os.ReadFile(globalConfig)
+	t.Setenv("HOME", userHome)
+	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
+
+	probe := filepath.Join(repository, ".abox-probe", "nonce", "machine")
+	mustMkdir(t, filepath.Dir(probe))
+	mustWrite(t, probe, "probe bytes\n", 0o600)
+	mustWrite(t, filepath.Join(repository, "visible.txt"), "visible\n", 0o600)
+	controlledHome := filepath.Join(root, "controlled-home")
+	client := realClient(t, gitPath, controlledHome, Credentials{})
+	result, err := client.Status(context.Background(), repository)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if output := string(result.Stdout); !strings.Contains(output, "visible.txt") || strings.Contains(output, ".abox-probe") {
+		t.Fatalf("status output does not apply only the managed probe exclude: %q", output)
+	}
+
+	excludes := filepath.Join(controlledHome, "git-excludes")
+	content, err := os.ReadFile(excludes)
+	if err != nil || string(content) != managedExcludesContent {
+		t.Fatalf("managed excludes = %q, %v", content, err)
+	}
+	if info, statErr := os.Stat(excludes); statErr != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("managed excludes mode = %v, %v", info, statErr)
+	}
+	if after, readErr := os.ReadFile(gitignore); readErr != nil || !slices.Equal(after, gitignoreBefore) {
+		t.Fatalf("repository .gitignore changed: %q, %v", after, readErr)
+	}
+	if after, readErr := os.ReadFile(globalConfig); readErr != nil || !slices.Equal(after, globalBefore) {
+		t.Fatalf("user global Git configuration changed: %q, %v", after, readErr)
+	}
+}
+
+func TestPrepareRefusesForeignManagedExcludesWithoutMutation(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "controlled-home")
+	mustMkdir(t, home)
+	excludes := filepath.Join(home, "git-excludes")
+	mustWrite(t, excludes, "foreign policy\n", 0o600)
+	client := Client{Home: home, ExcludesFile: excludes}
+
+	if err := client.Prepare(); !errors.Is(err, ErrPolicy) {
+		t.Fatalf("Prepare() error = %v, want policy refusal", err)
+	}
+	if content, err := os.ReadFile(excludes); err != nil || string(content) != "foreign policy\n" {
+		t.Fatalf("foreign excludes changed: %q, %v", content, err)
+	}
+}
+
+func TestPrepareConcurrentlyMaterializesOneCompletePolicy(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "controlled-home")
+	mustMkdir(t, home)
+	client := Client{Home: home, ExcludesFile: filepath.Join(home, "git-excludes")}
+	const callers = 32
+	start := make(chan struct{})
+	errors := make(chan error, callers)
+	var workers sync.WaitGroup
+	for range callers {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			errors <- client.Prepare()
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("concurrent Prepare() error = %v", err)
+		}
+	}
+	entries, err := os.ReadDir(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "git-excludes" {
+		t.Fatalf("controlled home entries = %v", entries)
+	}
+	if content, err := os.ReadFile(client.ExcludesFile); err != nil || string(content) != managedExcludesContent {
+		t.Fatalf("managed excludes = %q, %v", content, err)
+	}
 }
 
 func TestProfileRejectsAlternatesBeforeGitStarts(t *testing.T) {
@@ -262,7 +364,7 @@ func TestCommandUsesOnlyControlledEnvironmentAndExplicitCredentials(t *testing.T
 		}
 	}
 	joined := strings.Join(command.Argv, "\x00")
-	for _, want := range []string{"--no-pager", "--no-replace-objects", "core.hooksPath=/dev/null", "core.fsmonitor=false", "credential.helper=", "protocol.allow=never", "--\x00git@example.invalid:repo.git"} {
+	for _, want := range []string{"--no-pager", "--no-replace-objects", "core.excludesFile=" + client.ExcludesFile, "core.hooksPath=/dev/null", "core.fsmonitor=false", "credential.helper=", "protocol.allow=never", "--\x00git@example.invalid:repo.git"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv does not contain %q: %q", want, command.Argv)
 		}
@@ -343,18 +445,34 @@ func (r *recordingExecutor) Run(_ context.Context, command process.Command) (pro
 }
 
 func testClient(root string, executor Executor) Client {
-	return Client{
-		GitPath:  "/usr/bin/git",
-		Home:     filepath.Join(root, "controlled-home"),
-		Path:     "/usr/bin:/bin",
-		Executor: executor,
+	home := filepath.Join(root, "controlled-home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		panic(err)
 	}
+	client := Client{
+		GitPath:      "/usr/bin/git",
+		Home:         home,
+		Path:         "/usr/bin:/bin",
+		ExcludesFile: filepath.Join(home, "git-excludes"),
+		Executor:     executor,
+	}
+	if err := client.Prepare(); err != nil {
+		panic(err)
+	}
+	return client
 }
 
 func realClient(t *testing.T, gitPath, home string, credentials Credentials) Client {
 	t.Helper()
 	mustMkdir(t, home)
-	return Client{GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", Credentials: credentials, Executor: process.Runner{}}
+	client := Client{
+		GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(home, "git-excludes"),
+		Credentials: credentials, Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	return client
 }
 
 func realGitPath(t *testing.T) string {

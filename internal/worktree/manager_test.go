@@ -382,7 +382,13 @@ func newFixture(t *testing.T, gitlink bool) testFixture {
 	}
 	home := filepath.Join(root, "controlled-home")
 	mustMkdir(t, home)
-	client := machinegit.Client{GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}}
+	client := machinegit.Client{
+		GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(home, "git-excludes"),
+		Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
 	store, err := (gitstore.Materializer{Git: client}).Materialize(context.Background(), facts, compiled)
 	if err != nil {
 		t.Fatal(err)

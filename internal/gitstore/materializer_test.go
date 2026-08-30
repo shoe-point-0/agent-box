@@ -227,7 +227,13 @@ func newFixture(t *testing.T, detached bool) testFixture {
 	}
 	home := filepath.Join(root, "controlled-home")
 	mustMkdir(t, home)
-	client := machinegit.Client{GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}}
+	client := machinegit.Client{
+		GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(home, "git-excludes"),
+		Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
 	return testFixture{root: root, source: source, applicationRoot: applicationRoot, gitPath: gitPath, client: client, facts: facts, plan: compiled}
 }
 

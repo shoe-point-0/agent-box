@@ -196,9 +196,14 @@ func newFixture(t *testing.T) *fixture {
 		Repository: "repo", GitCommonDir: f.store, Identity: identity, BaseCommit: f.base,
 		PublishDestination: localDestination(f.source),
 	}
-	f.checker = publication.Checker{Git: machinegit.Client{
-		GitPath: f.gitPath, Home: f.home, Path: "/usr/bin:/bin", Executor: process.Runner{},
-	}}
+	client := machinegit.Client{
+		GitPath: f.gitPath, Home: f.home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(f.home, "git-excludes"),
+		Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	f.checker = publication.Checker{Git: client}
 	return f
 }
 

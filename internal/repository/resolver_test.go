@@ -50,7 +50,7 @@ func TestResolverReturnsTrustedFactsWithoutMaterialization(t *testing.T) {
 	home := filepath.Join(root, "controlled-home")
 	mustMkdir(t, home)
 	resolver := Resolver{
-		Git:   machinegit.Client{GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}},
+		Git:   preparedMachineGit(t, gitPath, home),
 		Paths: provider,
 	}
 	workspace := testWorkspace(filepath.Join(source, "nested"), "abox/{{ box.task }}/repo")
@@ -100,7 +100,7 @@ func TestResolverRefusesDirtySourceWithExactPathsAndNoFacts(t *testing.T) {
 	home := filepath.Join(root, "home")
 	mustMkdir(t, home)
 	resolver := Resolver{
-		Git:   machinegit.Client{GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}},
+		Git:   preparedMachineGit(t, gitPath, home),
 		Paths: provider,
 	}
 	before := snapshotTree(t, root)
@@ -190,6 +190,18 @@ func testWorkspace(source, branch string) *manifest.Workspace {
 		Name: "repo", Source: manifest.Source{Local: source}, CanonicalLocal: source,
 		Checkout: manifest.Checkout{Ref: "HEAD", Branch: branch}, WorkspacePath: "services/repo",
 	}}}}
+}
+
+func preparedMachineGit(t *testing.T, gitPath, home string) machinegit.Client {
+	t.Helper()
+	client := machinegit.Client{
+		GitPath: gitPath, Home: home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(home, "git-excludes"),
+		Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	return client
 }
 
 func testPathsAndBox(t *testing.T, root string) (*paths.Provider, identity.BoxID) {

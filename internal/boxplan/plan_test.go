@@ -99,7 +99,7 @@ func TestCompileAbsentBoxIsDeterministicAndCreatesNothing(t *testing.T) {
 	service := boxplan.Service{
 		State: absentState{}, Paths: provider, Runtime: plan.RuntimeFacts{Driver: "lima-qemu"},
 		Tools: contract.ToolVersions{AgentBox: "test", Git: "2.43.0", Lima: "test", Docker: "test", Compose: "test"},
-		Git:   machinegit.Client{GitPath: realGit(t), Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}},
+		Git:   preparedMachineGit(t, home),
 	}
 	request := boxplan.Request{WorkspaceID: workspaceID, BoxID: boxID, TaskKey: "TASK-31", ManifestPath: manifestPath}
 	before := snapshot(t, root)
@@ -155,7 +155,7 @@ func TestCompileExistingBoxExposesRestartAndDestructiveConflicts(t *testing.T) {
 	service := boxplan.Service{
 		State: absentState{}, Paths: provider, Runtime: plan.RuntimeFacts{Driver: "lima-qemu"},
 		Tools: contract.ToolVersions{AgentBox: "test", Git: "2.43.0", Lima: "test", Docker: "test", Compose: "test"},
-		Git:   machinegit.Client{GitPath: realGit(t), Home: home, Path: "/usr/bin:/bin", Executor: process.Runner{}},
+		Git:   preparedMachineGit(t, home),
 	}
 	request := boxplan.Request{WorkspaceID: workspaceID, BoxID: boxID, TaskKey: "TASK-31", ManifestPath: manifestPath}
 	initial, err := service.Compile(t.Context(), request)
@@ -281,6 +281,18 @@ func runGit(t *testing.T, directory string, args ...string) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, output)
 	}
+}
+
+func preparedMachineGit(t *testing.T, home string) machinegit.Client {
+	t.Helper()
+	client := machinegit.Client{
+		GitPath: realGit(t), Home: home, Path: "/usr/bin:/bin", ExcludesFile: filepath.Join(home, "git-excludes"),
+		Executor: process.Runner{},
+	}
+	if err := client.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	return client
 }
 
 func realGit(t *testing.T) string {

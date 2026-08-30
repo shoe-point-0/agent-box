@@ -29,6 +29,7 @@ func TestDarwinLayout(t *testing.T) {
 		"boxes":          {provider.BoxesRoot(), "/Users/shoe/Library/Application Support/Agent Box/boxes"},
 		"repositories":   {provider.RepositoriesRoot(), "/Users/shoe/Library/Application Support/Agent Box/repositories"},
 		"tools":          {provider.ToolsRoot(), "/Users/shoe/Library/Application Support/Agent Box/tools"},
+		"Git excludes":   {provider.GitExcludes(), "/Users/shoe/Library/Application Support/Agent Box/git-excludes"},
 		"downloads":      {provider.DownloadsRoot(), "/Users/shoe/Library/Caches/Agent Box/downloads"},
 		"image metadata": {provider.ImageMetadataRoot(), "/Users/shoe/Library/Caches/Agent Box/image-metadata"},
 		"daemon log":     {provider.DaemonLog(), "/Users/shoe/Library/Logs/Agent Box/aboxd.log"},

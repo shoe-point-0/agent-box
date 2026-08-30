@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,9 +17,10 @@ import (
 )
 
 const (
-	maxRefLength = 1024
-	falsePath    = "/bin/false"
-	nullPath     = "/dev/null"
+	maxRefLength           = 1024
+	falsePath              = "/bin/false"
+	nullPath               = "/dev/null"
+	managedExcludesContent = ".abox-probe/\n"
 )
 
 var (
@@ -47,11 +49,27 @@ type Credentials struct {
 
 // Client owns the complete execution profile for every Machine-side Git call.
 type Client struct {
-	GitPath     string
-	Home        string
-	Path        string
-	Credentials Credentials
-	Executor    Executor
+	GitPath      string
+	Home         string
+	Path         string
+	ExcludesFile string
+	Credentials  Credentials
+	Executor     Executor
+}
+
+// Prepare atomically materializes the only global ignore policy trusted by
+// Machine Git. It never reads or writes the user's global Git configuration.
+func (c Client) Prepare() error {
+	if err := validateCanonicalPath("controlled home", c.Home); err != nil {
+		return err
+	}
+	if err := validateCanonicalPath("managed excludes file", c.ExcludesFile); err != nil {
+		return err
+	}
+	if filepath.Dir(c.ExcludesFile) != c.Home {
+		return refuse("managed excludes file", "must be an immediate child of the controlled home")
+	}
+	return ensureManagedExcludes(c.Home, c.ExcludesFile)
 }
 
 // PolicyError reports a rejected input class without reflecting potentially
@@ -422,10 +440,15 @@ func (c Client) command(directory string, transport transport, arguments ...stri
 	if c.Executor == nil {
 		return process.Command{}, refuse("executor", "is required")
 	}
-	for field, value := range map[string]string{"git executable": c.GitPath, "controlled home": c.Home} {
+	for field, value := range map[string]string{
+		"git executable": c.GitPath, "controlled home": c.Home, "managed excludes file": c.ExcludesFile,
+	} {
 		if err := validateCanonicalPath(field, value); err != nil {
 			return process.Command{}, err
 		}
+	}
+	if filepath.Dir(c.ExcludesFile) != c.Home {
+		return process.Command{}, refuse("managed excludes file", "must be an immediate child of the controlled home")
 	}
 	if err := validateCanonicalPath("working directory", directory); err != nil {
 		return process.Command{}, err
@@ -436,9 +459,12 @@ func (c Client) command(directory string, transport transport, arguments ...stri
 	if err := validateCredentials(c.Credentials); err != nil {
 		return process.Command{}, err
 	}
+	if err := validateManagedExcludes(c.ExcludesFile); err != nil {
+		return process.Command{}, err
+	}
 
 	argv := []string{c.GitPath, "--no-pager", "--no-replace-objects"}
-	for _, setting := range fixedConfig(c.Credentials) {
+	for _, setting := range fixedConfig(c.Credentials, c.ExcludesFile) {
 		argv = append(argv, "-c", setting)
 	}
 	argv = append(argv, arguments...)
@@ -481,7 +507,7 @@ func (c Client) command(directory string, transport transport, arguments ...stri
 	return process.Command{Argv: argv, Dir: directory, Env: environment}, nil
 }
 
-func fixedConfig(credentials Credentials) []string {
+func fixedConfig(credentials Credentials, excludesFile string) []string {
 	askPass := falsePath
 	ssh := falsePath
 	if credentials.AskPass != "" {
@@ -491,6 +517,7 @@ func fixedConfig(credentials Credentials) []string {
 		ssh = credentials.SSH
 	}
 	return []string{
+		"core.excludesFile=" + excludesFile,
 		"core.hooksPath=" + nullPath,
 		"core.fsmonitor=false",
 		"core.useReplaceRefs=false",
@@ -512,6 +539,93 @@ func fixedConfig(credentials Credentials) []string {
 		"commit.gpgSign=false",
 		"tag.gpgSign=false",
 	}
+}
+
+func ensureManagedExcludes(home, path string) error {
+	homeInfo, err := os.Lstat(home)
+	homeOwner, ownerOK := statOwner(homeInfo)
+	if err != nil || !homeInfo.IsDir() || homeInfo.Mode()&os.ModeSymlink != 0 || homeInfo.Mode().Perm()&0o077 != 0 ||
+		!ownerOK || homeOwner != os.Geteuid() {
+		return refuse("controlled home", "must be an owner-only real directory")
+	}
+	if err := validateManagedExcludes(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	temporary, err := os.CreateTemp(home, ".git-excludes-")
+	if err != nil {
+		return refuse("managed excludes file", "cannot create owner-only content")
+	}
+	temporaryPath := temporary.Name()
+	defer func() { _ = os.Remove(temporaryPath) }()
+	if err := writeManagedExcludes(temporary); err != nil {
+		_ = temporary.Close()
+		return refuse("managed excludes file", "cannot persist owner-only content")
+	}
+	if err := os.Link(temporaryPath, path); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return refuse("managed excludes file", "cannot install owner-only content")
+		}
+	} else if err := syncDirectory(home); err != nil {
+		return refuse("managed excludes file", "cannot persist installation")
+	}
+	return validateManagedExcludes(path)
+}
+
+func writeManagedExcludes(file *os.File) error {
+	if err := file.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := file.WriteString(managedExcludesContent); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func validateManagedExcludes(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	owner, ownerOK := statOwner(info)
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || !ownerOK || owner != os.Geteuid() {
+		return refuse("managed excludes file", "must be an owner-only regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return refuse("managed excludes file", "cannot read managed content")
+	}
+	content, readErr := io.ReadAll(io.LimitReader(file, int64(len(managedExcludesContent)+1)))
+	closeErr := file.Close()
+	if readErr != nil || closeErr != nil || string(content) != managedExcludesContent {
+		return refuse("managed excludes file", "content differs from Agent Box policy")
+	}
+	return nil
+}
+
+func statOwner(info os.FileInfo) (int, bool) {
+	if info == nil {
+		return 0, false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return int(stat.Uid), true
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	syncErr := directory.Sync()
+	return errors.Join(syncErr, directory.Close())
 }
 
 func validateCredentials(credentials Credentials) error {

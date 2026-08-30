@@ -59,6 +59,7 @@ func (p *Provider) StateDatabase() string     { return filepath.Join(p.applicati
 func (p *Provider) BoxesRoot() string         { return filepath.Join(p.applicationRoot, "boxes") }
 func (p *Provider) RepositoriesRoot() string  { return filepath.Join(p.applicationRoot, "repositories") }
 func (p *Provider) ToolsRoot() string         { return filepath.Join(p.applicationRoot, "tools") }
+func (p *Provider) GitExcludes() string       { return filepath.Join(p.applicationRoot, "git-excludes") }
 func (p *Provider) DownloadsRoot() string     { return filepath.Join(p.cacheRoot, "downloads") }
 func (p *Provider) ImageMetadataRoot() string { return filepath.Join(p.cacheRoot, "image-metadata") }
 func (p *Provider) DaemonLog() string         { return filepath.Join(p.logRoot, "aboxd.log") }

@@ -92,6 +92,13 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "aboxd: configure Box paths: %v\n", err)
 		return contract.ExitInternal
 	}
+	gitClient := machinegit.Client{
+		Home: applicationRoot, Path: os.Getenv("PATH"), ExcludesFile: pathProvider.GitExcludes(), Executor: process.Runner{},
+	}
+	if err := gitClient.Prepare(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "aboxd: configure Machine Git profile: %v\n", err)
+		return contract.ExitInfrastructure
+	}
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
@@ -101,9 +108,11 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 			if observeErr != nil {
 				return contract.PlanOutput{}, observeErr
 			}
+			requestGit := gitClient
+			requestGit.GitPath = gitPath
 			service := boxplan.Service{
 				State: store, Paths: pathProvider, Runtime: plancompiler.RuntimeFacts{Driver: runtimeDriver()}, Tools: toolVersions,
-				Git: machinegit.Client{GitPath: gitPath, Home: applicationRoot, Path: os.Getenv("PATH"), Executor: process.Runner{}},
+				Git: requestGit,
 			}
 			return service.Compile(ctx, boxplan.Request{
 				WorkspaceID: identity.WorkspaceID(request.WorkspaceID), BoxID: identity.BoxID(request.BoxID),
