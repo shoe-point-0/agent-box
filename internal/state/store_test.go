@@ -20,6 +20,7 @@ var expectedTables = []string{
 	"leases",
 	"operation_events",
 	"operations",
+	"removal_ownership_snapshots",
 	"repositories",
 	"runtime_hosts",
 	"workspaces",

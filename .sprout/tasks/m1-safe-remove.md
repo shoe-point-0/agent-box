@@ -174,6 +174,18 @@ Implement refusal-first Box removal
   `git diff --check` passed after the writer-gate slice. Pinned lint reported
   `0 issues`; module verification, unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests all passed.
+- `go test -race -count=10 ./internal/state` passed after adding schema v3 and
+  the typed removal-ownership projection. Migration fixtures exercised upgrades
+  from every prior schema; real SQLite tests proved exact current-generation
+  and Plan-digest binding, deterministic round trips, idempotent identical
+  writes, refusal of changed ownership authority, and fail-closed reads when
+  authority is absent or its row identity is forged. `go vet ./internal/state`,
+  `make lint`, and `git diff --check` also passed; pinned lint reported `0
+  issues`.
+- `make check`, `sprout check m1-safe-remove`, and `sprout check --all` passed
+  after the ownership-snapshot slice. The full gate included module
+  verification, unit and race tests, vet, Linux builds, spike smoke, shell
+  checks, and Python automation tests.
 - The task remains open: these results do not prove a live `abox rm` command or
   complete daemon removal integration.
 
@@ -224,11 +236,18 @@ Implement refusal-first Box removal
 - Added daemon-local per-Box writer admission. Journaled non-removal mutations
   enter the gate, while the removal operation bypasses self-admission and uses
   its fenced journal lease to quiesce and drain that same gate before teardown.
-- Next slice must persist and load the complete ownership snapshot needed to
-  assemble concrete steps from the retained Plan; the current state schema does
-  not retain required inode, Lima metadata, or Compose resource ID/label facts.
-  Then expose CLI `abox rm`. Full disposable Box teardown evidence remains
-  required before any acceptance criterion can be checked.
+- Added an immutable, schema-versioned removal-ownership snapshot atomically
+  bound to the current Box generation and retained Plan digest. It preserves
+  Box-root and private-store inode identities, trusted publication destinations,
+  Lima metadata, exact Compose IDs/labels, and Lima/Compose path-chain evidence.
+  A generation accepts only byte-identical retry writes; loading strictly
+  validates the payload and independently compares its Box/generation/digest to
+  the selected database row.
+- Next slice must persist this snapshot from successful reconciliation and load
+  it to assemble the concrete worktree, Compose, Lima, private-store, and
+  generated-state steps around the retained Plan. Then expose CLI `abox rm`.
+  Full disposable Box teardown evidence remains required before any acceptance
+  criterion can be checked.
 
 ## Original request
 
