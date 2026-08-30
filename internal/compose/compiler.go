@@ -146,13 +146,13 @@ func Compile(ctx context.Context, input Input) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := atomicfile.WriteFile(rootPath, root, 0o600); err != nil {
+	if err := writeGeneratedFile(rootPath, root); err != nil {
 		return Result{}, fmt.Errorf("compile Compose root: %w", err)
 	}
-	if err := atomicfile.WriteFile(overridePath, override, 0o600); err != nil {
+	if err := writeGeneratedFile(overridePath, override); err != nil {
 		return Result{}, fmt.Errorf("compile Compose override: %w", err)
 	}
-	if err := atomicfile.WriteFile(resolvedPath, append(canonical, '\n'), 0o600); err != nil {
+	if err := writeGeneratedFile(resolvedPath, append(canonical, '\n')); err != nil {
 		return Result{}, fmt.Errorf("retain normalized Compose model: %w", err)
 	}
 	digest := sha256.Sum256(canonical)
@@ -161,6 +161,29 @@ func Compile(ctx context.Context, input Input) (Result, error) {
 		ResolvedModelPath: resolvedPath, ResolvedModel: canonical,
 		ResolvedModelDigest: contract.Digest("sha256:" + hex.EncodeToString(digest[:])),
 	}, nil
+}
+
+// writeGeneratedFile preserves the inode of an exact retained artifact. Warm
+// reconciliation still normalizes through Compose, but unchanged evidence must
+// not look like a filesystem mutation or invalidate a previously recorded path
+// identity.
+func writeGeneratedFile(path string, data []byte) error {
+	info, err := os.Lstat(path)
+	if err == nil {
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o600 {
+			return errors.New("retained generated file has unsafe type or mode")
+		}
+		current, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read retained generated file: %w", readErr)
+		}
+		if bytes.Equal(current, data) {
+			return nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect retained generated file: %w", err)
+	}
+	return atomicfile.WriteFile(path, data, 0o600)
 }
 
 func validateInput(input Input) error {

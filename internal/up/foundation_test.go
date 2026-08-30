@@ -2,17 +2,21 @@ package up
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/gitstore"
 	"github.com/shoe-point-0/agent-box/internal/journal"
 	"github.com/shoe-point-0/agent-box/internal/lima"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
@@ -130,4 +134,78 @@ func TestReconcileFoundationRecoversOrderedConcreteStagesWithoutDuplicateMutatio
 	if runtime.createMutations != 1 || runtime.startMutations != 1 {
 		t.Fatalf("runtime mutations: create=%d start=%d", runtime.createMutations, runtime.startMutations)
 	}
+
+	composeRunner := &foundationComposeRunner{plan: attempt.Plan}
+	composeConfig := ComposeConfig{Runner: composeRunner, DockerPath: "/usr/bin/docker"}
+	firstCompose, err := ReconcileComposeInputs(t.Context(), composeConfig, attempt, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstFiles := composeFileIdentities(t, firstCompose.Compiled)
+	secondCompose, err := ReconcileComposeInputs(t.Context(), composeConfig, attempt, third)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if composeRunner.calls != 6 || !reflect.DeepEqual(firstCompose, secondCompose) {
+		t.Fatalf("warm Compose inputs: calls=%d first=%#v second=%#v", composeRunner.calls, firstCompose, secondCompose)
+	}
+	if got := composeFileIdentities(t, secondCompose.Compiled); !reflect.DeepEqual(got, firstFiles) {
+		t.Fatalf("warm Compose compilation replaced unchanged files: first=%#v second=%#v", firstFiles, got)
+	}
+	if err := os.Rename(attempt.Repository.WorktreePath, attempt.Repository.WorktreePath+".observed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(attempt.Repository.WorktreePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileComposeInputs(t.Context(), composeConfig, attempt, third); err == nil ||
+		!strings.Contains(err.Error(), "Git path identity changed") || composeRunner.calls != 6 {
+		t.Fatalf("substituted worktree result: error=%v calls=%d", err, composeRunner.calls)
+	}
+}
+
+type foundationComposeRunner struct {
+	plan  contract.Plan
+	calls int
+}
+
+func (r *foundationComposeRunner) Run(_ context.Context, _ compose.Command) (compose.CommandResult, error) {
+	step := r.calls % 3
+	r.calls++
+	switch step {
+	case 0:
+		return compose.CommandResult{Stdout: []byte(r.plan.Tools.Compose + "\n")}, nil
+	case 1:
+		return compose.CommandResult{Stdout: []byte(`{"services":{"workspace":{}}}`)}, nil
+	default:
+		labels := map[string]any{
+			"dev.abox.managed": "true", "dev.abox.workspace": r.plan.WorkspaceID,
+			"dev.abox.box": r.plan.BoxID, "dev.abox.plan": string(r.plan.PlanDigest),
+			"dev.abox.generation": fmt.Sprint(1),
+		}
+		volumes := make([]any, 0, len(r.plan.Mounts))
+		for _, mount := range r.plan.Mounts {
+			volumes = append(volumes, map[string]any{
+				"type": "bind", "source": mount.Path, "target": mount.Path, "read_only": !mount.Writable,
+			})
+		}
+		encoded, err := json.Marshal(map[string]any{
+			"name":     r.plan.Compose.ProjectName,
+			"services": map[string]any{"workspace": map[string]any{"labels": labels, "volumes": volumes}},
+		})
+		return compose.CommandResult{Stdout: encoded}, err
+	}
+}
+
+func composeFileIdentities(t *testing.T, compiled compose.Result) map[string]ownership.FileIdentity {
+	t.Helper()
+	result := make(map[string]ownership.FileIdentity, 3)
+	for _, path := range []string{compiled.RootPath, compiled.OverridePath, compiled.ResolvedModelPath} {
+		identity, err := ownership.InspectPath(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result[filepath.Base(path)] = identity
+	}
+	return result
 }

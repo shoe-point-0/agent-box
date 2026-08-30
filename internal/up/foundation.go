@@ -20,8 +20,8 @@ type FoundationConfig struct {
 	BuildLima BuildLimaConfig
 }
 
-// FoundationResult carries freshly observed authority into the filesystem,
-// Compose, context, and READY stages that follow this graph prefix.
+// FoundationResult carries freshly observed authority into the Compose,
+// filesystem, context, and READY stages that follow this graph prefix.
 type FoundationResult struct {
 	Generated GeneratedPlanResult
 	Git       GitResult

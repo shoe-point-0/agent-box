@@ -218,6 +218,28 @@ Deliver the single-repository up vertical slice
 - This graph prefix is not yet dispatched by `cmd/aboxd` and does not make a
   real VM support claim. Filesystem verification, Compose, readiness, context,
   READY publication, daemon assembly, and the cold/warm CLI smoke remain open.
+- Compose-input slice: `internal/up.ReconcileComposeInputs` now consumes the
+  freshly proven generated-root, Git, and running-Lima results rather than
+  cached component rows. It refuses substituted Git/runtime paths before the
+  normalization runner is invoked, compiles the repository include plus Agent
+  Box policy, and records the complete path set consumed by runtime apply and
+  filesystem readiness.
+- Warm compilation still reruns the pinned version and both normalization
+  boundaries, but exact generated root, override, and redacted-model bytes now
+  preserve their existing inodes. `go test -race -count=10 ./internal/compose
+  ./internal/up` passed: twenty compiler passes and the assembled cold/warm
+  fixture retained all three file identities; replacing the observed worktree
+  was refused with zero additional normalization calls.
+- `go vet ./internal/up ./internal/compose`, `git diff --check`, `sprout check
+  m1-single-repo-up`, and `sprout check --all` passed. Post-slice `make check`
+  passed with lint reporting `0 issues`; module verification, all unit/race
+  tests, vet, builds, smoke, shell, and Python automation checks were green.
+- The prior next-step hypothesis of invoking filesystem readiness immediately
+  after Lima was wrong: the existing readiness contract requires a freshly
+  applied `compose.RuntimeSpec`, immutable container IDs, Docker mount
+  observations, and generated Compose path evidence. Compose compilation and
+  resource apply must therefore precede filesystem verification; bypassing
+  that order would turn generated intent into fake live evidence.
 
 ## Outcome and follow-ups
 
@@ -265,12 +287,17 @@ lifecycle contract. Matching resources resume from fresh path, immutable
 config, and embedded metadata observations; retained proof replacement fails
 before mutation.
 
-Next, add the filesystem readiness operation after the assembled foundation
-prefix, using its freshly observed Git and Lima results rather than cached
-state. Then add Compose, context, and READY operations and wire the completed
-runner into `cmd/aboxd`. Keep the packet open until the unchanged
-single-repository fixture passes through the real daemon and CLI, including
-detach and measured warm no-op assertions.
+The ninth coherent slice compiles Compose only after that foundation has been
+freshly proven. Re-normalization is mandatory on warm runs, while byte-identical
+generated evidence is no longer rewritten and therefore keeps the path identity
+that later readiness and removal checks consume.
+
+Next, add durable partial authority for Compose resource identities and apply
+the compiled project through `compose.Runtime`. Then invoke filesystem
+readiness with that fresh runtime observation, add context and READY operations,
+and wire the completed runner into `cmd/aboxd`. Keep the packet open until the
+unchanged single-repository fixture passes through the real daemon and CLI,
+including detach and measured warm no-op assertions.
 
 ## Original request
 

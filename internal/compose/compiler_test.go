@@ -31,6 +31,7 @@ func TestCompileGeneratedInputsAreDeterministic(t *testing.T) {
 	adapted := adaptedModel(t, compiled, nil)
 	var first map[string][]byte
 	var firstDigest contract.Digest
+	var firstIdentity map[string]os.FileInfo
 
 	for iteration := range 20 {
 		runner := &fakeRunner{outputs: [][]byte{[]byte("2.39.1\n"), baseline, adapted}}
@@ -46,6 +47,7 @@ func TestCompileGeneratedInputsAreDeterministic(t *testing.T) {
 		if iteration == 0 {
 			first = current
 			firstDigest = result.ResolvedModelDigest
+			firstIdentity = generatedFileInfo(t, outputDirectory)
 			assertGolden(t, "compose.root.golden.yaml", normalizeGenerated(current[compose.RootFileName], root, compiled))
 			assertGolden(t, "compose.abox.golden.yaml", normalizeGenerated(current[compose.OverrideFileName], root, compiled))
 			continue
@@ -53,7 +55,25 @@ func TestCompileGeneratedInputsAreDeterministic(t *testing.T) {
 		if !reflect.DeepEqual(current, first) || result.ResolvedModelDigest != firstDigest {
 			t.Fatalf("iteration %d changed generated artifacts or digest", iteration)
 		}
+		for name, info := range generatedFileInfo(t, outputDirectory) {
+			if !os.SameFile(firstIdentity[name], info) {
+				t.Fatalf("iteration %d replaced unchanged generated artifact %q", iteration, name)
+			}
+		}
 	}
+}
+
+func generatedFileInfo(t *testing.T, directory string) map[string]os.FileInfo {
+	t.Helper()
+	result := make(map[string]os.FileInfo, 3)
+	for _, name := range []string{compose.RootFileName, compose.OverrideFileName, compose.ResolvedModelFileName} {
+		info, err := os.Lstat(filepath.Join(directory, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result[name] = info
+	}
+	return result
 }
 
 func TestCompileRejectsVersionDriftAndPlanMutationBeforeNormalization(t *testing.T) {
