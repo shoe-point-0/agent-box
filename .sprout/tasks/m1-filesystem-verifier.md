@@ -173,6 +173,23 @@ Verify mounted filesystem contracts
   lint with `0 issues`, builds, smoke, and automation tests. This establishes
   native Linux inotify delivery through the tested Docker bind mount only; it
   does not establish VirtioFS or Darwin watcher behavior.
+- Undeclared mount canary: `go test -race -count=10
+  ./internal/filesystem/...` passed ten real Compose-container runs. The live
+  verifier now creates an empty Machine-owned random directory outside every
+  declared mount before collecting the four live mount views. Only after exact
+  Plan equality passes does it run fixed argv through the guest and every
+  sorted immutable container ID to require that exact path to be absent.
+- Unit tests prove guest and container visibility failures, output rejection,
+  cancellation classification, redacted diagnostics, deterministic ordering,
+  refusal when the canary root is inside a declared mount, and cleanup after
+  each exercised outcome. The real `alpine:3.20` Compose fixture proved the
+  undeclared Machine sibling is absent from the workspace container and left
+  no canary, probe, process, or container residue.
+- `make check`, `sprout check --all`, and `git diff --check` passed after this
+  slice. `make check` included full tests and race tests, vet, dependency
+  checks, lint with `0 issues`, builds, smoke, and automation tests. Guest
+  absence remains fixture evidence because `limactl` is unavailable; this is
+  not Lima, VZ, or VirtioFS evidence.
 
 ## Outcome and follow-ups
 
@@ -181,8 +198,9 @@ four-layer exact comparison collects through fresh live inspection, and the
 nonce-scoped bidirectional byte/mode/rename/delete lifecycle is implemented
 behind a fixed-command immutable-container adapter and has passed unchanged
 through a real Linux Compose container. Native watcher delivery now passes the
-same real-container path. Remaining work is undeclared-canary probes, the
-managed Git exclude, and readiness integration.
+same real-container path. The live verifier now also rejects guest or container
+visibility of an undeclared Machine canary after exact mount-set comparison.
+Remaining work is the managed Git exclude and readiness integration.
 Real Lima execution remains unavailable on this Machine and must not be
 inferred from fixtures or Docker evidence.
 

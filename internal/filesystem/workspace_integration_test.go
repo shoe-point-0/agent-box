@@ -56,6 +56,17 @@ func TestProbeVerifierAgainstRealComposeWorkspaceContainer(t *testing.T) {
 	if err != nil || containerID == "" {
 		t.Fatalf("locate immutable workspace container: %v: %s", err, idOutput)
 	}
+	canary, err := os.MkdirTemp(root, ".abox-mount-canary-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(canary) })
+	if output, err := exec.Command(docker, "exec", "--", containerID, "/usr/bin/test", "!", "-e", canary).CombinedOutput(); err != nil {
+		t.Fatalf("undeclared Machine canary is visible in workspace container: %v: %s", err, output)
+	}
+	if err := os.Remove(canary); err != nil {
+		t.Fatalf("remove undeclared Machine canary: %v", err)
+	}
 
 	host := localWorkspaceHost{runner: aboxprocess.Runner{CaptureLimit: 1024}}
 	adapter, err := filesystem.NewWorkspaceAdapter(host, compose.RuntimeSpec{DockerPath: docker, Workdir: root})
