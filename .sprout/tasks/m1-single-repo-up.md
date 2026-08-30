@@ -258,6 +258,25 @@ Deliver the single-repository up vertical slice
   now exists for crash recovery, but the concrete reconciler must still apply,
   freshly observe, retain immutable IDs, and prove warm identity before
   filesystem readiness can consume the result.
+- Concrete Compose-reconcile slice: `internal/up.ReconcileCompose` now consumes
+  the compiled `compose.RuntimeSpec` through the production `state.Store` and
+  `compose.Runtime` contracts. It persists or transfers intent before apply,
+  retains the exact container, network, and volume IDs observed afterward, and
+  uses observation rather than apply whenever complete recovery authority
+  already exists.
+- `go test -race -count=10 ./internal/up` passed. The focused fixture proved
+  intent preceded runtime mutation, one cold mutation survived a failed record
+  persistence followed by an idempotent retry, retained authority transferred
+  across operations, and later attempts re-observed without apply. READY-derived
+  authority also took the observation-only path, while a replaced live
+  container ID was refused before any mutation.
+- `go test -race -count=10 ./internal/compose ./internal/state`, `go vet
+  ./internal/up`, `make lint` (`0 issues`), and `git diff --check` passed.
+  Post-slice `make check` passed with module verification, all unit/race tests,
+  vet, builds, smoke, shell, and Python automation checks green.
+- This remains contract-fixture evidence rather than a real Docker-in-Lima
+  apply. Filesystem/workspace usability, context publication, atomic READY,
+  daemon dispatch, and the real cold/warm CLI smoke remain open.
 
 ## Outcome and follow-ups
 
@@ -315,13 +334,17 @@ binds generated inputs and immutable runtime-host identity before mutation and
 ensures READY cannot silently replace partial runtime ownership with a
 different live resource set.
 
-Next, consume that ledger in `internal/up.ReconcileCompose`: persist or transfer
-intent, invoke `compose.Runtime.Apply`, retain the freshly observed resource
-records, and re-prove retained IDs on warm recovery. Then invoke filesystem
-readiness with that fresh runtime observation, add context and READY operations,
-and wire the completed runner into `cmd/aboxd`. Keep the packet open until the
-unchanged single-repository fixture passes through the real daemon and CLI,
-including detach and measured warm no-op assertions.
+The eleventh coherent slice consumes that ledger through the concrete Compose
+runtime contract. A cold attempt applies only behind durable intent; complete
+partial or READY authority takes the observation-only path and must match the
+entire freshly observed resource set exactly.
+
+Next, pass `ComposeResult` into the existing filesystem collector/readiness
+boundary and prove Machine, runtime-host, and workspace-service usability from
+the freshly observed container IDs and mounts. Then add context and READY
+operations and wire the completed runner into `cmd/aboxd`. Keep the packet open
+until the unchanged single-repository fixture passes through the real daemon
+and CLI, including detach and measured warm no-op assertions.
 
 ## Original request
 
