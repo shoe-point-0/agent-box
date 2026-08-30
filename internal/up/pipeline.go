@@ -10,19 +10,24 @@ import (
 )
 
 // BuildReadyConfig binds the runtime-specific filesystem adapters only after
-// Compose has produced the immutable RuntimeSpec they must execute against.
-type BuildReadyConfig func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) (ReadyConfig, error)
+// the guest toolchain and Compose runtime have been freshly verified.
+type BuildReadyConfig func(context.Context, PreparedAttempt, FoundationResult, GuestResult, ComposeResult) (ReadyConfig, error)
+
+// BuildGuestConfig binds verified artifacts and guest paths to the freshly
+// reconciled runtime host before any repository-owned command may execute.
+type BuildGuestConfig func(context.Context, PreparedAttempt, FoundationResult) (GuestConfig, error)
 
 // BuildComposeConfig binds Compose normalization to the freshly reconciled
 // runtime host. A production guest-command runner cannot be constructed before
 // the immutable Lima Spec and running instance have been re-observed.
-type BuildComposeConfig func(context.Context, PreparedAttempt, FoundationResult) (ComposeConfig, error)
+type BuildComposeConfig func(context.Context, PreparedAttempt, FoundationResult, GuestResult) (ComposeConfig, error)
 
 // PipelineConfig binds the existing concrete reconcilers into one complete
 // preparation-to-READY execution path.
 type PipelineConfig struct {
 	Preparation  PreparationConfig
 	Foundation   FoundationConfig
+	BuildGuest   BuildGuestConfig
 	BuildCompose BuildComposeConfig
 	ComposeApply ComposeApplyConfig
 	BuildReady   BuildReadyConfig
@@ -30,9 +35,10 @@ type PipelineConfig struct {
 
 type prepareStage func(context.Context, journal.Operation) (PreparedAttempt, error)
 type foundationStage func(context.Context, PreparedAttempt) (FoundationResult, error)
-type composeInputsStage func(context.Context, PreparedAttempt, FoundationResult) (compose.RuntimeSpec, error)
+type guestStage func(context.Context, PreparedAttempt, FoundationResult) (GuestResult, error)
+type composeInputsStage func(context.Context, PreparedAttempt, FoundationResult, GuestResult) (compose.RuntimeSpec, error)
 type composeApplyStage func(context.Context, PreparedAttempt, compose.RuntimeSpec) (ComposeResult, error)
-type readyStage func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) error
+type readyStage func(context.Context, PreparedAttempt, FoundationResult, GuestResult, ComposeResult) error
 
 // Pipeline is one daemon-owned, dependency-ordered up attempt. Every stage
 // consumes fresh evidence from the preceding stage; no stage is skipped on a
@@ -40,6 +46,7 @@ type readyStage func(context.Context, PreparedAttempt, FoundationResult, Compose
 type Pipeline struct {
 	prepare       prepareStage
 	foundation    foundationStage
+	guest         guestStage
 	composeInputs composeInputsStage
 	composeApply  composeApplyStage
 	ready         readyStage
@@ -49,6 +56,9 @@ type Pipeline struct {
 // observing external state. Runtime-specific readiness construction remains
 // delayed until the freshly compiled and applied Compose result exists.
 func NewPipeline(config PipelineConfig) (*Pipeline, error) {
+	if config.BuildGuest == nil {
+		return nil, errors.New("configure Box up pipeline: guest config builder is required")
+	}
 	if config.BuildCompose == nil {
 		return nil, errors.New("configure Box up pipeline: Compose config builder is required")
 	}
@@ -62,8 +72,15 @@ func NewPipeline(config PipelineConfig) (*Pipeline, error) {
 		foundation: func(ctx context.Context, attempt PreparedAttempt) (FoundationResult, error) {
 			return ReconcileFoundation(ctx, config.Foundation, attempt)
 		},
-		composeInputs: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult) (compose.RuntimeSpec, error) {
-			composeConfig, err := config.BuildCompose(ctx, attempt, foundation)
+		guest: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult) (GuestResult, error) {
+			guestConfig, err := config.BuildGuest(ctx, attempt, foundation)
+			if err != nil {
+				return GuestResult{}, fmt.Errorf("reconcile Box pipeline: build guest config: %w", err)
+			}
+			return ReconcileGuest(ctx, guestConfig, attempt, foundation)
+		},
+		composeInputs: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult, guest GuestResult) (compose.RuntimeSpec, error) {
+			composeConfig, err := config.BuildCompose(ctx, attempt, foundation, guest)
 			if err != nil {
 				return compose.RuntimeSpec{}, fmt.Errorf("reconcile Box pipeline: build Compose config: %w", err)
 			}
@@ -72,8 +89,8 @@ func NewPipeline(config PipelineConfig) (*Pipeline, error) {
 		composeApply: func(ctx context.Context, attempt PreparedAttempt, spec compose.RuntimeSpec) (ComposeResult, error) {
 			return ReconcileCompose(ctx, config.ComposeApply, attempt, spec)
 		},
-		ready: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult, result ComposeResult) error {
-			ready, err := config.BuildReady(ctx, attempt, foundation, result)
+		ready: func(ctx context.Context, attempt PreparedAttempt, foundation FoundationResult, guest GuestResult, result ComposeResult) error {
+			ready, err := config.BuildReady(ctx, attempt, foundation, guest, result)
 			if err != nil {
 				return fmt.Errorf("reconcile Box pipeline: build READY config: %w", err)
 			}
@@ -85,7 +102,7 @@ func NewPipeline(config PipelineConfig) (*Pipeline, error) {
 // Execute rehydrates desired state under the coordinator's fenced lease and
 // runs every concrete boundary through the atomic READY publication.
 func (p *Pipeline) Execute(ctx context.Context, operation journal.Operation) error {
-	if p == nil || p.prepare == nil || p.foundation == nil || p.composeInputs == nil || p.composeApply == nil || p.ready == nil {
+	if p == nil || p.prepare == nil || p.foundation == nil || p.guest == nil || p.composeInputs == nil || p.composeApply == nil || p.ready == nil {
 		return errors.New("reconcile Box pipeline: stages are incomplete")
 	}
 	attempt, err := p.prepare(ctx, operation)
@@ -96,7 +113,11 @@ func (p *Pipeline) Execute(ctx context.Context, operation journal.Operation) err
 	if err != nil {
 		return fmt.Errorf("reconcile Box pipeline: foundation: %w", err)
 	}
-	spec, err := p.composeInputs(ctx, attempt, foundation)
+	guest, err := p.guest(ctx, attempt, foundation)
+	if err != nil {
+		return fmt.Errorf("reconcile Box pipeline: guest toolchain: %w", err)
+	}
+	spec, err := p.composeInputs(ctx, attempt, foundation, guest)
 	if err != nil {
 		return fmt.Errorf("reconcile Box pipeline: Compose inputs: %w", err)
 	}
@@ -104,7 +125,7 @@ func (p *Pipeline) Execute(ctx context.Context, operation journal.Operation) err
 	if err != nil {
 		return fmt.Errorf("reconcile Box pipeline: Compose runtime: %w", err)
 	}
-	if err := p.ready(ctx, attempt, foundation, result); err != nil {
+	if err := p.ready(ctx, attempt, foundation, guest, result); err != nil {
 		return fmt.Errorf("reconcile Box pipeline: READY: %w", err)
 	}
 	return nil

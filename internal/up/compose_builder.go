@@ -16,7 +16,10 @@ func NewComposeConfigBuilder(invoker compose.GuestCommandInvoker, dockerPath str
 	}
 	configuredEnvironment := cloneStringMap(environment)
 	configuredSecrets := append([]compose.Secret(nil), secrets...)
-	return func(_ context.Context, _ PreparedAttempt, foundation FoundationResult) (ComposeConfig, error) {
+	return func(_ context.Context, _ PreparedAttempt, foundation FoundationResult, guest GuestResult) (ComposeConfig, error) {
+		if guest.Spec.DockerPath != dockerPath || guest.Spec.RuntimeHost.RuntimeHost.InstanceName != foundation.Lima.Spec.RuntimeHost.InstanceName {
+			return ComposeConfig{}, errors.New("configure Compose builder: verified guest identity differs from runtime host")
+		}
 		runner, err := compose.NewGuestRunner(invoker, foundation.Lima.Spec)
 		if err != nil {
 			return ComposeConfig{}, err

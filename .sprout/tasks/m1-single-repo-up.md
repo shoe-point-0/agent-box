@@ -391,6 +391,26 @@ Deliver the single-repository up vertical slice
   (`0 issues`), and `git diff --check` passed. Post-slice `make check` passed
   with module verification, all unit/race tests, vet, builds, smoke, shell, and
   Python automation checks green.
+- Guest-toolchain pipeline slice: `internal/up.Pipeline` now inserts live guest
+  provisioning after the running Lima host and before Compose normalization.
+  The stage requires the exact freshly observed `lima.Spec`, reruns the complete
+  idempotent `guesttoolchain.Provisioner` contract on every cold or warm
+  attempt, and passes its verified guest paths to both delayed Compose and READY
+  adapter builders. Compose construction refuses a Docker path or runtime-host
+  identity that differs from the verified guest result, so repository-owned
+  commands cannot run through an unverified executable path.
+- `go test -race -count=10 ./internal/up` passed and proved the guest boundary
+  executes in dependency order, reruns on every attempt, stops the pipeline on
+  failure, and rejects runtime-host drift before provisioning. Focused `go vet`
+  and `git diff --check` passed. Post-slice `make check` passed with lint
+  reporting `0 issues`; module verification, all unit/race tests, vet, builds,
+  smoke, shell, and Python automation checks were green.
+- Live prerequisite inspection found KVM available and Docker/Compose
+  `29.6.1`/`5.3.0`, but no `limactl` executable and no guest image artifact in
+  the repository. No VM was created. Production assembly must consume an
+  explicit verified artifact installation; silently substituting the Machine
+  Docker binary or an implicit Lima image would violate the existing toolchain
+  and guest provisioning contracts.
 
 ## Outcome and follow-ups
 
@@ -463,11 +483,11 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, instantiate the complete pipeline with verified artifact, guest-toolchain,
-Git, Lima, Compose, and filesystem adapters and dispatch its `OperationRunner`
-from `cmd/aboxd`. Keep the packet open until the unchanged single-repository
-fixture passes through the real daemon and CLI, including detach and measured
-warm no-op assertions.
+Next, add the explicit production artifact-installation configuration and use
+it to instantiate Git, Lima, guest-toolchain, Compose, and filesystem adapters
+in `cmd/aboxd`, then dispatch the pipeline's `OperationRunner`. Keep the packet
+open until the unchanged single-repository fixture passes through the real
+daemon and CLI, including detach and measured warm no-op assertions.
 
 ## Original request
 

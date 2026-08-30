@@ -7,6 +7,7 @@ import (
 
 	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
+	"github.com/shoe-point-0/agent-box/internal/guesttoolchain"
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/process"
 )
@@ -26,7 +27,8 @@ func TestComposeConfigBuilderBindsEachFreshRuntimeWithoutSharedIdentity(t *testi
 		foundation := FoundationResult{Lima: LimaResult{Spec: lima.Spec{
 			RuntimeHost: contract.RuntimeHostPlan{InstanceName: name},
 		}}}
-		config, err := builder(t.Context(), PreparedAttempt{}, foundation)
+		guest := GuestResult{Spec: guesttoolchain.Spec{RuntimeHost: foundation.Lima.Spec, DockerPath: "/usr/bin/docker"}}
+		config, err := builder(t.Context(), PreparedAttempt{}, foundation, guest)
 		if err != nil {
 			t.Fatal(err)
 		}

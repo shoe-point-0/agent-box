@@ -15,6 +15,7 @@ func TestPipelineExecutesCompleteDependencyOrder(t *testing.T) {
 	operation := journal.Operation{ID: "operation-pipeline", BoxID: "box-pipeline", Kind: "up", State: journal.StateRunning}
 	attempt := PreparedAttempt{Operation: operation}
 	foundation := FoundationResult{}
+	guest := GuestResult{}
 	spec := compose.RuntimeSpec{DockerPath: "/usr/bin/docker"}
 	result := ComposeResult{Spec: spec}
 	var calls []string
@@ -33,10 +34,17 @@ func TestPipelineExecutesCompleteDependencyOrder(t *testing.T) {
 			}
 			return foundation, nil
 		},
-		composeInputs: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult) (compose.RuntimeSpec, error) {
-			calls = append(calls, "compose-inputs")
+		guest: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult) (GuestResult, error) {
+			calls = append(calls, "guest")
 			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) {
-				t.Fatal("Compose inputs did not receive fresh foundation result")
+				t.Fatal("guest did not receive fresh foundation result")
+			}
+			return guest, nil
+		},
+		composeInputs: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult, gotGuest GuestResult) (compose.RuntimeSpec, error) {
+			calls = append(calls, "compose-inputs")
+			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) || !reflect.DeepEqual(gotGuest, guest) {
+				t.Fatal("Compose inputs did not receive fresh prerequisite results")
 			}
 			return spec, nil
 		},
@@ -47,9 +55,9 @@ func TestPipelineExecutesCompleteDependencyOrder(t *testing.T) {
 			}
 			return result, nil
 		},
-		ready: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult, gotResult ComposeResult) error {
+		ready: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult, gotGuest GuestResult, gotResult ComposeResult) error {
 			calls = append(calls, "ready")
-			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) || !reflect.DeepEqual(gotResult, result) {
+			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) || !reflect.DeepEqual(gotGuest, guest) || !reflect.DeepEqual(gotResult, result) {
 				t.Fatal("READY did not receive complete fresh results")
 			}
 			return nil
@@ -59,14 +67,14 @@ func TestPipelineExecutesCompleteDependencyOrder(t *testing.T) {
 	if err := pipeline.Execute(t.Context(), operation); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"prepare", "foundation", "compose-inputs", "compose-apply", "ready"}
+	want := []string{"prepare", "foundation", "guest", "compose-inputs", "compose-apply", "ready"}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("pipeline calls = %v, want %v", calls, want)
 	}
 }
 
 func TestPipelineStopsAtFirstFailedBoundary(t *testing.T) {
-	stages := []string{"prepare", "foundation", "compose-inputs", "compose-apply", "ready"}
+	stages := []string{"prepare", "foundation", "guest", "compose-inputs", "compose-apply", "ready"}
 	for failedIndex, failedStage := range stages {
 		t.Run(failedStage, func(t *testing.T) {
 			var calls []string
@@ -84,13 +92,16 @@ func TestPipelineStopsAtFirstFailedBoundary(t *testing.T) {
 				foundation: func(context.Context, PreparedAttempt) (FoundationResult, error) {
 					return FoundationResult{}, fail("foundation")
 				},
-				composeInputs: func(context.Context, PreparedAttempt, FoundationResult) (compose.RuntimeSpec, error) {
+				guest: func(context.Context, PreparedAttempt, FoundationResult) (GuestResult, error) {
+					return GuestResult{}, fail("guest")
+				},
+				composeInputs: func(context.Context, PreparedAttempt, FoundationResult, GuestResult) (compose.RuntimeSpec, error) {
 					return compose.RuntimeSpec{}, fail("compose-inputs")
 				},
 				composeApply: func(context.Context, PreparedAttempt, compose.RuntimeSpec) (ComposeResult, error) {
 					return ComposeResult{}, fail("compose-apply")
 				},
-				ready: func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) error {
+				ready: func(context.Context, PreparedAttempt, FoundationResult, GuestResult, ComposeResult) error {
 					return fail("ready")
 				},
 			}
@@ -106,11 +117,21 @@ func TestPipelineStopsAtFirstFailedBoundary(t *testing.T) {
 }
 
 func TestNewPipelineDelaysRuntimeSpecificBuilders(t *testing.T) {
-	if _, err := NewPipeline(PipelineConfig{}); err == nil || !strings.Contains(err.Error(), "Compose config builder") {
+	if _, err := NewPipeline(PipelineConfig{}); err == nil || !strings.Contains(err.Error(), "guest config builder") {
+		t.Fatalf("NewPipeline() missing guest builder error = %v", err)
+	}
+	if _, err := NewPipeline(PipelineConfig{
+		BuildGuest: func(context.Context, PreparedAttempt, FoundationResult) (GuestConfig, error) {
+			return GuestConfig{}, nil
+		},
+	}); err == nil || !strings.Contains(err.Error(), "Compose config builder") {
 		t.Fatalf("NewPipeline() missing Compose builder error = %v", err)
 	}
 	if _, err := NewPipeline(PipelineConfig{
-		BuildCompose: func(context.Context, PreparedAttempt, FoundationResult) (ComposeConfig, error) {
+		BuildGuest: func(context.Context, PreparedAttempt, FoundationResult) (GuestConfig, error) {
+			return GuestConfig{}, nil
+		},
+		BuildCompose: func(context.Context, PreparedAttempt, FoundationResult, GuestResult) (ComposeConfig, error) {
 			return ComposeConfig{}, nil
 		},
 	}); err == nil || !strings.Contains(err.Error(), "READY config builder") {
@@ -121,20 +142,23 @@ func TestNewPipelineDelaysRuntimeSpecificBuilders(t *testing.T) {
 	foundation := FoundationResult{Lima: LimaResult{}}
 	wantErr := errors.New("injected runtime binding failure")
 	pipeline, err := NewPipeline(PipelineConfig{
-		BuildCompose: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult) (ComposeConfig, error) {
+		BuildGuest: func(context.Context, PreparedAttempt, FoundationResult) (GuestConfig, error) {
+			return GuestConfig{}, nil
+		},
+		BuildCompose: func(_ context.Context, got PreparedAttempt, gotFoundation FoundationResult, _ GuestResult) (ComposeConfig, error) {
 			if !reflect.DeepEqual(got, attempt) || !reflect.DeepEqual(gotFoundation, foundation) {
 				t.Fatal("Compose builder did not receive fresh foundation evidence")
 			}
 			return ComposeConfig{}, wantErr
 		},
-		BuildReady: func(context.Context, PreparedAttempt, FoundationResult, ComposeResult) (ReadyConfig, error) {
+		BuildReady: func(context.Context, PreparedAttempt, FoundationResult, GuestResult, ComposeResult) (ReadyConfig, error) {
 			return ReadyConfig{}, nil
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pipeline.composeInputs(t.Context(), attempt, foundation); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "build Compose config") {
+	if _, err := pipeline.composeInputs(t.Context(), attempt, foundation, GuestResult{}); !errors.Is(err, wantErr) || !strings.Contains(err.Error(), "build Compose config") {
 		t.Fatalf("composeInputs() error = %v, want wrapped builder failure", err)
 	}
 
