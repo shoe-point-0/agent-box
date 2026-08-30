@@ -18,7 +18,8 @@ Before proposing a change:
 2. Keep the change focused and preserve explicit platform, ownership, cleanup, and security boundaries.
 3. Add tests for observable behavior and failure paths.
 4. Run `make check` from the repository root.
-5. Record real execution evidence; do not turn a cross-build or mock into a support claim.
+5. Sign off every commit under the DCO policy below.
+6. Record real execution evidence; do not turn a cross-build or mock into a support claim.
 
 Use `make clean` to remove `bin/` and `.tools/`.
 
@@ -40,8 +41,32 @@ Tests that create VMs, containers, networks, mounts, worktrees, or temporary roo
 
 Changes to normative architecture, compatibility, security, persistence, or destructive lifecycle behavior require an ADR. Follow [`docs/decisions/README.md`](docs/decisions/README.md). Small implementation choices that do not alter a durable contract do not need an ADR.
 
-## Commits and pull requests
+## Issues, pull requests, and reviews
 
-Use focused conventional commits such as `feat(cli): report build version` or `docs(security): define disclosure path`. Pull requests should explain the boundary changed, tests run, cleanup behavior, and any remaining non-claims.
+An issue is welcome for bugs, design discussion, and work that needs coordination, but it is not required for a focused fix. Search existing issues first. Include the observed behavior, expected behavior, minimal reproduction, platform and tool versions, and sanitized diagnostics. Never report vulnerabilities or private conduct details in a public issue; use the processes linked below.
 
-By participating, you agree to follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Follow [`SECURITY.md`](SECURITY.md) for vulnerability handling; the project does not currently have an operational private disclosure channel, so never put vulnerability details in a public issue.
+Open a draft pull request early when a change affects public contracts or needs design feedback. A ready pull request must:
+
+- explain the boundary changed, motivation, tests run, cleanup behavior, and remaining non-claims;
+- link its issue or ADR when one is required;
+- keep generated files, dependency changes, and unrelated cleanup out unless required;
+- pass `make check` and every additional platform gate needed for its claim; and
+- answer blocking review findings or document why they no longer apply.
+
+Authors do not approve their own changes. Maintainers classify feedback as blocking only for correctness, security, compatibility, lifecycle, governance, or agreed scope; preferences should be labeled non-blocking. The approval, conflict, bootstrap, and merge rules are in [`GOVERNANCE.md`](GOVERNANCE.md).
+
+## Developer Certificate of Origin
+
+Agent Box uses the [Developer Certificate of Origin 1.1](https://developercertificate.org/), not a Contributor License Agreement. Every commit must include a `Signed-off-by` trailer certifying that the contributor has the right to submit the work under the project license:
+
+```sh
+git commit -s
+```
+
+The trailer must use a name and email the contributor is authorized to certify. Sign-off is a legal attestation, not a GPG or SSH signature. Maintainers verify it during review; automated DCO enforcement is not yet configured, so missing trailers must be fixed before merge without rewriting another contributor's attestation for them.
+
+## Commits
+
+Use focused conventional commits such as `feat(cli): report build version` or `docs(security): define disclosure path`.
+
+By participating, you agree to follow [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Follow [`SECURITY.md`](SECURITY.md) for vulnerability handling; the project does not currently have an operational private disclosure channel, so never put vulnerability details in a public issue. Release and compatibility changes must also follow [`RELEASES.md`](RELEASES.md) and [`COMPATIBILITY.md`](COMPATIBILITY.md).

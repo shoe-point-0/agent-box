@@ -33,9 +33,17 @@ Linux is the implementation and continuous-verification lane. CI is configured t
 ## Project documents
 
 - Product and architecture baseline: [`THE_BEGINNING.md`](THE_BEGINNING.md)
+- Roadmap and evidence gates: [`ROADMAP.md`](ROADMAP.md)
 - Measured substrate boundary: [`docs/architecture/substrate-spikes.md`](docs/architecture/substrate-spikes.md)
 - Architecture decisions: [`docs/decisions/`](docs/decisions/README.md)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Governance and decision process: [`GOVERNANCE.md`](GOVERNANCE.md)
+- Maintainer and reviewer roster: [`MAINTAINERS.md`](MAINTAINERS.md)
+- Release policy: [`RELEASES.md`](RELEASES.md)
+- Compatibility and deprecation policy: [`COMPATIBILITY.md`](COMPATIBILITY.md)
+- Telemetry policy: [`TELEMETRY.md`](TELEMETRY.md)
+- Adoption and project-health measures: [`PROJECT_HEALTH.md`](PROJECT_HEALTH.md)
+- Name and trademark review status: [`TRADEMARKS.md`](TRADEMARKS.md)
 - Security reporting policy and current private-channel gap: [`SECURITY.md`](SECURITY.md)
 - Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 
