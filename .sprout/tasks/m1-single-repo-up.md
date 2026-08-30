@@ -119,9 +119,24 @@ Deliver the single-repository up vertical slice
 - Post-authority `make check` passed: lint reported `0 issues`; module
   verification, all unit and race tests, vet, builds, smoke, shell checks, and
   Python automation tests were green. `sprout check m1-single-repo-up` passed.
+- Concrete Git-reconcile slice: `internal/up.ReconcileGit` now consumes the
+  immutable `PreparedAttempt` with the production `state.Store`,
+  `gitstore.Materializer`, and `worktree.Manager` contracts. It persists or
+  transfers the exact generation claim before mutation, persists the private
+  store inode immediately after materialization, and persists the locked
+  worktree inode and Git registration immediately after creation.
+- `go test -race -count=10 ./internal/up` passed against real Git. The test
+  interrupted reconciliation after private-store persistence, resumed under a
+  later operation without a second clone, then re-observed the retained locked
+  worktree without a second add or lock. Replacing the retained store inode at
+  its deterministic path was refused and the foreign marker remained intact;
+  drifted recovery authority was refused before any external adapter call.
+- `go vet ./internal/up` and `git diff --check` passed. Post-slice `make check`
+  passed: lint reported `0 issues`; all unit and race tests, vet, builds, smoke,
+  shell checks, and Python automation tests were green.
 - This evidence does not yet satisfy the cold/warm Box acceptance criteria: the
-  prepared attempt is not yet consumed by concrete Git, Lima, filesystem,
-  Compose, context, and READY operations in `cmd/aboxd`. The final READY
+  prepared attempt is not yet consumed by concrete Lima, filesystem, Compose,
+  context, and READY operations in `cmd/aboxd`. The final READY
   transaction exists but is not wired to the filesystem readiness gate, and no
   runtime-host support claim is made.
 
@@ -151,14 +166,18 @@ the same transaction that publishes complete READY removal authority, so a
 failed publication retains the recovery record and a successful publication
 cannot leave two competing authority sources.
 
-Next, consume `up.PreparedAttempt` and the partial-authority store in concrete
-private-store and worktree reconcile operations. Persist the claim before
-mutation and each freshly verified identity immediately after its apply, then
-prove restart recovery against real Git without adopting a path from its name
-alone. Then add Lima, filesystem, Compose, context, and READY
-operations and wire the completed runner into `cmd/aboxd`. Keep the packet open
-until the unchanged single-repository fixture passes through the real daemon
-and CLI, including detach and measured warm no-op assertions.
+The fifth coherent slice consumes that authority in the concrete private-store
+and worktree path. Recovery is proof-bearing: a retained private-store inode is
+freshly checked by the worktree boundary, and a retained worktree is observed
+rather than ensured; a deterministic path without matching retained identity
+is never adopted.
+
+Next, add the concrete generated Plan and Lima reconcile operations after the
+Git result, retaining their exact ownership evidence for READY publication.
+Then add filesystem, Compose, context, and READY operations and wire the
+completed runner into `cmd/aboxd`. Keep the packet open until the unchanged
+single-repository fixture passes through the real daemon and CLI, including
+detach and measured warm no-op assertions.
 
 ## Original request
 
