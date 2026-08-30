@@ -186,6 +186,18 @@ Implement refusal-first Box removal
   after the ownership-snapshot slice. The full gate included module
   verification, unit and race tests, vet, Linux builds, spike smoke, shell
   checks, and Python automation tests.
+- `go test -race -count=10 ./internal/state` passed after closing a recovery
+  gap in the ownership snapshot. The schema-v1alpha2 payload now retains the
+  exact immutable Lima and Compose runtime specifications, including verified
+  guest-image identity, generated Compose model bytes and digest, executable
+  paths, generation, and both path-evidence sets. Save and load reject any
+  mismatch among those specifications, the selected Box generation, core Lima
+  metadata, Compose labels, and the retained Plan digest. Five adversarial
+  mutations proved that generation, path evidence, Plan identity, runtime-host
+  identity, and resolved-model drift all fail before persistence.
+- `make lint` passed with `0 issues`; `make check`, `sprout check
+  m1-safe-remove`, `sprout check --all`, and `git diff --check` passed for the
+  reconstruction-complete snapshot slice.
 - The task remains open: these results do not prove a live `abox rm` command or
   complete daemon removal integration.
 
@@ -242,12 +254,16 @@ Implement refusal-first Box removal
   Lima metadata, exact Compose IDs/labels, and Lima/Compose path-chain evidence.
   A generation accepts only byte-identical retry writes; loading strictly
   validates the payload and independently compares its Box/generation/digest to
-  the selected database row.
-- Next slice must persist this snapshot from successful reconciliation and load
-  it to assemble the concrete worktree, Compose, Lima, private-store, and
-  generated-state steps around the retained Plan. Then expose CLI `abox rm`.
-  Full disposable Box teardown evidence remains required before any acceptance
-  criterion can be checked.
+  the selected database row. The snapshot also retains the full immutable Lima
+  and Compose specifications required to reconstruct destructive adapters after
+  daemon restart rather than depending on process-local reconciliation values.
+- There is not yet a production successful-reconciliation path to attach this
+  save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
+  mutation. The next slice should add the snapshot-producing terminal operation
+  to the real `abox up` reconciliation assembly as that path is introduced,
+  then load the retained Plan plus snapshot to assemble the concrete removal
+  coordinator. After that, expose CLI `abox rm`. Full disposable Box teardown
+  evidence remains required before any acceptance criterion can be checked.
 
 ## Original request
 

@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -10,18 +11,22 @@ import (
 	"io"
 	"maps"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/generatedstate"
 	"github.com/shoe-point-0/agent-box/internal/gitstore"
+	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/toolchain"
 )
 
-const removalSnapshotSchemaVersion = "abox.removal-ownership/v1alpha1"
+const removalSnapshotSchemaVersion = "abox.removal-ownership/v1alpha2"
 
 // RepositoryRemovalRecord retains the trusted repository intent and private
 // store identity required to reconstruct worktree and private-store steps.
@@ -39,7 +44,9 @@ type RemovalSnapshot struct {
 	PlanDigest          contract.Digest
 	BoxRoot             generatedstate.Record
 	Repositories        []RepositoryRemovalRecord
+	LimaSpec            lima.Spec
 	Lima                ownership.LimaInstanceRecord
+	ComposeSpec         compose.RuntimeSpec
 	Compose             compose.RuntimeRecords
 	LimaPathEvidence    ownership.PathSetRecord
 	ComposePathEvidence ownership.PathSetRecord
@@ -192,19 +199,31 @@ func validateRemovalSnapshot(snapshot RemovalSnapshot) error {
 			return errors.New("save removal ownership snapshot: repository ownership is incomplete")
 		}
 	}
-	if snapshot.Lima.Name != snapshot.BoxID || snapshot.Lima.Metadata[ownership.BoxIDFact] != snapshot.BoxID {
+	generation := strconv.FormatInt(snapshot.Generation, 10)
+	if snapshot.Lima.Name != snapshot.BoxID || snapshot.Lima.Metadata[ownership.BoxIDFact] != snapshot.BoxID ||
+		snapshot.Lima.Metadata["dev.abox.plan-digest"] != string(snapshot.PlanDigest) ||
+		snapshot.Lima.Metadata["dev.abox.generation"] != generation {
 		return errors.New("save removal ownership snapshot: Lima ownership is incomplete")
+	}
+	if err := validateLimaRemovalSpec(snapshot); err != nil {
+		return err
+	}
+	if err := validateComposeRemovalSpec(snapshot); err != nil {
+		return err
 	}
 	if len(snapshot.Compose.Resources) == 0 {
 		return errors.New("save removal ownership snapshot: Compose ownership is absent")
 	}
+	project := snapshot.ComposeSpec.Plan.Compose.ProjectName
 	for _, record := range snapshot.Compose.Resources {
-		if invalidFact(record.Kind) || invalidFact(record.ID) || record.Labels[ownership.ComposeBoxIDFact] != snapshot.BoxID {
+		if invalidFact(record.Kind) || invalidFact(record.ID) ||
+			!validComposeRemovalLabels(record.Labels, snapshot.BoxID, project, string(snapshot.PlanDigest), generation) {
 			return errors.New("save removal ownership snapshot: Compose resource ownership is incomplete")
 		}
 	}
 	for _, record := range snapshot.Compose.Volumes {
-		if invalidFact(record.ID) || record.Labels[ownership.ComposeBoxIDFact] != snapshot.BoxID {
+		if invalidFact(record.ID) ||
+			!validComposeRemovalLabels(record.Labels, snapshot.BoxID, project, string(snapshot.PlanDigest), generation) {
 			return errors.New("save removal ownership snapshot: Compose volume ownership is incomplete")
 		}
 	}
@@ -212,6 +231,49 @@ func validateRemovalSnapshot(snapshot RemovalSnapshot) error {
 		return errors.New("save removal ownership snapshot: runtime path ownership is incomplete")
 	}
 	return nil
+}
+
+func validComposeRemovalLabels(labels map[string]string, boxID, project, planDigest, generation string) bool {
+	return labels[ownership.ComposeBoxIDFact] == boxID &&
+		labels["com.docker.compose.project"] == project &&
+		labels["dev.abox.plan"] == planDigest && labels["dev.abox.generation"] == generation
+}
+
+func validateLimaRemovalSpec(snapshot RemovalSnapshot) error {
+	spec := snapshot.LimaSpec
+	if spec.BoxID != snapshot.BoxID || spec.RuntimeHost.InstanceName != snapshot.BoxID ||
+		spec.PlanDigest != snapshot.PlanDigest || spec.Generation != snapshot.Generation ||
+		!reflect.DeepEqual(spec.RuntimeHost, snapshot.ComposeSpec.Plan.RuntimeHost) ||
+		!reflect.DeepEqual(spec.Mounts, snapshot.ComposeSpec.Plan.Mounts) ||
+		!reflect.DeepEqual(spec.PathEvidence, snapshot.LimaPathEvidence) ||
+		spec.GuestImage.Component != toolchain.GuestImage || invalidFact(spec.GuestImage.Version) ||
+		invalidFact(string(spec.GuestImage.Digest)) || !cleanAbsolutePath(spec.ImagePath) {
+		return errors.New("save removal ownership snapshot: Lima removal specification is incomplete")
+	}
+	return nil
+}
+
+func validateComposeRemovalSpec(snapshot RemovalSnapshot) error {
+	spec := snapshot.ComposeSpec
+	compiled := spec.Compiled
+	if spec.Plan.BoxID != snapshot.BoxID || spec.Plan.PlanDigest != snapshot.PlanDigest ||
+		spec.Generation != snapshot.Generation || !reflect.DeepEqual(spec.RuntimeHost, snapshot.LimaSpec) ||
+		!reflect.DeepEqual(spec.PathEvidence, snapshot.ComposePathEvidence) ||
+		compiled.ProjectName != spec.Plan.Compose.ProjectName || compiled.ProjectName == "" ||
+		!cleanAbsolutePath(spec.DockerPath) || !cleanAbsolutePath(spec.Workdir) ||
+		!cleanAbsolutePath(compiled.RootPath) || !cleanAbsolutePath(compiled.OverridePath) ||
+		!cleanAbsolutePath(compiled.ResolvedModelPath) || len(compiled.ResolvedModel) == 0 {
+		return errors.New("save removal ownership snapshot: Compose removal specification is incomplete")
+	}
+	digest := sha256.Sum256(compiled.ResolvedModel)
+	if compiled.ResolvedModelDigest != contract.Digest(fmt.Sprintf("sha256:%x", digest)) {
+		return errors.New("save removal ownership snapshot: Compose resolved-model identity differs")
+	}
+	return nil
+}
+
+func cleanAbsolutePath(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsRune(path, '\x00')
 }
 
 func validPathRecord(record ownership.PathRecord) bool {
@@ -249,7 +311,9 @@ func invalidFact(value string) bool {
 func cloneRemovalSnapshot(snapshot RemovalSnapshot) RemovalSnapshot {
 	cloned := snapshot
 	cloned.Repositories = slices.Clone(snapshot.Repositories)
+	cloned.LimaSpec = cloneLimaSpec(snapshot.LimaSpec)
 	cloned.Lima.Metadata = maps.Clone(snapshot.Lima.Metadata)
+	cloned.ComposeSpec = cloneComposeSpec(snapshot.ComposeSpec)
 	cloned.Compose.Resources = make([]ownership.ComposeResourceRecord, len(snapshot.Compose.Resources))
 	for index, record := range snapshot.Compose.Resources {
 		record.Labels = maps.Clone(record.Labels)
@@ -262,6 +326,31 @@ func cloneRemovalSnapshot(snapshot RemovalSnapshot) RemovalSnapshot {
 	}
 	cloned.LimaPathEvidence = clonePathSet(snapshot.LimaPathEvidence)
 	cloned.ComposePathEvidence = clonePathSet(snapshot.ComposePathEvidence)
+	return cloned
+}
+
+func cloneLimaSpec(spec lima.Spec) lima.Spec {
+	cloned := spec
+	cloned.Mounts = slices.Clone(spec.Mounts)
+	for index := range cloned.Mounts {
+		cloned.Mounts[index].Services = slices.Clone(spec.Mounts[index].Services)
+	}
+	cloned.PathEvidence = clonePathSet(spec.PathEvidence)
+	return cloned
+}
+
+func cloneComposeSpec(spec compose.RuntimeSpec) compose.RuntimeSpec {
+	cloned := spec
+	cloned.RuntimeHost = cloneLimaSpec(spec.RuntimeHost)
+	cloned.Plan.Repositories = slices.Clone(spec.Plan.Repositories)
+	cloned.Plan.Compose.Includes = slices.Clone(spec.Plan.Compose.Includes)
+	cloned.Plan.Compose.Profiles = slices.Clone(spec.Plan.Compose.Profiles)
+	cloned.Plan.Mounts = slices.Clone(spec.Plan.Mounts)
+	for index := range cloned.Plan.Mounts {
+		cloned.Plan.Mounts[index].Services = slices.Clone(spec.Plan.Mounts[index].Services)
+	}
+	cloned.Compiled.ResolvedModel = slices.Clone(spec.Compiled.ResolvedModel)
+	cloned.PathEvidence = clonePathSet(spec.PathEvidence)
 	return cloned
 }
 
