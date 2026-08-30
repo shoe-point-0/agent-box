@@ -180,6 +180,25 @@ Deliver the single-repository up vertical slice
 - This slice does not create or start a VM. The concrete Lima reconciler and
   production DAG remain unwired, so no Linux or Darwin runtime-host support
   claim is made.
+- Concrete Lima-reconcile slice: `internal/up.ReconcileLima` now consumes the
+  prepared immutable attempt, retained generated-root proof, production
+  `state.Store` authority contract, and concrete `lima.Adapter` lifecycle
+  contract. It persists intent before config creation, retains the exact config
+  path-set before create, retains live embedded instance identity before start,
+  and freshly proves retained config and instance identity on every resume.
+- `go test -race -count=20 ./internal/up` passed. The focused fixture interrupted
+  first after config creation and then after instance creation, resumed the
+  exact resources under later operations, and measured one config write, one
+  instance create mutation, and one start mutation across subsequent warm
+  reconciliation. Replacing the retained config inode was refused before any
+  runtime call and the foreign file remained unchanged.
+- `go vet ./internal/up`, `git diff --check`, `sprout check
+  m1-single-repo-up`, and `sprout check --all` passed. Post-slice `make check`
+  passed with lint reporting `0 issues`; module verification, all unit and race
+  tests, vet, builds, smoke, shell, and Python automation checks were green.
+- This is contract-fixture evidence, not a real VM claim. Generated Plan, Git,
+  and Lima are still not assembled into the production DAG, and filesystem
+  readiness through READY remains unwired.
 
 ## Outcome and follow-ups
 
@@ -222,11 +241,14 @@ The seventh coherent slice establishes the Lima create/start recovery ledger.
 The generated config and runtime host now have one monotonic authority source
 that READY must consume atomically rather than reconstructing from a name.
 
-Next, implement the concrete Lima create/start reconciler against this retained
-authority, then assemble generated Plan, Git, and Lima as the first concrete
-production DAG operations. Then add
-filesystem, Compose, context, and READY operations and wire the completed
-runner into `cmd/aboxd`. Keep the packet open until the unchanged
+The eighth coherent slice consumes that ledger through the concrete Lima
+lifecycle contract. Matching resources resume from fresh path, immutable
+config, and embedded metadata observations; retained proof replacement fails
+before mutation.
+
+Next, assemble generated Plan, Git, and Lima as the first concrete production
+DAG operations. Then add filesystem, Compose, context, and READY operations and
+wire the completed runner into `cmd/aboxd`. Keep the packet open until the unchanged
 single-repository fixture passes through the real daemon and CLI, including
 detach and measured warm no-op assertions.
 
