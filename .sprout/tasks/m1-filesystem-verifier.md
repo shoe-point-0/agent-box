@@ -126,16 +126,31 @@ Verify mounted filesystem contracts
   `make lint` (`0 issues`), and `git diff --check` passed for the live collector
   slice. This does not yet claim a complete filesystem probe or real Lima
   execution.
+- Bidirectional probe orchestration: `go test -race -count=10
+  ./internal/filesystem/...` passed. For every sorted Plan worktree, the verifier
+  now creates an exclusive 128-bit nonce beneath `.abox-probe`, requires the
+  immutable workspace-container ID and a writable workspace-service mount, and
+  checks exact bytes and modes plus rename and deletion visibility in both
+  directions. Tests exercise all workspace-operation failures, mismatched
+  bytes, cancellation, duplicate/ambiguous projections, symlink refusal,
+  preservation of a pre-existing concurrent-probe parent, bounded diagnostics,
+  and nonce cleanup on every exercised exit path.
+- `make check` passed after the probe-orchestration slice, including full unit
+  and race tests, vet, lint with `0 issues`, builds, and repository script tests.
+  The current workspace boundary fixture shares the real test filesystem; it is
+  not container or VirtioFS evidence. The fixed-command workspace adapter and
+  unchanged real-container execution remain required before completion.
 
 ## Outcome and follow-ups
 
-In progress. Machine path identity protects Lima and Compose mutation, and the
-four-layer exact comparison now collects through fresh live inspection and
-typed invocation boundaries. Remaining work is to run the bidirectional
-byte/mode, rename/delete, watcher, and undeclared-canary probes, materialize the
-managed Git exclude, and execute that complete verifier against the
-real-container lane. Real Lima execution remains unavailable on this Machine
-and must not be inferred from fixtures or Docker evidence.
+In progress. Machine path identity protects Lima and Compose mutation, the
+four-layer exact comparison collects through fresh live inspection, and the
+nonce-scoped bidirectional byte/mode/rename/delete lifecycle is implemented
+behind an immutable-container workspace boundary. Remaining work is the fixed
+workspace-container command adapter, watcher and undeclared-canary probes, the
+managed Git exclude, readiness integration, and unchanged real-container
+execution. Real Lima execution remains unavailable on this Machine and must
+not be inferred from fixtures or Docker evidence.
 
 ## Original request
 

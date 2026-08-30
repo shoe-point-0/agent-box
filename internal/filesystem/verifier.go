@@ -27,6 +27,7 @@ const (
 	InvalidObservation ErrorKind = "invalid-observation"
 	MalformedMountInfo ErrorKind = "malformed-mountinfo"
 	MountSetMismatch   ErrorKind = "mount-set-mismatch"
+	ProbeFailed        ErrorKind = "probe-failed"
 )
 
 // Error intentionally reports only a layer and stable reason. Live paths and
