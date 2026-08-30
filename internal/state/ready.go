@@ -91,6 +91,9 @@ func (s *Store) PublishReady(ctx context.Context, publication ReadyGeneration) e
 		if err := retireReconciliationGeneratedAuthority(ctx, tx, publication); err != nil {
 			return err
 		}
+		if err := retireReconciliationLimaAuthority(ctx, tx, publication); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM reconciliation_git_authority
 			WHERE box_id = ? AND generation = ? AND plan_digest = ?`, publication.Plan.BoxID,
 			publication.Generation, publication.Plan.PlanDigest); err != nil {

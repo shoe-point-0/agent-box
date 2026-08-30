@@ -160,6 +160,26 @@ Deliver the single-repository up vertical slice
 - This slice still does not satisfy cold/warm Box acceptance: the generated
   Plan and concrete Git reconciler are not yet assembled into the production
   DAG, and Lima onward remains unwired.
+- Partial Lima-authority slice: schema v7 adds one generation-scoped recovery
+  record for the exact Lima artifact, immutable runtime-host Spec, generated
+  config path, config path-set proof, and created instance identity. Intent is
+  durable before either config or instance proof; proofs can only advance and
+  can transfer to a later running daemon operation without changing identity.
+- READY publication now compares complete partial Lima authority with the Lima
+  removal snapshot and centralized `lima.yaml` path in the same transaction.
+  Exact authority is retired; an artifact mismatch rolls back publication and
+  preserves the recovery record.
+- `go test -race -count=10 ./internal/state`, `go vet ./internal/state`, and
+  `git diff --check` passed. Tests cover claim/config/instance progression,
+  cross-operation recovery, drift, regression, proof replacement, matching
+  READY retirement, mismatch rollback, and migration from every schema fixture
+  through schema v7.
+- Post-slice `make check` passed with lint reporting `0 issues`; module
+  verification, all unit and race tests, vet, builds, smoke, shell, and Python
+  automation checks were green.
+- This slice does not create or start a VM. The concrete Lima reconciler and
+  production DAG remain unwired, so no Linux or Darwin runtime-host support
+  claim is made.
 
 ## Outcome and follow-ups
 
@@ -198,9 +218,13 @@ durable root authority. A crash after root creation can resume only when the
 retained inode still matches, and READY cannot silently replace that partial
 authority with a different removal root.
 
-Next, assemble generated Plan then Git as the first concrete production DAG
-operations and add the Lima create/start reconcile immediately after them,
-retaining exact Lima ownership evidence for READY publication. Then add
+The seventh coherent slice establishes the Lima create/start recovery ledger.
+The generated config and runtime host now have one monotonic authority source
+that READY must consume atomically rather than reconstructing from a name.
+
+Next, implement the concrete Lima create/start reconciler against this retained
+authority, then assemble generated Plan, Git, and Lima as the first concrete
+production DAG operations. Then add
 filesystem, Compose, context, and READY operations and wire the completed
 runner into `cmd/aboxd`. Keep the packet open until the unchanged
 single-repository fixture passes through the real daemon and CLI, including

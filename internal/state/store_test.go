@@ -22,6 +22,7 @@ var expectedTables = []string{
 	"operations",
 	"reconciliation_generated_authority",
 	"reconciliation_git_authority",
+	"reconciliation_lima_authority",
 	"removal_ownership_snapshots",
 	"repositories",
 	"runtime_hosts",
