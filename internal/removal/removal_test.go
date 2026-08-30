@@ -9,8 +9,67 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
+	"github.com/shoe-point-0/agent-box/internal/gitstore"
+	"github.com/shoe-point-0/agent-box/internal/ownership"
+	"github.com/shoe-point-0/agent-box/internal/publication"
 	"github.com/shoe-point-0/agent-box/internal/removal"
+	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
+
+func TestWorktreeStepFeedsExactGitLossesIntoDefaultRefusal(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	observed := worktree.Observation{
+		Repository: "repo", CanonicalPath: filepath.Join(root, "workspace", "repo"),
+		CanonicalCommon: filepath.Join(root, "git", "repo.git"), Branch: "abox/task/repo",
+		Commit: "2222222222222222222222222222222222222222", LockReason: "owned by Agent Box box-one",
+		Registered: true, Dirty: true, ChangedPaths: []string{"tracked.txt", "untracked\n.txt"},
+		IgnoredPaths:     []string{filepath.Join("cache", "ignored.bin")},
+		WorktreeIdentity: ownership.FileIdentity{Device: 1, Inode: 2}, StoreIdentity: ownership.FileIdentity{Device: 1, Inode: 3},
+	}
+	worktrees := &stubWorktreeObserver{observation: observed}
+	publications := stubPublicationObserver{statuses: []publication.ReferenceStatus{{
+		Reference:          publication.Reference{Name: "refs/heads/" + observed.Branch, Commit: observed.Commit},
+		UnpublishedCommits: []string{"1111111111111111111111111111111111111111", observed.Commit},
+	}}}
+	remover := &stubWorktreeRemover{}
+	destination := repository.Destination{Kind: repository.DestinationLocal, URL: root}
+	step, err := removal.NewWorktreeStep(removal.WorktreeStepConfig{
+		Facts: repository.Facts{Name: "repo"}, Plan: contract.Plan{}, Store: gitstore.Record{},
+		Destinations: []repository.Destination{destination}, Worktrees: worktrees,
+		Publications: publications, Remover: remover,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := []string{}
+	coordinator, err := removal.New(removal.Config{
+		Steps: []removal.Step{step}, Lease: fakeGuard{&log}, Quiescer: fakeQuiescer{&log}, Recorder: fakeRecorder{log: &log},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := coordinator.Preview(t.Context(), "box-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLosses := []removal.Loss{
+		{Kind: removal.LossUnpublishedCommit, Value: "1111111111111111111111111111111111111111"},
+		{Kind: removal.LossUnpublishedCommit, Value: observed.Commit},
+		{Kind: removal.LossWorktreeChange, Value: filepath.Join(observed.CanonicalPath, "cache", "ignored.bin")},
+		{Kind: removal.LossWorktreeChange, Value: filepath.Join(observed.CanonicalPath, "tracked.txt")},
+		{Kind: removal.LossWorktreeChange, Value: filepath.Join(observed.CanonicalPath, "untracked\n.txt")},
+	}
+	if !slices.Equal(preview.Losses, wantLosses) {
+		t.Fatalf("losses = %#v, want %#v", preview.Losses, wantLosses)
+	}
+	_, err = coordinator.Execute(t.Context(), preview, removal.Authorization{PreviewDigest: preview.Digest})
+	if !errors.Is(err, removal.ErrSafetyRefusal) || remover.calls != 0 || len(log) != 0 {
+		t.Fatalf("default Execute = %v, remover calls = %d, lifecycle = %v", err, remover.calls, log)
+	}
+}
 
 func TestDefaultRemovalRefusesExactLossesWithoutLifecycleMutation(t *testing.T) {
 	t.Parallel()
@@ -348,4 +407,29 @@ func cloneFact(fact removal.Fact) removal.Fact {
 		clone.Evidence = nil
 	}
 	return clone
+}
+
+type stubWorktreeObserver struct {
+	observation worktree.Observation
+}
+
+func (s *stubWorktreeObserver) Observe(context.Context, repository.Facts, contract.Plan, gitstore.Record) (worktree.Observation, error) {
+	return s.observation, nil
+}
+
+type stubPublicationObserver struct {
+	statuses []publication.ReferenceStatus
+}
+
+func (s stubPublicationObserver) Check(context.Context, gitstore.Record, []publication.Reference, []repository.Destination) ([]publication.ReferenceStatus, error) {
+	return s.statuses, nil
+}
+
+type stubWorktreeRemover struct {
+	calls int
+}
+
+func (s *stubWorktreeRemover) Remove(context.Context, repository.Facts, contract.Plan, gitstore.Record, worktree.Observation) error {
+	s.calls++
+	return nil
 }

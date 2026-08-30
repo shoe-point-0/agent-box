@@ -77,12 +77,17 @@ func TestEnsureRealGitLifecycleObservationAndNoOp(t *testing.T) {
 
 	dirtyName := "untracked\nfile.txt"
 	mustWrite(t, filepath.Join(fixture.facts.WorktreePath, dirtyName), "dirty\n")
-	dirty, err := manager.Ensure(context.Background(), fixture.facts, fixture.plan, fixture.store)
-	if err != nil || !dirty.Dirty || !reflect.DeepEqual(dirty.ChangedPaths, []string{dirtyName}) {
-		t.Fatalf("Ensure(dirty) = %#v, %v", dirty, err)
+	mustWrite(t, filepath.Join(fixture.facts.GitStorePath, "info", "exclude"), "ignored-cache/\n")
+	ignoredName := filepath.Join("ignored-cache", "artifact\n.bin")
+	mustMkdir(t, filepath.Dir(filepath.Join(fixture.facts.WorktreePath, ignoredName)))
+	mustWrite(t, filepath.Join(fixture.facts.WorktreePath, ignoredName), "ignored\n")
+	dirty, err := manager.Observe(context.Background(), fixture.facts, fixture.plan, fixture.store)
+	if err != nil || !dirty.Dirty || !reflect.DeepEqual(dirty.ChangedPaths, []string{dirtyName}) ||
+		!reflect.DeepEqual(dirty.IgnoredPaths, []string{ignoredName}) {
+		t.Fatalf("Observe(dirty and ignored) = %#v, %v", dirty, err)
 	}
 	if adapter.adds != 1 || adapter.locks != 1 {
-		t.Fatal("dirty observation recreated or relocked the worktree")
+		t.Fatal("read-only observation recreated or relocked the worktree")
 	}
 }
 

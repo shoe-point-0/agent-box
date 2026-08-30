@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
@@ -31,6 +32,7 @@ type Git interface {
 	UnlockWorktree(context.Context, string, string) (machinegit.Result, error)
 	WorktreeCommonDir(context.Context, string) (machinegit.Result, error)
 	Status(context.Context, string) (machinegit.Result, error)
+	IgnoredFiles(context.Context, string) (machinegit.Result, error)
 	RemoveWorktree(context.Context, string, string) (machinegit.Result, error)
 	DeleteBranch(context.Context, string, string, string) (machinegit.Result, error)
 }
@@ -53,6 +55,7 @@ type Observation struct {
 	Registered       bool
 	Dirty            bool
 	ChangedPaths     []string
+	IgnoredPaths     []string
 	WorktreeIdentity ownership.FileIdentity
 	StoreIdentity    ownership.FileIdentity
 }
@@ -118,6 +121,38 @@ func (e *ActiveSubmodulesError) ErrorCode() contract.ErrorCode {
 }
 
 func (e *ActiveSubmodulesError) ExitCode() int { return contract.ExitCodeFor(e.ErrorCode()) }
+
+// Observe performs the complete read-only ownership and loss preflight for an
+// existing linked worktree. It never creates, locks, unlocks, or removes state.
+func (m Manager) Observe(ctx context.Context, facts repository.Facts, immutable contract.Plan, store gitstore.Record) (Observation, error) {
+	if m.Git == nil {
+		return Observation{}, errors.New("observe linked worktree: Git adapter is required")
+	}
+	if err := m.validateInput(facts, immutable, store); err != nil {
+		return Observation{}, err
+	}
+	if err := verifyStoreIdentity(store); err != nil {
+		return Observation{}, conflict(facts.Name, err.Error())
+	}
+	if relative, err := m.Git.UsesRelativeWorktrees(ctx, store.GitCommonDir); err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree %s: inspect relative-worktree mode: %w", facts.Name, err)
+	} else if relative {
+		return Observation{}, &RelativeWorktreesError{Repository: facts.Name}
+	}
+
+	registrations, err := m.registrations(ctx, store.GitCommonDir)
+	if err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree %s: observe registrations: %w", facts.Name, err)
+	}
+	registered, exists, err := selectRegistration(registrations, facts.WorktreePath, facts.Branch)
+	if err != nil {
+		return Observation{}, conflict(facts.Name, err.Error())
+	}
+	if !exists {
+		return Observation{}, conflict(facts.Name, "expected Git registration is absent")
+	}
+	return m.observe(ctx, facts, store, registered, ownerReason(immutable.BoxID))
+}
 
 // Ensure returns a fresh observation of a matching worktree or creates, locks,
 // and verifies it. It never resets or adopts conflicting state.
@@ -290,18 +325,46 @@ func (m Manager) observe(ctx context.Context, facts repository.Facts, store gits
 	}
 	status, err := m.Git.Status(ctx, facts.WorktreePath)
 	if err != nil {
-		return Observation{}, fmt.Errorf("ensure linked worktree %s: observe status: %w", facts.Name, err)
+		return Observation{}, fmt.Errorf("observe linked worktree %s status: %w", facts.Name, err)
 	}
 	changed, err := repository.ChangedPaths(status.Stdout)
 	if err != nil {
-		return Observation{}, fmt.Errorf("ensure linked worktree %s: parse status: %w", facts.Name, err)
+		return Observation{}, fmt.Errorf("observe linked worktree %s status: %w", facts.Name, err)
+	}
+	ignoredResult, err := m.Git.IgnoredFiles(ctx, facts.WorktreePath)
+	if err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree %s ignored files: %w", facts.Name, err)
+	}
+	ignored, err := parseNULPaths(ignoredResult.Stdout)
+	if err != nil {
+		return Observation{}, fmt.Errorf("observe linked worktree %s ignored files: %w", facts.Name, err)
 	}
 	return Observation{
 		Repository: facts.Name, CanonicalPath: facts.WorktreePath, CanonicalCommon: commonDir,
 		Branch: facts.Branch, Commit: registered.Head, LockReason: registered.LockReason,
-		Registered: true, Dirty: len(changed) != 0, ChangedPaths: changed,
+		Registered: true, Dirty: len(changed) != 0 || len(ignored) != 0,
+		ChangedPaths: changed, IgnoredPaths: ignored,
 		WorktreeIdentity: worktreeIdentity, StoreIdentity: store.Identity,
 	}, nil
+}
+
+func parseNULPaths(output []byte) ([]string, error) {
+	if len(output) == 0 {
+		return nil, nil
+	}
+	if output[len(output)-1] != 0 {
+		return nil, errors.New("ignored-file list is not NUL terminated")
+	}
+	fields := bytes.Split(output[:len(output)-1], []byte{0})
+	paths := make([]string, len(fields))
+	for index, field := range fields {
+		if len(field) == 0 {
+			return nil, errors.New("ignored-file list contains an empty path")
+		}
+		paths[index] = string(field)
+	}
+	slices.Sort(paths)
+	return slices.Compact(paths), nil
 }
 
 func ownerReason(boxID string) string { return "owned by Agent Box " + boxID }

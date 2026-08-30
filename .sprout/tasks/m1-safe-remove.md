@@ -82,6 +82,13 @@ Implement refusal-first Box removal
 - `make check` passed: pinned lint reported `0 issues`; module tidiness and
   verification, all unit and race tests, vet, Linux builds, spike smoke, shell
   checks, and Python automation tests passed.
+- `go test -race -count=10 ./internal/removal ./internal/worktree
+  ./internal/machinegit ./internal/publication` passed. The real-Git worktree
+  fixture proved a read-only removal observation reports tracked/untracked and
+  ignored files (including newline-bearing names) without adding or relocking a
+  worktree. The removal adapter test proved those paths and conservative
+  publication commit IDs enter the digest-bound coordinator inventory and that
+  default execution refuses before lease or remover calls.
 - The task remains open: these results prove the coordinator slice, not a live
   `abox rm` command or concrete Git/Lima/Compose teardown integration.
 
@@ -92,11 +99,15 @@ Implement refusal-first Box removal
   confirmation, fenced lease/quiescence hooks, per-resource immediate
   reobservation, fixed teardown stages, durable before/after transitions, and
   partial-progress results for convergent retries.
-- Next slice must implement concrete removal steps over the existing worktree,
-  publication, Compose, Lima, ownership, and state boundaries. It must include
-  ignored-file detection, wire daemon/CLI preview and execution without trusting
-  writable Box state, and exercise real Git plus disposable runtime resources
-  before any acceptance criterion can be checked.
+- Added a hardened `git ls-files --others --ignored --exclude-standard -z`
+  boundary, a mutation-free worktree observation API, and a worktree removal
+  adapter that combines registration, branch, common-directory, inode, dirty,
+  ignored-file, and trusted publication evidence into exact coordinator facts.
+- Next slice must implement the adapter's concrete ownership-proved,
+  interruption-safe Git remover, including the worktree-removed/branch-remains
+  retry state. Compose, Lima, private-store, generated-state, daemon, and CLI
+  integration plus disposable runtime teardown evidence remain required before
+  any acceptance criterion can be checked.
 
 ## Original request
 

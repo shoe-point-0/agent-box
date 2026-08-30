@@ -99,6 +99,13 @@ func (c Client) Status(ctx context.Context, repository string) (process.Result, 
 	return c.run(ctx, repository, noTransport, "status", "--porcelain=v2", "-z", "--untracked-files=all")
 }
 
+// IgnoredFiles enumerates every ignored file that a raw worktree directory
+// removal would discard. Unlike status, ls-files does not collapse ignored
+// directories, and -z preserves arbitrary path bytes other than NUL.
+func (c Client) IgnoredFiles(ctx context.Context, repository string) (process.Result, error) {
+	return c.run(ctx, repository, noTransport, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
+}
+
 // ResolveCommit resolves a validated ref to exactly one commit object.
 func (c Client) ResolveCommit(ctx context.Context, repository, ref string) (process.Result, error) {
 	if !validObjectName(ref, true) {
