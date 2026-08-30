@@ -137,8 +137,20 @@ Implement refusal-first Box removal
   issues`; module verification, all unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests passed. `go vet
   ./internal/gitstore ./internal/removal` and `git diff --check` also passed.
+- `go test -race -count=10 ./internal/generatedstate ./internal/removal` passed
+  after adding transient generated-state teardown. Disposable path-provider
+  fixtures proved exact inode-bound removal of context, Lima, Compose, empty
+  workspace/Git roots, and interrupted atomic-write remnants while retaining
+  the immutable Plan and diagnostics. Replacement inodes, nonempty resource
+  roots, and unrecognized Box-root entries were refused without touching their
+  contents; an injected post-delete interruption converged from a fresh
+  observation. `go vet ./internal/generatedstate ./internal/removal` and `git
+  diff --check` also passed.
+- `make check` passed after the generated-state slice: pinned lint reported `0
+  issues`; module verification, all unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests passed.
 - The task remains open: these results do not prove a live `abox rm` command or
-  generated-state and daemon integration.
+  daemon/lease integration.
 
 ## Outcome and follow-ups
 
@@ -173,10 +185,16 @@ Implement refusal-first Box removal
   revalidates the immutable Plan, persisted record, canonical Box containment,
   and live inode before consuming a typed path proof. Terminal absence is
   observable without replaying recursive deletion after an interruption.
-- Next slice must implement ownership-proved generated-state teardown while
-  retaining the durable records needed to diagnose partial cleanup. Daemon and
-  CLI integration plus full disposable Box teardown evidence remain required
-  before any acceptance criterion can be checked.
+- Added an ownership-proved generated-state step. Preview binds the persisted
+  Box-root inode, immutable retained Plan, and exact transient artifact set;
+  the leaf reobserves and consumes typed path proofs for only path-provider
+  artifacts and interrupted atomic-write remnants. It refuses nonempty or
+  unrecognized state and deliberately retains `plan.json` plus diagnostics so
+  daemon recovery can diagnose and finalize partial cleanup.
+- Next slice must wire removal through the daemon's durable lease, quiescence,
+  journal, and state boundaries before exposing CLI `abox rm`. Full disposable
+  Box teardown evidence remains required before any acceptance criterion can
+  be checked.
 
 ## Original request
 
