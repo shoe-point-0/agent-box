@@ -210,6 +210,18 @@ Implement refusal-first Box removal
   slice, including module verification, all unit and race tests, vet, Linux
   builds, spike smoke, shell checks, and Python automation tests. `go vet
   ./internal/removal` and `git diff --check` also passed.
+- `go test -race -count=10 ./internal/removal` passed after adding the
+  operation-runner boundary between daemon dispatch and the assembled removal
+  coordinator. The runner strictly decodes authorization, emits the complete
+  digest-bound preview before considering consent, refuses missing or stale
+  consent before lease acquisition, maps failures to stable redacted contract
+  codes, and emits explicit completed/remaining progress only after convergence.
+  Adversarial tests proved unknown/trailing input, missing ownership authority,
+  stale digests, and preview-journal failure cannot reach a remover.
+- `make check` passed for the operation-runner slice: pinned lint reported `0
+  issues`; module verification, all unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests passed. `sprout check
+  m1-safe-remove`, `sprout check --all`, and `git diff --check` also passed.
 - The task remains open: these results do not prove a live `abox rm` command or
   complete daemon removal integration.
 
@@ -274,14 +286,19 @@ Implement refusal-first Box removal
   The boundary fails closed before preview when the snapshot is missing or its
   Box, Plan, generation, repository, or configured path identity differs, and
   injects only daemon-incarnation capabilities that must never be persisted.
+- Added an operation runner that preserves the preview/authorization boundary
+  at daemon dispatch: callers must return the exact emitted digest with every
+  applicable grant, and malformed, stale, or unjournaled previews cannot enter
+  the removal lease lifecycle. Provider errors remain behind stable redacted
+  control-plane failures.
 - There is not yet a production successful-reconciliation path to attach this
   save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
-  mutation. The next slice should add the real `abox up` reconciliation
-  assembly and a terminal operation that saves this snapshot only after all
-  owned resources reconcile successfully. Then wire a remove daemon endpoint
-  to the new current-snapshot assembly and expose CLI `abox rm`. Full disposable
-  Box teardown evidence remains required before any acceptance criterion can be
-  checked.
+  mutation. The next removal slice should add the daemon remove route and client
+  transport around this runner, while `m1-single-repo-up` must add the real
+  reconciliation assembly and save this snapshot only after all owned resources
+  reconcile successfully. Production runtime-adapter construction, CLI `abox
+  rm`, and full disposable Box teardown evidence remain required before any
+  acceptance criterion can be checked.
 
 ## Original request
 
