@@ -83,10 +83,22 @@ Deliver the single-repository up vertical slice
   longer be proven.
 - `go vet ./internal/up`, `make lint` (`0 issues`), and `git diff --check`
   passed for the control-plane slice.
+- READY-state slice: `go test -race -count=20 ./internal/state` passed after
+  adding schema v4 and `Store.PublishReady`. The transaction commits the
+  immutable Plan/current generation, context path and digest, freshly observed
+  repository/worktree, Lima and Compose caches, and the complete removal
+  ownership snapshot together. Repeating an identical publication is a no-op;
+  attempts to rebind one generation are refused.
+- The READY-state suite injected a unique Git-store cache collision after the
+  generation insert point. SQLite rolled back the generation, repository, and
+  removal-authority rows and left the Box at generation zero in `planning`.
+- Post-slice `make check` passed: lint reported `0 issues`, module verification,
+  all unit and race tests, vet, builds, smoke, and automation tests were green.
 - This evidence does not yet satisfy the cold/warm Box acceptance criteria: the
   concrete Git, Plan, Lima, filesystem, Compose, context, READY-state, and
-  removal-snapshot operations are not yet assembled into `cmd/aboxd`, and no
-  runtime-host support claim is made.
+  removal-snapshot operations are not yet assembled into `cmd/aboxd`. The final
+  READY transaction now exists but is not wired to the filesystem readiness
+  gate, and no runtime-host support claim is made.
 
 ## Outcome and follow-ups
 
@@ -97,10 +109,18 @@ lease loss, and releases only a still-proven fence through cancellation-proof
 bounded cleanup. Errors cross the daemon boundary only as stable redacted
 contract codes.
 
-Next, assemble the concrete existing adapters as re-observing operations and
-add atomic current-generation/READY publication. Keep the packet open until the
-unchanged single-repository fixture passes through the real daemon and CLI,
-including detach and measured warm no-op assertions.
+The second coherent slice adds one atomic READY publication boundary. It
+retains context identity and complete removal ownership with the current Plan,
+updates only cached component observations, enforces monotonic generations,
+and supports exact warm retries without allowing immutable generation evidence
+to drift.
+
+Next, build the production attempt assembler that loads and resolves the
+manifest, materializes the Plan and repository, and feeds concrete Lima,
+filesystem, Compose, context, and READY operations into the existing fenced
+coordinator. Keep the packet open until the unchanged single-repository fixture
+passes through the real daemon and CLI, including detach and measured warm
+no-op assertions.
 
 ## Original request
 

@@ -62,19 +62,9 @@ type removalSnapshotDocument struct {
 // current retained Plan. A generation's authority is immutable: an identical
 // retry is accepted, but different ownership facts are refused.
 func (s *Store) SaveRemovalSnapshot(ctx context.Context, snapshot RemovalSnapshot) error {
-	normalized := cloneRemovalSnapshot(snapshot)
-	slices.SortFunc(normalized.Repositories, func(left, right RepositoryRemovalRecord) int {
-		return strings.Compare(left.Facts.Name, right.Facts.Name)
-	})
-	if err := validateRemovalSnapshot(normalized); err != nil {
-		return err
-	}
-	encoded, err := json.Marshal(removalSnapshotDocument{
-		SchemaVersion:   removalSnapshotSchemaVersion,
-		RemovalSnapshot: normalized,
-	})
+	normalized, encoded, err := prepareRemovalSnapshot(snapshot)
 	if err != nil {
-		return fmt.Errorf("encode removal ownership snapshot: %w", err)
+		return err
 	}
 
 	err = s.Update(ctx, func(tx *sql.Tx) error {
@@ -94,29 +84,49 @@ func (s *Store) SaveRemovalSnapshot(ctx context.Context, snapshot RemovalSnapsho
 		if generation != normalized.Generation || planDigest != string(normalized.PlanDigest) {
 			return errors.New("save removal ownership snapshot: current Plan differs")
 		}
-
-		var existing []byte
-		err = tx.QueryRowContext(ctx, `SELECT snapshot_json
-			FROM removal_ownership_snapshots WHERE box_id = ? AND generation = ?`,
-			normalized.BoxID, normalized.Generation).Scan(&existing)
-		if err == nil {
-			if bytes.Equal(existing, encoded) {
-				return nil
-			}
-			return errors.New("save removal ownership snapshot: generation ownership is immutable")
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("query removal ownership snapshot: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO removal_ownership_snapshots
-			(box_id, generation, plan_digest, snapshot_json) VALUES (?, ?, ?, ?)`,
-			normalized.BoxID, normalized.Generation, normalized.PlanDigest, string(encoded)); err != nil {
-			return fmt.Errorf("insert removal ownership snapshot: %w", err)
-		}
-		return nil
+		return saveRemovalSnapshotTx(ctx, tx, normalized, encoded)
 	})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func prepareRemovalSnapshot(snapshot RemovalSnapshot) (RemovalSnapshot, []byte, error) {
+	normalized := cloneRemovalSnapshot(snapshot)
+	slices.SortFunc(normalized.Repositories, func(left, right RepositoryRemovalRecord) int {
+		return strings.Compare(left.Facts.Name, right.Facts.Name)
+	})
+	if err := validateRemovalSnapshot(normalized); err != nil {
+		return RemovalSnapshot{}, nil, err
+	}
+	encoded, err := json.Marshal(removalSnapshotDocument{
+		SchemaVersion: removalSnapshotSchemaVersion, RemovalSnapshot: normalized,
+	})
+	if err != nil {
+		return RemovalSnapshot{}, nil, fmt.Errorf("encode removal ownership snapshot: %w", err)
+	}
+	return normalized, encoded, nil
+}
+
+func saveRemovalSnapshotTx(ctx context.Context, tx *sql.Tx, snapshot RemovalSnapshot, encoded []byte) error {
+	var existing []byte
+	err := tx.QueryRowContext(ctx, `SELECT snapshot_json
+		FROM removal_ownership_snapshots WHERE box_id = ? AND generation = ?`,
+		snapshot.BoxID, snapshot.Generation).Scan(&existing)
+	if err == nil {
+		if bytes.Equal(existing, encoded) {
+			return nil
+		}
+		return errors.New("save removal ownership snapshot: generation ownership is immutable")
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("query removal ownership snapshot: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO removal_ownership_snapshots
+		(box_id, generation, plan_digest, snapshot_json) VALUES (?, ?, ?, ?)`,
+		snapshot.BoxID, snapshot.Generation, snapshot.PlanDigest, string(encoded)); err != nil {
+		return fmt.Errorf("insert removal ownership snapshot: %w", err)
 	}
 	return nil
 }
