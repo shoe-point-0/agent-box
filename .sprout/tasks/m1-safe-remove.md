@@ -198,6 +198,18 @@ Implement refusal-first Box removal
 - `make lint` passed with `0 issues`; `make check`, `sprout check
   m1-safe-remove`, `sprout check --all`, and `git diff --check` passed for the
   reconstruction-complete snapshot slice.
+- `go test -race -count=10 ./internal/removal` passed after adding the
+  current-generation removal assembly. The assembly loads only the selected
+  Box's validated snapshot, rejects missing authority plus operation, Plan,
+  generation, repository-order, and configured-root drift, and reconstructs
+  the fixed Compose, Lima, worktree, private-store, and generated-state order
+  with the daemon incarnation's journal lease, writer gate, and event recorder.
+  Assembly tests use inert adapters and prove that construction itself performs
+  no external observation, lease acquisition, or mutation.
+- `make lint` passed with `0 issues`; `make check` passed after the assembly
+  slice, including module verification, all unit and race tests, vet, Linux
+  builds, spike smoke, shell checks, and Python automation tests. `go vet
+  ./internal/removal` and `git diff --check` also passed.
 - The task remains open: these results do not prove a live `abox rm` command or
   complete daemon removal integration.
 
@@ -257,13 +269,19 @@ Implement refusal-first Box removal
   the selected database row. The snapshot also retains the full immutable Lima
   and Compose specifications required to reconstruct destructive adapters after
   daemon restart rather than depending on process-local reconciliation values.
+- Added the restart-safe assembly boundary that consumes the current persisted
+  authority and reconstructs every concrete removal step in dependency order.
+  The boundary fails closed before preview when the snapshot is missing or its
+  Box, Plan, generation, repository, or configured path identity differs, and
+  injects only daemon-incarnation capabilities that must never be persisted.
 - There is not yet a production successful-reconciliation path to attach this
   save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
-  mutation. The next slice should add the snapshot-producing terminal operation
-  to the real `abox up` reconciliation assembly as that path is introduced,
-  then load the retained Plan plus snapshot to assemble the concrete removal
-  coordinator. After that, expose CLI `abox rm`. Full disposable Box teardown
-  evidence remains required before any acceptance criterion can be checked.
+  mutation. The next slice should add the real `abox up` reconciliation
+  assembly and a terminal operation that saves this snapshot only after all
+  owned resources reconcile successfully. Then wire a remove daemon endpoint
+  to the new current-snapshot assembly and expose CLI `abox rm`. Full disposable
+  Box teardown evidence remains required before any acceptance criterion can be
+  checked.
 
 ## Original request
 
