@@ -123,7 +123,11 @@ func Compile(ctx context.Context, input Input) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("inspect Compose root: %w", err)
 	}
-	override, err := renderOverride(input.Plan, input.Generation, services)
+	volumes, err := resourceNames(baseline, "volumes")
+	if err != nil {
+		return Result{}, fmt.Errorf("inspect Compose root volumes: %w", err)
+	}
+	override, err := renderOverride(input.Plan, input.Generation, services, volumes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -214,7 +218,7 @@ func renderRoot(compiled contract.Plan) ([]byte, error) {
 	return []byte(output.String()), nil
 }
 
-func renderOverride(compiled contract.Plan, generation int64, services []string) ([]byte, error) {
+func renderOverride(compiled contract.Plan, generation int64, services, volumes []string) ([]byte, error) {
 	known := make(map[string]struct{}, len(services))
 	for _, service := range services {
 		known[service] = struct{}{}
@@ -269,6 +273,15 @@ func renderOverride(compiled contract.Plan, generation int64, services []string)
 	output.WriteString(strconv.FormatBool(compiled.Policy.NetworkEgress == "deny"))
 	output.WriteString("\n    labels:\n")
 	writeLabels(&output, "      ", labels)
+	if len(volumes) > 0 {
+		output.WriteString("volumes:\n")
+		for _, volume := range volumes {
+			output.WriteString("  ")
+			output.WriteString(yamlString(volume))
+			output.WriteString(":\n    labels:\n")
+			writeLabels(&output, "      ", labels)
+		}
+	}
 	return []byte(output.String()), nil
 }
 
@@ -324,6 +337,30 @@ func serviceNames(model []byte) ([]string, error) {
 	}
 	slices.Sort(services)
 	return services, nil
+}
+
+func resourceNames(model []byte, field string) ([]string, error) {
+	var document map[string]json.RawMessage
+	if err := decodeJSON(model, &document); err != nil {
+		return nil, err
+	}
+	value, ok := document[field]
+	if !ok {
+		return nil, nil
+	}
+	var resources map[string]json.RawMessage
+	if err := decodeJSON(value, &resources); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(resources))
+	for name := range resources {
+		if name == "" || strings.ContainsAny(name, "\x00\r\n") {
+			return nil, fmt.Errorf("normalized model contains an invalid %s name", field)
+		}
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names, nil
 }
 
 func validateAndCanonicalize(model []byte, compiled contract.Plan, generation int64, services []string, secrets []Secret) ([]byte, error) {

@@ -16,6 +16,11 @@ var ErrNotOwned = errors.New("ownership proof refused")
 // on labeled or metadata-bearing external resources.
 const BoxIDFact = "dev.abox.box-id"
 
+// ComposeBoxIDFact is the Box identity label required by the versioned
+// Compose contract. Lima metadata uses BoxIDFact; Docker resources use this
+// label because it is the name projected by the generated Compose override.
+const ComposeBoxIDFact = "dev.abox.box"
+
 // ProofError identifies the resource class and fact that failed without
 // including potentially sensitive observed values.
 type ProofError struct {
@@ -60,7 +65,7 @@ func ProveLimaInstance(recorded LimaInstanceRecord, live LimaInstanceObservation
 	if !validOpaque(recorded.Name) || recorded.Name != live.Name {
 		return LimaInstanceProof{}, refuse("lima instance", "recorded and live names differ")
 	}
-	if err := verifyBoxFacts("lima instance", "embedded metadata", recorded.Metadata, live.Metadata); err != nil {
+	if err := verifyBoxFacts("lima instance", "embedded metadata", BoxIDFact, recorded.Metadata, live.Metadata); err != nil {
 		return LimaInstanceProof{}, err
 	}
 	return LimaInstanceProof{name: recorded.Name}, nil
@@ -99,7 +104,7 @@ func ProveComposeResource(recorded ComposeResourceRecord, live ComposeResourceOb
 	if !validOpaque(recorded.ID) || recorded.ID != live.ID {
 		return ComposeResourceProof{}, refuse("compose resource", "opaque IDs differ")
 	}
-	if err := verifyBoxFacts("compose resource", "ownership labels", recorded.Labels, live.Labels); err != nil {
+	if err := verifyBoxFacts("compose resource", "ownership labels", ComposeBoxIDFact, recorded.Labels, live.Labels); err != nil {
 		return ComposeResourceProof{}, err
 	}
 	return ComposeResourceProof{kind: recorded.Kind, id: recorded.ID}, nil
@@ -128,7 +133,7 @@ func ProveVolume(recorded VolumeRecord, live VolumeObservation) (VolumeProof, er
 	if !validOpaque(recorded.ID) || recorded.ID != live.ID {
 		return VolumeProof{}, refuse("volume", "opaque IDs differ")
 	}
-	if err := verifyBoxFacts("volume", "ownership labels", recorded.Labels, live.Labels); err != nil {
+	if err := verifyBoxFacts("volume", "ownership labels", ComposeBoxIDFact, recorded.Labels, live.Labels); err != nil {
 		return VolumeProof{}, err
 	}
 	return VolumeProof{id: recorded.ID}, nil
@@ -184,8 +189,8 @@ func ProveListener(recorded ListenerRecord, live ListenerObservation) (ListenerP
 	}, nil
 }
 
-func verifyBoxFacts(resource, fact string, recorded, live map[string]string) error {
-	if !validOpaque(recorded[BoxIDFact]) {
+func verifyBoxFacts(resource, fact, boxIDFact string, recorded, live map[string]string) error {
+	if !validOpaque(recorded[boxIDFact]) {
 		return refuse(resource, fact+" lack the Agent Box identity")
 	}
 	for key, expected := range recorded {

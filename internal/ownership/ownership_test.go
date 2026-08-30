@@ -116,7 +116,7 @@ func TestGitWorktreeProofRequiresPathRegistrationAndLock(t *testing.T) {
 func TestRuntimeProofsRequireOpaqueIdentityAndIndependentFacts(t *testing.T) {
 	t.Parallel()
 
-	labels := map[string]string{ownership.BoxIDFact: "task-a1b2c3d4", "dev.abox.workspace-id": "ws_a1b2c3d4"}
+	labels := map[string]string{ownership.ComposeBoxIDFact: "task-a1b2c3d4", "dev.abox.workspace-id": "ws_a1b2c3d4"}
 	composeRecord := ownership.ComposeResourceRecord{Kind: "container", ID: "sha256:opaque", Labels: labels}
 	composeLive := ownership.ComposeResourceObservation{Kind: "container", ID: "sha256:opaque", Labels: labels}
 	composeProof, err := ownership.ProveComposeResource(composeRecord, composeLive)
@@ -127,10 +127,10 @@ func TestRuntimeProofsRequireOpaqueIdentityAndIndependentFacts(t *testing.T) {
 	for name, mutate := range map[string]func(*ownership.ComposeResourceObservation){
 		"stale ID": func(live *ownership.ComposeResourceObservation) { live.ID = "sha256:replacement" },
 		"forged label": func(live *ownership.ComposeResourceObservation) {
-			live.Labels = map[string]string{ownership.BoxIDFact: "task-a1b2c3d4", "dev.abox.workspace-id": "ws_other234"}
+			live.Labels = map[string]string{ownership.ComposeBoxIDFact: "task-a1b2c3d4", "dev.abox.workspace-id": "ws_other234"}
 		},
 		"missing label": func(live *ownership.ComposeResourceObservation) {
-			live.Labels = map[string]string{ownership.BoxIDFact: "task-a1b2c3d4"}
+			live.Labels = map[string]string{ownership.ComposeBoxIDFact: "task-a1b2c3d4"}
 		},
 		"forged kind": func(live *ownership.ComposeResourceObservation) { live.Kind = "network" },
 	} {
@@ -148,7 +148,7 @@ func TestRuntimeProofsRequireOpaqueIdentityAndIndependentFacts(t *testing.T) {
 		t.Fatalf("ProveVolume() = %#v, %v", volumeProof, err)
 	}
 	_, err = ownership.ProveVolume(volumeRecord, ownership.VolumeObservation{
-		ID: volumeRecord.ID, Labels: map[string]string{ownership.BoxIDFact: "forged"},
+		ID: volumeRecord.ID, Labels: map[string]string{ownership.ComposeBoxIDFact: "forged"},
 	})
 	assertRefused(t, err)
 	_, err = ownership.ProveVolume(volumeRecord, ownership.VolumeObservation{
@@ -255,8 +255,8 @@ func TestProofErrorsAreInspectableAndZeroProofsAuthorizeNothing(t *testing.T) {
 	t.Parallel()
 
 	_, err := ownership.ProveVolume(
-		ownership.VolumeRecord{ID: "recorded", Labels: map[string]string{ownership.BoxIDFact: "box"}},
-		ownership.VolumeObservation{ID: "live", Labels: map[string]string{ownership.BoxIDFact: "box"}},
+		ownership.VolumeRecord{ID: "recorded", Labels: map[string]string{ownership.ComposeBoxIDFact: "box"}},
+		ownership.VolumeObservation{ID: "live", Labels: map[string]string{ownership.ComposeBoxIDFact: "box"}},
 	)
 	if !errors.Is(err, ownership.ErrNotOwned) {
 		t.Fatalf("error = %v, want ErrNotOwned", err)
