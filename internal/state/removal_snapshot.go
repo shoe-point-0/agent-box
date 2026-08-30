@@ -26,7 +26,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 )
 
-const removalSnapshotSchemaVersion = "abox.removal-ownership/v1alpha2"
+const removalSnapshotSchemaVersion = "abox.removal-ownership/v1alpha3"
 
 // RepositoryRemovalRecord retains the trusted repository intent and private
 // store identity required to reconstruct worktree and private-store steps.
@@ -44,6 +44,7 @@ type RemovalSnapshot struct {
 	PlanDigest          contract.Digest
 	BoxRoot             generatedstate.Record
 	Repositories        []RepositoryRemovalRecord
+	LimaArtifact        toolchain.Identity
 	LimaSpec            lima.Spec
 	Lima                ownership.LimaInstanceRecord
 	ComposeSpec         compose.RuntimeSpec
@@ -241,13 +242,13 @@ func validComposeRemovalLabels(labels map[string]string, boxID, project, planDig
 
 func validateLimaRemovalSpec(snapshot RemovalSnapshot) error {
 	spec := snapshot.LimaSpec
-	if spec.BoxID != snapshot.BoxID || spec.RuntimeHost.InstanceName != snapshot.BoxID ||
+	if !validToolchainIdentity(snapshot.LimaArtifact, toolchain.Lima) || snapshot.LimaArtifact.Version != lima.SupportedVersion ||
+		spec.BoxID != snapshot.BoxID || spec.RuntimeHost.InstanceName != snapshot.BoxID ||
 		spec.PlanDigest != snapshot.PlanDigest || spec.Generation != snapshot.Generation ||
 		!reflect.DeepEqual(spec.RuntimeHost, snapshot.ComposeSpec.Plan.RuntimeHost) ||
 		!reflect.DeepEqual(spec.Mounts, snapshot.ComposeSpec.Plan.Mounts) ||
 		!reflect.DeepEqual(spec.PathEvidence, snapshot.LimaPathEvidence) ||
-		spec.GuestImage.Component != toolchain.GuestImage || invalidFact(spec.GuestImage.Version) ||
-		invalidFact(string(spec.GuestImage.Digest)) || !cleanAbsolutePath(spec.ImagePath) {
+		!validToolchainIdentity(spec.GuestImage, toolchain.GuestImage) || !cleanAbsolutePath(spec.ImagePath) {
 		return errors.New("save removal ownership snapshot: Lima removal specification is incomplete")
 	}
 	return nil
@@ -274,6 +275,13 @@ func validateComposeRemovalSpec(snapshot RemovalSnapshot) error {
 
 func cleanAbsolutePath(path string) bool {
 	return filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsRune(path, '\x00')
+}
+
+func validToolchainIdentity(identity toolchain.Identity, component toolchain.Component) bool {
+	digest := string(identity.Digest)
+	return identity.Component == component && identity.Name == "" && !invalidFact(identity.Version) &&
+		len(digest) == len("sha256:")+sha256.Size*2 && strings.HasPrefix(digest, "sha256:") &&
+		strings.Trim(digest[len("sha256:"):], "0123456789abcdef") == ""
 }
 
 func validPathRecord(record ownership.PathRecord) bool {

@@ -14,6 +14,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/publication"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
 
@@ -36,17 +37,18 @@ type MachineGit interface {
 // AssemblyConfig contains daemon-incarnation dependencies that are deliberately
 // excluded from the persisted ownership snapshot.
 type AssemblyConfig struct {
-	Snapshots   SnapshotStore
-	Journal     LeaseJournal
-	Operation   journal.Operation
-	Owner       journal.Owner
-	Quiescer    Quiescer
-	Paths       *paths.Provider
-	MachineGit  MachineGit
-	Lima        LimaRuntime
-	Compose     ComposeRuntime
-	AppendEvent AppendEventFunc
-	Now         func() time.Time
+	Snapshots    SnapshotStore
+	Journal      LeaseJournal
+	Operation    journal.Operation
+	Owner        journal.Owner
+	Quiescer     Quiescer
+	Paths        *paths.Provider
+	MachineGit   MachineGit
+	LimaArtifact toolchain.Identity
+	Lima         LimaRuntime
+	Compose      ComposeRuntime
+	AppendEvent  AppendEventFunc
+	Now          func() time.Time
 }
 
 // AssembleCurrent reconstructs a complete removal coordinator only from the
@@ -70,6 +72,9 @@ func AssembleCurrent(ctx context.Context, config AssemblyConfig) (*Coordinator, 
 	}
 	if !found {
 		return nil, fmt.Errorf("assemble Box removal: %w", ErrRemovalSnapshotAbsent)
+	}
+	if snapshot.LimaArtifact != config.LimaArtifact {
+		return nil, errors.New("assemble Box removal: verified Lima artifact differs from ownership snapshot")
 	}
 	if err := validateAssemblyIdentity(snapshot, config.Operation); err != nil {
 		return nil, err

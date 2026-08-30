@@ -18,15 +18,19 @@ import (
 
 	"github.com/shoe-point-0/agent-box/internal/boxlist"
 	"github.com/shoe-point-0/agent-box/internal/boxplan"
+	"github.com/shoe-point-0/agent-box/internal/compose"
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/journal"
+	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/process"
+	"github.com/shoe-point-0/agent-box/internal/removal"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/version"
 )
 
@@ -99,7 +103,13 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "aboxd: configure Machine Git profile: %v\n", err)
 		return contract.ExitInfrastructure
 	}
+	owner, err := journal.CurrentOwner()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "aboxd: create daemon owner: %v\n", err)
+		return contract.ExitInfrastructure
+	}
 	writers := daemon.NewWriterGate()
+	removeRunner := newProductionRemovalRunner(store, operationJournal, writers, pathProvider, gitClient, owner, applicationRoot)
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
@@ -121,7 +131,10 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 				TaskKey: request.TaskKey, ManifestPath: request.ManifestPath,
 			})
 		},
-		Run: func(context.Context, journal.Operation, json.RawMessage, daemon.Emit) *contract.Failure {
+		Run: func(ctx context.Context, operation journal.Operation, input json.RawMessage, emit daemon.Emit) *contract.Failure {
+			if operation.Kind == "remove" {
+				return removeRunner.Run(ctx, operation, input, removal.OperationEmit(emit))
+			}
 			return &contract.Failure{Code: contract.CodeFeatureNotSupported}
 		},
 	})
@@ -142,6 +155,74 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		return contract.ExitInfrastructure
 	}
 	return contract.ExitOK
+}
+
+func newProductionRemovalRunner(
+	store *state.Store,
+	operationJournal *journal.Journal,
+	writers *daemon.WriterGate,
+	pathProvider *paths.Provider,
+	gitClient machinegit.Client,
+	owner journal.Owner,
+	applicationRoot string,
+) removal.OperationRunner {
+	return removal.OperationRunner{Assemble: func(ctx context.Context, operation journal.Operation) (*removal.Coordinator, error) {
+		snapshot, found, err := store.CurrentRemovalSnapshot(ctx, operation.BoxID)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("assemble production Box removal: %w", removal.ErrRemovalSnapshotAbsent)
+		}
+
+		limaPath, err := exec.LookPath("limactl")
+		if err != nil {
+			return nil, fmt.Errorf("assemble production Box removal: locate Lima: %w", err)
+		}
+		limaPath, err = filepath.Abs(limaPath)
+		if err != nil {
+			return nil, fmt.Errorf("assemble production Box removal: canonicalize Lima path: %w", err)
+		}
+		provider, err := toolchain.NewPreinstalledProvider([]toolchain.Entry{{
+			Component: toolchain.Lima,
+			Candidate: toolchain.Candidate{Identity: snapshot.LimaArtifact, Path: limaPath},
+		}})
+		if err != nil {
+			return nil, err
+		}
+		artifact, err := toolchain.VerifyArtifact(ctx, snapshot.LimaArtifact, provider)
+		if err != nil {
+			return nil, err
+		}
+		environment := map[string]string{
+			"PATH": os.Getenv("PATH"), "HOME": applicationRoot, "LANG": "C", "LC_ALL": "C", "TZ": "UTC",
+		}
+		limaRuntime, err := lima.NewAdapter(artifact, process.Runner{}, applicationRoot, environment)
+		if err != nil {
+			return nil, err
+		}
+		composeRuntime, err := compose.NewRuntime(limaRuntime)
+		if err != nil {
+			return nil, err
+		}
+		gitPath, err := exec.LookPath("git")
+		if err != nil {
+			return nil, fmt.Errorf("assemble production Box removal: locate Git: %w", err)
+		}
+		gitClient.GitPath, err = filepath.Abs(gitPath)
+		if err != nil {
+			return nil, fmt.Errorf("assemble production Box removal: canonicalize Git path: %w", err)
+		}
+		return removal.AssembleCurrent(ctx, removal.AssemblyConfig{
+			Snapshots: store, Journal: operationJournal, Operation: operation, Owner: owner,
+			Quiescer: writers, Paths: pathProvider, MachineGit: gitClient,
+			LimaArtifact: snapshot.LimaArtifact, Lima: limaRuntime, Compose: composeRuntime,
+			AppendEvent: func(ctx context.Context, operationID, kind string, details json.RawMessage, occurredAt time.Time) error {
+				_, err := operationJournal.AppendEvent(ctx, operationID, kind, details, occurredAt)
+				return err
+			},
+		})
+	}}
 }
 
 func runtimeDriver() string {

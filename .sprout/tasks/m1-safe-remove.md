@@ -246,8 +246,23 @@ Implement refusal-first Box removal
   slice. The full gate reported `0 issues` and passed module verification, all
   unit and race tests, vet, Linux builds, spike smoke, shell checks, and Python
   automation tests.
+- `go test -race -count=10 ./cmd/aboxd ./internal/state ./internal/removal
+  ./internal/toolchain` passed after wiring production daemon dispatch. The
+  daemon now routes `remove` into `removal.OperationRunner`, reconstructs the
+  concrete Lima and Compose adapters lazily, and verifies the exact persisted
+  Lima executable identity and SHA-256 digest before constructing either
+  adapter. A real Unix-socket daemon test proved missing ownership authority
+  returns `ABOX_OWNERSHIP_CONFLICT` rather than the former feature-not-supported
+  response; focused tests also proved invalid artifact identity is rejected
+  before provider resolution and snapshot/artifact drift is rejected during
+  assembly.
+- `make check`, `sprout check m1-safe-remove`, `sprout check --all`, and `git
+  diff --check` passed for the production-dispatch slice. Pinned lint reported
+  `0 issues`; module verification, unit and race tests, vet, Linux builds, spike
+  smoke, shell checks, and Python automation tests all passed. `limactl` remains
+  unavailable on this Linux lane, so no live Lima teardown is claimed.
 - The task remains open: these results prove the CLI/transport contract but not
-  production `aboxd` removal assembly or a disposable full-Box teardown.
+  a disposable full-Box teardown through persisted production ownership.
 
 ## Outcome and follow-ups
 
@@ -319,17 +334,26 @@ Implement refusal-first Box removal
   durable operation stream as reconciliation. The route records operations as
   `remove`, so daemon execution bypasses ordinary writer admission and leaves
   lease/quiescence ownership with the removal coordinator.
+- Wired production `aboxd` dispatch to the operation runner and concrete
+  adapters. Removal ownership schema v1alpha3 now persists the immutable Lima
+  executable identity that authorized creation; daemon restart resolves the
+  local candidate, verifies its exact digest through `internal/toolchain`, and
+  binds that same identity to the assembly snapshot before any preview command.
+  Compose executes only through that verified Lima adapter. Missing authority
+  fails before executable lookup, preserving refusal behavior on clean daemon
+  installations without Lima.
 - There is not yet a production successful-reconciliation path to attach this
-  save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
-  mutation. `m1-single-repo-up` must add the real reconciliation assembly and
+  save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for non-removal
+  mutations. `m1-single-repo-up` must add the real reconciliation assembly and
   save this snapshot only after all owned resources reconcile successfully.
   `abox rm` now performs a mandatory preview operation, renders exact losses,
   then starts a distinct digest-authorized operation only when `--yes` is
   present; dirty-worktree, unpublished-commit, and volume loss each retain a
-  separate flag. The next removal slice must construct production Lima and
-  Compose adapters from verified daemon toolchain authority and dispatch
-  `remove` from `cmd/aboxd` into `OperationRunner`. Full disposable Box teardown
-  evidence remains required before any acceptance criterion can be checked.
+  separate flag. Full disposable Box teardown evidence through the production
+  ownership snapshot remains required before any acceptance criterion can be
+  checked; that fixture must prove refusal, exact selected-Box loss, drift, and
+  interrupted retry through one assembled operation rather than inferring the
+  result from the already-passing leaf tests.
 
 ## Original request
 

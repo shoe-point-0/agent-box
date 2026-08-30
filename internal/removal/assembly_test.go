@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/toolchain"
 )
 
 func TestAssembleCurrentReconstructsDependencyOrderedCoordinator(t *testing.T) {
@@ -75,6 +77,9 @@ func TestAssembleCurrentRejectsOperationAndPathDrift(t *testing.T) {
 		}},
 		{name: "configured root", mutate: func(_ *AssemblyConfig, snapshot *state.RemovalSnapshot) {
 			snapshot.BoxRoot.Root.CanonicalPath = filepath.Join(provider.BoxesRoot(), "task-1-abcdefgh")
+		}},
+		{name: "verified Lima artifact", mutate: func(config *AssemblyConfig, _ *state.RemovalSnapshot) {
+			config.LimaArtifact.Digest = contract.Digest("sha256:" + strings.Repeat("b", 64))
 		}},
 	}
 	for _, test := range tests {
@@ -144,6 +149,10 @@ func testAssemblySnapshot(t *testing.T, provider *paths.Provider) state.RemovalS
 				PublishDestination: facts.PublishDestination,
 			},
 		}},
+		LimaArtifact: toolchain.Identity{
+			Component: toolchain.Lima, Version: lima.SupportedVersion,
+			Digest: contract.Digest("sha256:" + strings.Repeat("a", 64)),
+		},
 		LimaSpec: limaSpec,
 		Lima: ownership.LimaInstanceRecord{
 			Name: "auth-142-itjwb74g", Metadata: map[string]string{"dev.abox.box-id": "auth-142-itjwb74g"},
@@ -163,11 +172,12 @@ func testAssemblyConfig(provider *paths.Provider, snapshot state.RemovalSnapshot
 		Owner: journal.Owner{
 			InstanceID: "daemon-a", ProcessStartID: "process-a", BootID: "boot-a",
 		},
-		Quiescer:   quiescerStub{},
-		Paths:      provider,
-		MachineGit: machinegit.Client{},
-		Lima:       limaRuntimeStub{},
-		Compose:    composeRuntimeStub{},
+		Quiescer:     quiescerStub{},
+		Paths:        provider,
+		MachineGit:   machinegit.Client{},
+		LimaArtifact: snapshot.LimaArtifact,
+		Lima:         limaRuntimeStub{},
+		Compose:      composeRuntimeStub{},
 		AppendEvent: func(context.Context, string, string, json.RawMessage, time.Time) error {
 			return nil
 		},

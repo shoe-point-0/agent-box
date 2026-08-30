@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
@@ -80,6 +81,32 @@ func TestArtifactRunRechecksDigestBeforeExecution(t *testing.T) {
 	assertPrerequisite(t, err, toolchain.DigestMismatch)
 	if runner.calls != 1 {
 		t.Fatalf("runner calls after digest mismatch = %d, want 1", runner.calls)
+	}
+}
+
+func TestVerifyArtifactUsesTheSameFailClosedContract(t *testing.T) {
+	specification, entries := toolchaintest.Fixture(t)
+	provider, err := toolchain.NewPreinstalledProvider(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := toolchain.VerifyArtifact(t.Context(), specification.Lima, provider)
+	if err != nil || artifact.Identity() != specification.Lima {
+		t.Fatalf("VerifyArtifact() = %#v, %v", artifact.Identity(), err)
+	}
+
+	changed := specification.Lima
+	changed.Digest = contract.Digest("sha256:" + strings.Repeat("c", 64))
+	if _, err := toolchain.VerifyArtifact(t.Context(), changed, provider); err == nil {
+		t.Fatal("VerifyArtifact() accepted identity drift")
+	}
+	counting := &countingProvider{}
+	invalid := specification.Lima
+	invalid.Digest = "invalid"
+	_, err = toolchain.VerifyArtifact(t.Context(), invalid, counting)
+	assertPrerequisite(t, err, toolchain.InvalidSpecification)
+	if counting.calls != 0 {
+		t.Fatalf("provider calls = %d, want 0", counting.calls)
 	}
 }
 

@@ -90,6 +90,7 @@ func TestRemovalSnapshotRejectsRuntimeSpecificationsThatCannotBeReconstructed(t 
 		name   string
 		mutate func(*RemovalSnapshot)
 	}{
+		{name: "Lima executable", mutate: func(snapshot *RemovalSnapshot) { snapshot.LimaArtifact.Version = "2.0.1" }},
 		{name: "Lima generation", mutate: func(snapshot *RemovalSnapshot) { snapshot.LimaSpec.Generation++ }},
 		{name: "Lima path evidence", mutate: func(snapshot *RemovalSnapshot) { snapshot.LimaSpec.PathEvidence.Paths = nil }},
 		{name: "Compose Plan", mutate: func(snapshot *RemovalSnapshot) { snapshot.ComposeSpec.Plan.BoxID = "other-box" }},
@@ -192,6 +193,10 @@ func testRemovalSnapshot() RemovalSnapshot {
 			Facts: facts,
 			Store: gitstore.Record{Repository: facts.Name, GitCommonDir: facts.GitStorePath, Identity: ownership.FileIdentity{Device: 7, Inode: 20}, BaseCommit: facts.BaseCommit, PublishDestination: destination},
 		}},
+		LimaArtifact: toolchain.Identity{
+			Component: toolchain.Lima, Version: lima.SupportedVersion,
+			Digest: contract.Digest("sha256:" + strings.Repeat("a", 64)),
+		},
 		LimaSpec: limaSpec,
 		Lima: ownership.LimaInstanceRecord{Name: boxID, Metadata: map[string]string{
 			ownership.BoxIDFact: boxID, "dev.abox.plan-digest": string(planDigest), "dev.abox.generation": "1",

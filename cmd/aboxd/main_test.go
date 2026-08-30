@@ -14,6 +14,12 @@ import (
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
+	"github.com/shoe-point-0/agent-box/internal/daemonclient"
+	"github.com/shoe-point-0/agent-box/internal/identity"
+	"github.com/shoe-point-0/agent-box/internal/journal"
+	"github.com/shoe-point-0/agent-box/internal/machinegit"
+	"github.com/shoe-point-0/agent-box/internal/paths"
+	"github.com/shoe-point-0/agent-box/internal/state"
 )
 
 func TestRunReportsVersion(t *testing.T) {
@@ -81,6 +87,29 @@ func TestRunServesHandshakeAndShutsDown(t *testing.T) {
 	if response.StatusCode != http.StatusOK || handshake.APIVersion != contract.DaemonAPIVersion {
 		t.Fatalf("handshake status/version = %d/%q", response.StatusCode, handshake.APIVersion)
 	}
+	manifestPath := filepath.Join(root, "workspace", ".abox", "box.yaml")
+	workspaceID, err := identity.Workspace(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boxID, err := identity.Box(workspaceID, "TASK-REMOVE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	daemonClient, err := daemonclient.New(socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure, err := daemonClient.Remove(t.Context(), daemon.MutationRequest{
+		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-REMOVE",
+		ManifestPath: manifestPath, ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
+	}, "production-remove-missing-authority", func(daemonclient.Event) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failure == nil || failure.Code != contract.CodeOwnershipConflict {
+		t.Fatalf("production remove failure = %#v, want ownership conflict", failure)
+	}
 
 	cancel()
 	select {
@@ -93,6 +122,33 @@ func TestRunServesHandshakeAndShutsDown(t *testing.T) {
 	}
 	if stdout.Len() != 0 || stderr.Len() != 0 {
 		t.Fatalf("daemon output stdout/stderr = %q/%q, want empty", stdout.String(), stderr.String())
+	}
+}
+
+func TestProductionRemovalDispatchFailsClosedWithoutOwnershipAuthority(t *testing.T) {
+	root := t.TempDir()
+	store, err := state.Open(t.Context(), filepath.Join(root, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	operationJournal, err := journal.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathProvider, err := paths.New(root, filepath.Join(root, "cache"), filepath.Join(root, "logs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := newProductionRemovalRunner(
+		store, operationJournal, daemon.NewWriterGate(), pathProvider, machinegit.Client{},
+		journal.Owner{InstanceID: "daemon-test", ProcessStartID: "process-test", BootID: "boot-test"}, root,
+	)
+	failure := runner.Run(t.Context(), journal.Operation{
+		ID: "operation-remove", BoxID: "box-missing", Kind: "remove", State: journal.StateRunning,
+	}, nil, func(string, any) error { return nil })
+	if failure == nil || failure.Code != contract.CodeOwnershipConflict {
+		t.Fatalf("production removal failure = %#v, want ownership conflict", failure)
 	}
 }
 

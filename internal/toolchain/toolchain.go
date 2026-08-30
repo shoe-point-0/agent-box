@@ -310,6 +310,33 @@ func Verify(ctx context.Context, specification Specification, provider Provider)
 	}, nil
 }
 
+// VerifyArtifact resolves and verifies one immutable artifact without requiring
+// callers that need a single component to fabricate a complete Toolchain. The
+// returned Artifact retains the same digest recheck before every execution as
+// artifacts returned by Verify.
+func VerifyArtifact(ctx context.Context, expected Identity, provider Provider) (Artifact, error) {
+	if provider == nil {
+		return Artifact{}, prerequisite(expected, InvalidSpecification, errors.New("provider is nil"))
+	}
+	if err := expected.validate(); err != nil {
+		return Artifact{}, prerequisite(expected, InvalidSpecification, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return Artifact{}, err
+	}
+	candidate, err := provider.Resolve(ctx, expected)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Artifact{}, ctxErr
+		}
+		return Artifact{}, prerequisite(expected, MissingArtifact, err)
+	}
+	if candidate.Identity != expected {
+		return Artifact{}, prerequisite(expected, IdentityMismatch, errors.New("provider returned a different immutable identity"))
+	}
+	return verifyCandidate(ctx, candidate)
+}
+
 func verifyCandidate(ctx context.Context, candidate Candidate) (Artifact, error) {
 	if !filepath.IsAbs(candidate.Path) || filepath.Clean(candidate.Path) != candidate.Path || strings.IndexByte(candidate.Path, 0) >= 0 {
 		return Artifact{}, prerequisite(candidate.Identity, UnsafeArtifact, errors.New("path must be clean, absolute, and NUL-free"))
