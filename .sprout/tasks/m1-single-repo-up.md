@@ -301,6 +301,29 @@ Deliver the single-repository up vertical slice
   claim. Context materialization and `Store.PublishReady` must run in the
   readiness callback before production daemon dispatch can honestly return
   success.
+- READY-publication slice: `internal/up.ReconcileReady` now runs context
+  generation and the production `state.Store.PublishReady` transaction only
+  inside `ReconcileFilesystem`'s final callback. It derives repository and
+  service context from the freshly proven foundation and Docker observations,
+  rejects stopped, unhealthy, duplicate, or missing workspace services, and
+  assembles complete generated-root, Git, Lima, Compose, and path removal
+  authority without consulting cached component rows.
+- The context path is materialized mode `0600`, read back, and hashed before the
+  state transaction. Exact warm evidence preserves the existing context inode;
+  differing retained bytes are refused without replacement. The generated Lima
+  config path and content are freshly reproved before its digest enters READY.
+- `go test -race -count=10 ./internal/up` passed. The focused integration test
+  wrote a real context document, committed READY through a real SQLite store,
+  loaded the retained removal snapshot, and repeated publication without
+  replacing the context inode. Injected filesystem, context-redaction, retained
+  context, and READY-transaction failures did not publish state; a failed state
+  transaction left the complete context available for an exact recovery retry.
+- `go vet ./internal/up`, `make lint` (`0 issues`), `git diff --check`, `sprout
+  check m1-single-repo-up`, and `sprout check --all` passed for this slice.
+- This evidence remains a deterministic Linux fixture, not a real Lima VM or
+  Docker-in-Lima claim. The complete runner is not yet dispatched by
+  `cmd/aboxd`, and the cold/warm CLI and client-detachment acceptance criteria
+  remain open.
 
 ## Outcome and follow-ups
 
@@ -368,12 +391,15 @@ filesystem readiness gate. The final callback sees only a freshly re-observed
 Docker set that still matches every retained resource ID, after Machine,
 runtime-host, container-kernel, and workspace-service checks have passed.
 
-Next, materialize the context document and call `Store.PublishReady` inside the
-filesystem publisher callback, assembling the complete removal snapshot from
-the freshly proven foundation and Compose results. Then wire the completed
-runner into `cmd/aboxd`. Keep the packet open until the unchanged
-single-repository fixture passes through the real daemon and CLI, including
-detach and measured warm no-op assertions.
+The thirteenth coherent slice completes the final publication boundary. Context
+bytes and service readiness now come from the same fresh observation consumed
+by the filesystem gate, while one SQLite transaction promotes the generation
+and retires only matching partial authority.
+
+Next, compose preparation, foundation, Compose input/apply, filesystem, context,
+and READY into one concrete runner and dispatch it from `cmd/aboxd`. Keep the
+packet open until the unchanged single-repository fixture passes through the
+real daemon and CLI, including detach and measured warm no-op assertions.
 
 ## Original request
 
