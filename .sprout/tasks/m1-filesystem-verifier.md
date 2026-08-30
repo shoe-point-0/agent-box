@@ -101,15 +101,28 @@ Verify mounted filesystem contracts
   and `git diff --check` passed.
 - Runtime inspection still reports `limactl: command not found`. No VM was
   created and this evidence does not establish Lima, VZ, or VirtioFS behavior.
+- Exact live mount-set contract: `go test -race -count=10
+  ./internal/filesystem/... ./internal/lima/... ./internal/compose/...` passed,
+  including the real Docker lifecycle suite. The typed verifier compares the
+  Plan independently with Lima's inspected config, guest mountinfo, Docker
+  inspect binds, and mountinfo keyed by immutable container ID. It rejects
+  missing, extra, remapped, duplicate, nested, or mode-drifted mounts at each
+  layer; bounds mountinfo to 1 MiB/8192 records; decodes kernel path escapes;
+  and returns stable diagnostics without observed paths or content. Lima now
+  exposes a defensive mount copy from its live inspection rather than its
+  generated input.
+- `go vet ./internal/filesystem/... ./internal/lima/... ./internal/compose/...`,
+  `make lint` (`0 issues`), and `git diff --check` passed for this slice.
 
 ## Outcome and follow-ups
 
-In progress. The critical Machine-side TOCTOU primitive now exists and both
-Lima create/start and Compose mutation boundaries consume it. Remaining work is
-to implement exact live mount-set observation plus the bidirectional/watcher
-probe and managed Git exclude, and execute the complete verifier against the
-available real-container lane. Real Lima execution remains unavailable on this
-Machine and must not be inferred from the injected boundary.
+In progress. Machine path identity protects Lima and Compose mutation, and the
+four-layer exact comparison now has a bounded typed contract. Remaining work is
+to collect guest/container mountinfo through the live invocation boundary, run
+the bidirectional byte/mode, rename/delete, watcher, and undeclared-canary
+probes, materialize the managed Git exclude, and execute that complete verifier
+against the real-container lane. Real Lima execution remains unavailable on
+this Machine and must not be inferred from fixtures or Docker evidence.
 
 ## Original request
 

@@ -92,6 +92,29 @@ type Observation struct {
 	inspectError []string
 }
 
+// MountObservation is one mount reported by Lima's live instance config.
+// Source and Destination remain separate so an observed path remap cannot be
+// mistaken for the identity mapping required by Agent Box.
+type MountObservation struct {
+	Source      string
+	Destination string
+	Writable    bool
+}
+
+// Mounts returns a defensive copy of the mounts from Lima's live inspection.
+func (o Observation) Mounts() []MountObservation {
+	if o.config == nil {
+		return nil
+	}
+	mounts := make([]MountObservation, len(o.config.Mounts))
+	for index, mount := range o.config.Mounts {
+		mounts[index] = MountObservation{
+			Source: mount.Location, Destination: mount.MountPoint, Writable: mount.Writable,
+		}
+	}
+	return mounts
+}
+
 func (o Observation) ownership() ownership.LimaInstanceObservation {
 	return ownership.LimaInstanceObservation{Name: o.Name, Metadata: o.Metadata}
 }

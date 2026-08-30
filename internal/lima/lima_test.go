@@ -126,6 +126,15 @@ func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 	if err != nil || observation.State != lima.Stopped {
 		t.Fatalf("Create() = %#v, %v", observation, err)
 	}
+	mounts := observation.Mounts()
+	if len(mounts) != len(spec.Mounts) || mounts[0].Source != spec.Mounts[0].Path ||
+		mounts[0].Destination != spec.Mounts[0].Path || mounts[0].Writable != spec.Mounts[0].Writable {
+		t.Fatalf("Create().Mounts() = %#v, want live config mounts", mounts)
+	}
+	mounts[0].Source = "/mutated-copy"
+	if observation.Mounts()[0].Source != spec.Mounts[0].Path {
+		t.Fatal("Mounts() returned mutable observation storage")
+	}
 	if _, err := adapter.Create(t.Context(), spec, configPath, configEvidence); err != nil {
 		t.Fatal(err)
 	}
