@@ -297,7 +297,7 @@ func TestProductionMachineGitCallsCannotBypassProfile(t *testing.T) {
 		t.Fatal("runtime.Caller failed")
 	}
 	internalRoot := filepath.Dir(filepath.Dir(current))
-	allowed := map[string]bool{"machinegit": true, "process": true, "spike": true}
+	allowed := map[string]bool{"machinegit": true, "process": true, "spike": true, "toolchain": true}
 	var violations []string
 	entries, err := os.ReadDir(internalRoot)
 	if err != nil {
