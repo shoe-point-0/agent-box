@@ -239,6 +239,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /v1/boxes", s.handleList)
 	mux.HandleFunc("POST /v1/boxes:plan", s.handlePlan)
 	mux.HandleFunc("POST /v1/boxes:up", s.handleUp)
+	mux.HandleFunc("POST /v1/boxes:remove", s.handleRemove)
 	mux.HandleFunc("GET /v1/operations/{id}/events", s.handleEvents)
 	return s.requireCompatibleAPI(mux)
 }
@@ -315,6 +316,14 @@ func (s *Server) handlePlan(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) handleUp(writer http.ResponseWriter, request *http.Request) {
+	s.handleMutation(writer, request, "up")
+}
+
+func (s *Server) handleRemove(writer http.ResponseWriter, request *http.Request) {
+	s.handleMutation(writer, request, "remove")
+}
+
+func (s *Server) handleMutation(writer http.ResponseWriter, request *http.Request, kind string) {
 	key := request.Header.Get(HeaderIdempotencyKey)
 	if err := validateIdempotencyKey(key); err != nil {
 		writeFailure(writer, http.StatusBadRequest, requestFailure(err.Error()))
@@ -352,7 +361,7 @@ func (s *Server) handleUp(writer http.ResponseWriter, request *http.Request) {
 	operation, created, err := s.journal.Begin(request.Context(), journal.BeginRequest{
 		WorkspaceID: identity.WorkspaceID(input.WorkspaceID), BoxID: identity.BoxID(input.BoxID),
 		TaskKey: input.TaskKey, ManifestPath: input.ManifestPath, ManifestDigest: input.ManifestDigest,
-		OperationID: operationID, IdempotencyKey: key, Kind: "up", RequestDigest: digest,
+		OperationID: operationID, IdempotencyKey: key, Kind: kind, RequestDigest: digest,
 		StartedAt: time.Now().UTC(),
 	})
 	if err != nil {

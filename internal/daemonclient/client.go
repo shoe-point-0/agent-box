@@ -152,14 +152,23 @@ func (c *Client) Plan(ctx context.Context, request daemon.PlanRequest) (contract
 // stream by durable sequence. Returning a Failure means the daemon completed or
 // rejected the request with a stable symbolic code.
 func (c *Client) Up(ctx context.Context, request daemon.MutationRequest, idempotencyKey string, consume func(Event) error) (*contract.Failure, error) {
+	return c.mutate(ctx, "/v1/boxes:up", "up", request, idempotencyKey, consume)
+}
+
+// Remove submits or reattaches to one refusal-first Box removal operation.
+func (c *Client) Remove(ctx context.Context, request daemon.MutationRequest, idempotencyKey string, consume func(Event) error) (*contract.Failure, error) {
+	return c.mutate(ctx, "/v1/boxes:remove", "remove", request, idempotencyKey, consume)
+}
+
+func (c *Client) mutate(ctx context.Context, mutationPath, operation string, request daemon.MutationRequest, idempotencyKey string, consume func(Event) error) (*contract.Failure, error) {
 	body, err := json.Marshal(request)
 	if err != nil {
-		return nil, fmt.Errorf("encode up request: %w", err)
+		return nil, fmt.Errorf("encode %s request: %w", operation, err)
 	}
 	operationID := ""
 	sequence := int64(0)
 	for attempt := 0; attempt < maxResumeAttempts; attempt++ {
-		method, path, requestBody := http.MethodPost, "/v1/boxes:up", body
+		method, path, requestBody := http.MethodPost, mutationPath, body
 		if operationID != "" {
 			method = http.MethodGet
 			path = "/v1/operations/" + url.PathEscape(operationID) + "/events?after=" + strconv.FormatInt(sequence, 10)

@@ -246,6 +246,39 @@ func TestMutationStartsOnceReattachesAndResumesNDJSON(t *testing.T) {
 	}
 }
 
+func TestRemoveRouteCreatesRemovalOperation(t *testing.T) {
+	var observedKind string
+	runner := func(_ context.Context, operation journal.Operation, _ json.RawMessage, emit Emit) *contract.Failure {
+		observedKind = operation.Kind
+		if err := emit("removal.preview", map[string]any{"digest": "sha256:preview"}); err != nil {
+			return &contract.Failure{Code: contract.CodeInternalInvariant}
+		}
+		return &contract.Failure{Code: contract.CodeCleanupRefused}
+	}
+	server, client, _ := startTestServer(t, runner)
+	defer shutdownServer(t, server)
+
+	response := doRequest(t, client, http.MethodPost, "/v1/boxes:remove", testMutationBody(t, json.RawMessage(`{}`)), "remove-route-1", true)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("remove mutation status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	decoder := json.NewDecoder(response.Body)
+	preview := decodeEvent(t, decoder)
+	finished := decodeEvent(t, decoder)
+	assertStreamEOF(t, decoder)
+	_ = response.Body.Close()
+	if observedKind != "remove" || preview.Kind != "removal.preview" || finished.Kind != "operation.finished" {
+		t.Fatalf("remove kind/events = %q/%q/%q", observedKind, preview.Kind, finished.Kind)
+	}
+	var result operationResult
+	if err := json.Unmarshal(finished.Details, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.State != journal.StateFailed || result.ErrorCode != contract.CodeCleanupRefused {
+		t.Fatalf("remove terminal result = %+v", result)
+	}
+}
+
 func TestMutationDigestPreservesLargeJSONIntegerIdentity(t *testing.T) {
 	base := MutationRequest{
 		WorkspaceID: "ws_aaaaaaaa", BoxID: "task-aaaaaaaa", TaskKey: "TASK",

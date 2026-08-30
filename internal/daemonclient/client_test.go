@@ -18,6 +18,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/daemonclient"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/journal"
+	"github.com/shoe-point-0/agent-box/internal/removal"
 	"github.com/shoe-point-0/agent-box/internal/state"
 )
 
@@ -114,6 +115,131 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	}
 }
 
+func TestClientRemovalPreservesPreviewAuthorizationOverRealDaemon(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := state.Open(t.Context(), filepath.Join(root, "state", "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	operationJournal, err := journal.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := &removalTestStep{present: true}
+	coordinator, err := removal.New(removal.Config{
+		Steps: []removal.Step{step}, Lease: removalTestLease{}, Quiescer: removalTestQuiescer{}, Recorder: removalTestRecorder{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := removal.OperationRunner{Assemble: func(context.Context, journal.Operation) (*removal.Coordinator, error) {
+		return coordinator, nil
+	}}
+	server, err := daemon.Start(daemon.Config{
+		RuntimeDir: filepath.Join(root, "runtime"), Journal: operationJournal, Writers: daemon.NewWriterGate(),
+		List: func(context.Context) (contract.ListOutput, error) {
+			return contract.ListOutput{SchemaVersion: contract.ListSchemaVersion, Boxes: []contract.ListBox{}}, nil
+		},
+		Plan: func(context.Context, daemon.PlanRequest) (contract.PlanOutput, error) {
+			return contract.PlanOutput{SchemaVersion: contract.PlanOutputSchemaVersion, Plan: contract.Plan{SchemaVersion: contract.PlanSchemaVersion}, Operations: []contract.PlanOperation{}}, nil
+		},
+		Run: func(ctx context.Context, operation journal.Operation, input json.RawMessage, emit daemon.Emit) *contract.Failure {
+			return runner.Run(ctx, operation, input, func(kind string, details any) error { return emit(kind, details) })
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	})
+	client, err := daemonclient.New(server.SocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	manifest := filepath.Join(root, "workspace", ".abox", "box.yaml")
+	workspaceID, err := identity.Workspace(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boxID, err := identity.Box(workspaceID, "TASK-REMOVE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := daemon.MutationRequest{
+		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-REMOVE", ManifestPath: manifest,
+		ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
+	}
+	var preview removal.Preview
+	failure, err := client.Remove(t.Context(), request, "remove-preview", func(event daemonclient.Event) error {
+		if event.Kind == "removal.preview" {
+			return json.Unmarshal(event.Details, &preview)
+		}
+		return nil
+	})
+	if err != nil || failure == nil || failure.Code != contract.CodeCleanupRefused || preview.Digest == "" || step.removes != 0 {
+		t.Fatalf("preview Remove() = failure %#v, error %v, preview %#v, removes %d", failure, err, preview, step.removes)
+	}
+	authorization, err := json.Marshal(removal.OperationInput{PreviewDigest: preview.Digest, Yes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Input = authorization
+	var kinds []string
+	failure, err = client.Remove(t.Context(), request, "remove-authorized", func(event daemonclient.Event) error {
+		kinds = append(kinds, event.Kind)
+		return nil
+	})
+	if err != nil || failure != nil || step.removes != 1 {
+		t.Fatalf("authorized Remove() = failure %#v, error %v, removes %d", failure, err, step.removes)
+	}
+	if got := fmt.Sprint(kinds); got != "[removal.preview removal.completed operation.finished]" {
+		t.Fatalf("authorized removal events = %s", got)
+	}
+}
+
+type removalTestStep struct {
+	present bool
+	removes int
+}
+
+func (*removalTestStep) Key() string          { return "compose/test" }
+func (*removalTestStep) Stage() removal.Stage { return removal.StageCompose }
+func (s *removalTestStep) Observe(context.Context) (removal.Fact, error) {
+	if !s.present {
+		return removal.Fact{Losses: []removal.Loss{}}, nil
+	}
+	return removal.Fact{Present: true, Evidence: map[string]string{"id": "test-resource"}, Losses: []removal.Loss{}}, nil
+}
+func (s *removalTestStep) Remove(context.Context, removal.Fact) error {
+	s.removes++
+	s.present = false
+	return nil
+}
+
+type removalTestLease struct{}
+
+func (removalTestLease) Acquire(_ context.Context, boxID string) (removal.Lease, error) {
+	return removal.Lease{BoxID: boxID, Token: "test-lease"}, nil
+}
+func (removalTestLease) Release(context.Context, removal.Lease) error { return nil }
+
+type removalTestQuiescer struct{}
+
+func (removalTestQuiescer) Quiesce(context.Context, removal.Lease) error { return nil }
+func (removalTestQuiescer) Resume(context.Context, removal.Lease) error  { return nil }
+
+type removalTestRecorder struct{}
+
+func (removalTestRecorder) Record(context.Context, removal.Transition) error { return nil }
+
 func TestClientListsStrictBoundedInventory(t *testing.T) {
 	t.Parallel()
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -198,6 +324,50 @@ func TestClientResumesStreamFromLastDurableSequence(t *testing.T) {
 	})
 	if err != nil || failure != nil {
 		t.Fatalf("Up() = %#v, %v", failure, err)
+	}
+	if fmt.Sprint(sequences) != "[1 2]" || eventRequests.Load() != 1 {
+		t.Fatalf("sequences/resumes = %v/%d", sequences, eventRequests.Load())
+	}
+}
+
+func TestClientRemoveResumesStreamFromLastDurableSequence(t *testing.T) {
+	const operationID = "op_0123456789ABCDEF"
+	var eventRequests atomic.Int32
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/boxes:remove":
+			if request.Header.Get(daemon.HeaderIdempotencyKey) != "remove-resume-key" {
+				t.Errorf("idempotency key = %q", request.Header.Get(daemon.HeaderIdempotencyKey))
+			}
+			writer.Header().Set(daemon.HeaderOperationID, operationID)
+			writer.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = fmt.Fprintln(writer, eventLine(operationID, 1, "removal.preview", `{"digest":"sha256:preview"}`))
+		case "/v1/operations/" + operationID + "/events":
+			eventRequests.Add(1)
+			if request.URL.Query().Get("after") != "1" {
+				t.Errorf("resume sequence = %q", request.URL.Query().Get("after"))
+			}
+			writer.Header().Set(daemon.HeaderOperationID, operationID)
+			writer.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = fmt.Fprintln(writer, eventLine(operationID, 2, "operation.finished", `{"apiVersion":"abox.api/v1alpha1","state":"succeeded"}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	})
+	socket, stop := serveUnixHTTP(t, handler)
+	defer stop()
+	client, err := daemonclient.New(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	var sequences []int64
+	failure, err := client.Remove(t.Context(), daemon.MutationRequest{}, "remove-resume-key", func(event daemonclient.Event) error {
+		sequences = append(sequences, event.Sequence)
+		return nil
+	})
+	if err != nil || failure != nil {
+		t.Fatalf("Remove() = %#v, %v", failure, err)
 	}
 	if fmt.Sprint(sequences) != "[1 2]" || eventRequests.Load() != 1 {
 		t.Fatalf("sequences/resumes = %v/%d", sequences, eventRequests.Load())

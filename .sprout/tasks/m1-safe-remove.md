@@ -222,8 +222,21 @@ Implement refusal-first Box removal
   issues`; module verification, all unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests passed. `sprout check
   m1-safe-remove`, `sprout check --all`, and `git diff --check` also passed.
+- `go test -race -count=10 ./internal/daemon ./internal/daemonclient` passed
+  after adding the typed `POST /v1/boxes:remove` route and client transport.
+  The real Unix-socket fixture ran `removal.OperationRunner` end to end: the
+  first request streamed the exact digest-bound preview and refused without a
+  lease or remover call, while a second request returning that digest and
+  explicit `yes` streamed preview, completion, and terminal events before
+  removing once. A broken removal stream reattached by operation ID and resumed
+  strictly after the last durable sequence. `go vet ./internal/daemon
+  ./internal/daemonclient` and `git diff --check` also passed.
+- `make check` passed for the removal-transport slice: pinned lint reported `0
+  issues`; module verification, all unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests passed. `sprout check
+  m1-safe-remove` and `sprout check --all` also passed.
 - The task remains open: these results do not prove a live `abox rm` command or
-  complete daemon removal integration.
+  production `aboxd` removal assembly.
 
 ## Outcome and follow-ups
 
@@ -291,14 +304,19 @@ Implement refusal-first Box removal
   applicable grant, and malformed, stale, or unjournaled previews cannot enter
   the removal lease lifecycle. Provider errors remain behind stable redacted
   control-plane failures.
+- Added a typed daemon removal route and resumable client method over the same
+  durable operation stream as reconciliation. The route records operations as
+  `remove`, so daemon execution bypasses ordinary writer admission and leaves
+  lease/quiescence ownership with the removal coordinator.
 - There is not yet a production successful-reconciliation path to attach this
   save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for every
-  mutation. The next removal slice should add the daemon remove route and client
-  transport around this runner, while `m1-single-repo-up` must add the real
-  reconciliation assembly and save this snapshot only after all owned resources
-  reconcile successfully. Production runtime-adapter construction, CLI `abox
-  rm`, and full disposable Box teardown evidence remain required before any
-  acceptance criterion can be checked.
+  mutation. `m1-single-repo-up` must add the real reconciliation assembly and
+  save this snapshot only after all owned resources reconcile successfully.
+  The next removal slice should construct the production Lima and Compose
+  adapters from verified daemon toolchain authority, dispatch `remove` from
+  `cmd/aboxd` into `OperationRunner`, and add `abox rm`. Full disposable Box
+  teardown evidence remains required before any acceptance criterion can be
+  checked.
 
 ## Original request
 
