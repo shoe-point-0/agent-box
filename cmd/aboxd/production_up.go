@@ -17,6 +17,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/installation"
 	"github.com/shoe-point-0/agent-box/internal/journal"
 	"github.com/shoe-point-0/agent-box/internal/lima"
+	"github.com/shoe-point-0/agent-box/internal/machine"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
@@ -34,6 +35,7 @@ func newProductionUpRunner(
 	gitClient machinegit.Client,
 	owner journal.Owner,
 	applicationRoot string,
+	runtimeRoot string,
 	installationPath string,
 ) up.OperationRunner {
 	return up.OperationRunner{Assemble: func(ctx context.Context, operation journal.Operation) (*up.Coordinator, error) {
@@ -41,8 +43,8 @@ func newProductionUpRunner(
 		if err != nil {
 			return nil, err
 		}
-		if runtimeDriver() != "lima-vz" {
-			return nil, &productionRuntimeError{}
+		if err := productionMachinePreflight(ctx, installed, applicationRoot, runtimeRoot); err != nil {
+			return nil, err
 		}
 		requestGit, err := productionGitClient(gitClient)
 		if err != nil {
@@ -120,16 +122,29 @@ func newProductionUpRunner(
 	}}
 }
 
-// productionRuntimeError prevents the VZ-only Lima adapter from reaching any
-// generated-state or Git mutation on an unimplemented Machine backend.
-type productionRuntimeError struct{}
+const (
+	productionRouterAddress = "127.0.0.1:7777"
+	minimumStateFreeBytes   = 1 << 30
+	minimumRuntimeFreeBytes = 16 << 20
+)
 
-func (*productionRuntimeError) Error() string {
-	return "production Box up runtime is unsupported on this Machine"
-}
-
-func (*productionRuntimeError) ErrorCode() contract.ErrorCode {
-	return contract.CodeMachineUnsupported
+func productionMachinePreflight(ctx context.Context, installed installation.Runtime, applicationRoot, runtimeRoot string) error {
+	pathRequirements := []machine.PathRequirement{
+		{Name: "state", Path: applicationRoot, MinFreeBytes: minimumStateFreeBytes},
+		{Name: "runtime", Path: runtimeRoot, MinFreeBytes: minimumRuntimeFreeBytes},
+	}
+	observer, err := machine.NewLocalObserver(machine.LocalObserverConfig{
+		Paths: pathRequirements, RouterAddress: productionRouterAddress,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = machine.Check(ctx, machine.Specification{
+		Supported: []machine.Platform{{OS: "darwin", Architecture: "arm64", Accelerator: "vz"}},
+		Paths:     pathRequirements, RouterAddress: productionRouterAddress,
+		Toolchain: installed.Specification, Provider: installed.Provider,
+	}, observer)
+	return err
 }
 
 func productionLimaBuilder(store *state.Store, runtime *lima.Adapter, installed installation.Runtime) up.BuildLimaConfig {

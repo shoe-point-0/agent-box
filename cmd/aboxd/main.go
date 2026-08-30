@@ -112,7 +112,7 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 	}
 	writers := daemon.NewWriterGate()
 	removeRunner := newProductionRemovalRunner(store, operationJournal, writers, pathProvider, gitClient, owner, applicationRoot, installationPath)
-	upRunner := newProductionUpRunner(store, operationJournal, pathProvider, gitClient, owner, applicationRoot, installationPath)
+	upRunner := newProductionUpRunner(store, operationJournal, pathProvider, gitClient, owner, applicationRoot, runtimeDir, installationPath)
 	planEndpoint := productionPlanEndpoint(store, pathProvider, gitClient, installationPath)
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,

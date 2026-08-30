@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -166,6 +169,99 @@ func TestProductionRemovalDispatchFailsClosedWithoutOwnershipAuthority(t *testin
 	if failure == nil || failure.Code != contract.CodeOwnershipConflict {
 		t.Fatalf("production removal failure = %#v, want ownership conflict", failure)
 	}
+}
+
+func TestProductionUpRunsLiveMachinePreflightBeforeBoxMutation(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Linux engineering-lane refusal test")
+	}
+	root := t.TempDir()
+	runtimeRoot := filepath.Join(root, "runtime")
+	if err := os.Mkdir(runtimeRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := state.Open(t.Context(), filepath.Join(root, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	operationJournal, err := journal.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathProvider, err := paths.New(root, filepath.Join(root, "cache"), filepath.Join(root, "logs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceID, err := identity.Workspace(filepath.Join(root, "fixture", ".abox", "box.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	boxID, err := identity.Box(workspaceID, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := newProductionUpRunner(
+		store, operationJournal, pathProvider, machinegit.Client{},
+		journal.Owner{InstanceID: "daemon-test", ProcessStartID: "process-test", BootID: "boot-test"},
+		root, runtimeRoot, writeTestInstallation(t, root),
+	)
+	failure := runner.Run(t.Context(), journal.Operation{
+		ID: "operation-up-preflight", BoxID: boxID.String(), Kind: "up", State: journal.StateRunning,
+	}, json.RawMessage(`{}`), func(string, any) error { return nil })
+	if failure == nil || failure.Code != contract.CodeMachineUnsupported {
+		t.Fatalf("production up failure = %#v, want Machine unsupported", failure)
+	}
+	boxRoot, err := pathProvider.BoxRoot(boxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(boxRoot); !os.IsNotExist(err) {
+		t.Fatalf("Machine preflight failure left Box state at %q: %v", boxRoot, err)
+	}
+}
+
+func writeTestInstallation(t *testing.T, root string) string {
+	t.Helper()
+	artifact := func(name, version string, executable bool) map[string]any {
+		mode := os.FileMode(0o600)
+		if executable {
+			mode = 0o700
+		}
+		data := []byte("fixture-" + name + "\n")
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, data, mode); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(data)
+		return map[string]any{"version": version, "digest": fmt.Sprintf("sha256:%x", digest), "path": path}
+	}
+	utilities := make(map[string]any)
+	utilityPaths := make(map[string]string)
+	for _, name := range []string{"cat", "sha256sum", "stat", "systemctl", "test"} {
+		utilities[name] = artifact(name, "fixture-1", true)
+		utilityPaths[name] = "/usr/bin/" + name
+	}
+	document := map[string]any{
+		"schemaVersion": "abox.installation/v1alpha1",
+		"artifacts": map[string]any{
+			"lima": artifact("limactl", "2.0.0", true), "guestImage": artifact("guest-image", "fixture", false),
+			"docker": artifact("docker", "fixture", true), "compose": artifact("compose", "fixture", true), "utilities": utilities,
+		},
+		"guest": map[string]any{
+			"dockerPath": "/usr/bin/docker", "composePath": "/usr/libexec/docker/cli-plugins/docker-compose",
+			"utilityPaths": utilityPaths, "workdir": "/tmp", "dockerSocket": "/var/run/docker.sock", "dockerService": "docker.service",
+		},
+	}
+	data, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "installation.json")
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func waitForSocket(t *testing.T, path string) {

@@ -441,6 +441,31 @@ Deliver the single-repository up vertical slice
   verification, all unit/race tests, vet, builds, smoke, shell, and Python
   automation checks were green. `sprout check m1-single-repo-up` and `sprout
   check --all` passed.
+- Live-Machine preflight slice: `internal/machine.LocalObserver` now collects
+  the current OS/architecture/accelerator tuple, canonical path ancestry and
+  filesystem capacity, and a temporary IPv4 loopback bind without creating a
+  directory or retaining a listener. Darwin uses Apple's documented
+  `kern.hv_support` signal before reporting the VZ accelerator; non-Darwin
+  Machines remain the unsupported QEMU engineering lane.
+- Production `up` re-verifies the installation's complete pinned artifact set,
+  requires at least 1 GiB on the state filesystem and 16 MiB on the daemon
+  runtime filesystem, and proves `127.0.0.1:7777` can be bound before Git lookup,
+  generated Box state, lease acquisition, or pipeline mutation. The exact
+  configured daemon runtime root is observed rather than reconstructing it from
+  the application root.
+- `go test -race -count=10 ./internal/machine ./internal/installation
+  ./cmd/aboxd` passed. The live observer tests covered existing and absent paths,
+  no directory creation, symlinked ancestry refusal, occupied router detection,
+  listener release, copied configuration, and platform collection. A production
+  dispatch test loaded a valid installation on Linux, returned
+  `ABOX_MACHINE_UNSUPPORTED`, and proved the deterministic Box root remained
+  absent.
+- `go vet ./internal/machine ./internal/installation ./cmd/aboxd`,
+  `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`, and `git diff --check`
+  passed. Post-slice `make check` passed with lint reporting `0 issues`; module
+  verification, all unit/race tests, vet, builds, smoke, shell, and Python
+  automation checks were green. Cross-compilation is compilation evidence only;
+  no Darwin runtime behavior is claimed.
 
 ## Outcome and follow-ups
 
@@ -513,11 +538,12 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, add the concrete read-only Machine preflight observer and execute it from
-production operation assembly before the fenced pipeline. Then use an explicit
-pinned installation plus the unchanged single-repository fixture on a supported
-Darwin/arm64 VZ Machine to prove real cold READY, measured warm no-op, and CLI
-detachment. Keep this packet open until those three acceptance criteria pass.
+Next, use an explicit pinned installation plus the unchanged single-repository
+fixture on a supported Darwin/arm64 VZ Machine to prove real cold READY, measured
+warm no-op, and CLI detachment. Keep this packet open until those three
+acceptance criteria pass. When the Machine router is introduced in Milestone 3,
+its already-owned listener must become explicit preflight evidence rather than
+being mistaken for an unrelated occupied port.
 
 ## Original request
 

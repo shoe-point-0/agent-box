@@ -43,6 +43,8 @@ func (e *Error) ErrorCode() contract.ErrorCode { return contract.CodePrerequisit
 // locations where the packaged image exposes those exact bytes.
 type Runtime struct {
 	Toolchain      toolchain.Toolchain
+	Specification  toolchain.Specification
+	Provider       toolchain.Provider
 	GuestImagePath string
 	DockerPath     string
 	ComposePath    string
@@ -135,8 +137,9 @@ func Load(ctx context.Context, path string) (Runtime, error) {
 		return Runtime{}, invalid(fmt.Errorf("canonicalize guest image: %w", err))
 	}
 	return Runtime{
-		Toolchain: verified, GuestImagePath: filepath.Clean(guestImagePath),
-		DockerPath: configured.Guest.DockerPath, ComposePath: configured.Guest.ComposePath,
+		Toolchain: verified, Specification: specification, Provider: provider,
+		GuestImagePath: filepath.Clean(guestImagePath),
+		DockerPath:     configured.Guest.DockerPath, ComposePath: configured.Guest.ComposePath,
 		UtilityPaths: cloneMap(configured.Guest.UtilityPaths), Workdir: configured.Guest.Workdir,
 		DockerSocket: configured.Guest.DockerSocket, DockerService: configured.Guest.DockerService,
 	}, nil
