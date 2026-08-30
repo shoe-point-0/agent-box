@@ -196,9 +196,28 @@ Deliver the single-repository up vertical slice
   m1-single-repo-up`, and `sprout check --all` passed. Post-slice `make check`
   passed with lint reporting `0 issues`; module verification, all unit and race
   tests, vet, builds, smoke, shell, and Python automation checks were green.
-- This is contract-fixture evidence, not a real VM claim. Generated Plan, Git,
-  and Lima are still not assembled into the production DAG, and filesystem
-  readiness through READY remains unwired.
+- That concrete-Lima evidence was contract-fixture evidence, not a real VM
+  claim. At that point the three concrete stages were not yet assembled and
+  filesystem readiness through READY remained unwired.
+- Foundation graph-prefix slice: `internal/up.ReconcileFoundation` now composes
+  the concrete generated Plan, Git, and Lima reconcilers in explicit dependency
+  order. The Lima intent builder runs only after the immutable Plan, private
+  store, and linked worktree exist, so it can record fresh mount path evidence.
+  A later-stage failure deliberately retains earlier partial authority for
+  resume instead of compensating by deleting owned source or runtime inputs.
+- `go test -race -count=10 ./internal/up` passed. The integration fixture used
+  real Git for private-store/worktree creation, interrupted after Git authority
+  was complete but before Lima intent, then resumed and ran a third warm pass.
+  Across all attempts it measured one Plan write, one private-store mutation,
+  one worktree creation, one runtime-fixture create mutation, and one
+  runtime-fixture start mutation;
+  every warm boundary was freshly re-observed.
+- `go vet ./internal/up`, `git diff --check`, and post-slice `make check` passed;
+  lint reported `0 issues`, and all unit/race tests, vet, builds, smoke, shell,
+  and Python automation checks were green.
+- This graph prefix is not yet dispatched by `cmd/aboxd` and does not make a
+  real VM support claim. Filesystem verification, Compose, readiness, context,
+  READY publication, daemon assembly, and the cold/warm CLI smoke remain open.
 
 ## Outcome and follow-ups
 
@@ -246,9 +265,10 @@ lifecycle contract. Matching resources resume from fresh path, immutable
 config, and embedded metadata observations; retained proof replacement fails
 before mutation.
 
-Next, assemble generated Plan, Git, and Lima as the first concrete production
-DAG operations. Then add filesystem, Compose, context, and READY operations and
-wire the completed runner into `cmd/aboxd`. Keep the packet open until the unchanged
+Next, add the filesystem readiness operation after the assembled foundation
+prefix, using its freshly observed Git and Lima results rather than cached
+state. Then add Compose, context, and READY operations and wire the completed
+runner into `cmd/aboxd`. Keep the packet open until the unchanged
 single-repository fixture passes through the real daemon and CLI, including
 detach and measured warm no-op assertions.
 

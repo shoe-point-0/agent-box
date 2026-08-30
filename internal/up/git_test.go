@@ -190,6 +190,10 @@ type gitReconcileFixture struct {
 }
 
 func newGitReconcileFixture(t *testing.T) gitReconcileFixture {
+	return newGitReconcileFixtureWithDriver(t, "lima-qemu")
+}
+
+func newGitReconcileFixtureWithDriver(t *testing.T, driver string) gitReconcileFixture {
 	t.Helper()
 	gitPath := os.Getenv("HERMES_CRUSHER_REAL_GIT")
 	if gitPath == "" {
@@ -260,7 +264,7 @@ func newGitReconcileFixture(t *testing.T) gitReconcileFixture {
 	}}
 	compiled, _, err := plancompiler.Compile(plancompiler.Input{
 		Workspace: workspace, WorkspaceID: workspaceID, BoxID: boxID, TaskKey: "TASK-69", ManifestPath: manifestPath,
-		Repositories: []repository.Facts{facts}, Runtime: plancompiler.RuntimeFacts{Driver: "lima-qemu"},
+		Repositories: []repository.Facts{facts}, Runtime: plancompiler.RuntimeFacts{Driver: driver},
 		Tools: contract.ToolVersions{AgentBox: "test", Git: "test", Lima: "test", Docker: "test", Compose: "test"},
 	})
 	if err != nil {
