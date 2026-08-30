@@ -78,6 +78,7 @@ type Step interface {
 type Lease struct {
 	BoxID string
 	Token string
+	state *leaseLifecycle
 }
 
 // LeaseGuard acquires and releases the Box's fenced exclusive lease.
@@ -265,14 +266,15 @@ func (c *Coordinator) Execute(ctx context.Context, preview Preview, authorizatio
 	defer func() {
 		returnErr = errors.Join(returnErr, c.releaseAfter(ctx, lease))
 	}()
-	if err := c.quiescer.Quiesce(ctx, lease); err != nil {
+	executionContext := lease.executionContext(ctx)
+	if err := c.quiescer.Quiesce(executionContext, lease); err != nil {
 		return Result{}, fmt.Errorf("execute Box removal: quiesce writers: %w", err)
 	}
 	defer func() {
 		returnErr = errors.Join(returnErr, c.resumeAfter(ctx, lease))
 	}()
 
-	freshResources, err := c.observe(ctx)
+	freshResources, err := c.observe(executionContext)
 	if err != nil {
 		return Result{}, fmt.Errorf("execute Box removal: reobserve after quiesce: %w", err)
 	}
@@ -288,7 +290,10 @@ func (c *Coordinator) Execute(ctx context.Context, preview Preview, authorizatio
 		if !expected.Present {
 			continue
 		}
-		fact, err := c.steps[index].Observe(ctx)
+		if err := context.Cause(executionContext); err != nil {
+			return c.failed(index, result.Completed, fmt.Errorf("verify removal lease: %w", err))
+		}
+		fact, err := c.steps[index].Observe(executionContext)
 		if err != nil {
 			return c.failed(index, result.Completed, fmt.Errorf("reobserve immediately before removal: %w", err))
 		}
@@ -296,10 +301,16 @@ func (c *Coordinator) Execute(ctx context.Context, preview Preview, authorizatio
 		if err != nil || resource.Digest != expected.Digest {
 			return c.failed(index, result.Completed, errors.Join(err, ErrInventoryDrift))
 		}
-		if err := c.recorder.Record(ctx, Transition{Kind: TransitionRemoveStarted, Resource: expected.Key}); err != nil {
+		if err := context.Cause(executionContext); err != nil {
+			return c.failed(index, result.Completed, fmt.Errorf("verify removal lease: %w", err))
+		}
+		if err := c.recorder.Record(executionContext, Transition{Kind: TransitionRemoveStarted, Resource: expected.Key}); err != nil {
 			return c.failed(index, result.Completed, fmt.Errorf("persist remove start: %w", err))
 		}
-		removeErr := c.steps[index].Remove(ctx, fact)
+		if err := context.Cause(executionContext); err != nil {
+			return c.failed(index, result.Completed, fmt.Errorf("verify removal lease: %w", err))
+		}
+		removeErr := c.steps[index].Remove(executionContext, fact)
 		kind := TransitionRemoveSucceeded
 		if removeErr != nil {
 			kind = TransitionRemoveFailed

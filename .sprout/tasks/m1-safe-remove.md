@@ -149,8 +149,22 @@ Implement refusal-first Box removal
 - `make check` passed after the generated-state slice: pinned lint reported `0
   issues`; module verification, all unit and race tests, vet, Linux builds,
   spike smoke, shell checks, and Python automation tests passed.
+- `go test -race -count=10 ./internal/removal ./internal/journal
+  ./internal/state` passed after binding removal to the durable operation
+  journal. The real SQLite fixture held and renewed the exact operation-owned
+  fenced lease beyond its original TTL, rejected a competing daemon owner,
+  persisted ordered `removal.remove-started` and
+  `removal.remove-succeeded` events, released at the current fence, and allowed
+  a successor only at fence 2. An injected renewal loss canceled the removal
+  execution context and proved that no later destructive step began.
+- `go vet ./internal/removal ./internal/journal ./internal/state`, `make lint`,
+  and `git diff --check` passed for the durable lifecycle slice; pinned lint
+  reported `0 issues`.
+- `make check` passed after the durable lifecycle slice: pinned lint reported
+  `0 issues`; module verification, all unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests passed.
 - The task remains open: these results do not prove a live `abox rm` command or
-  daemon/lease integration.
+  complete daemon removal integration.
 
 ## Outcome and follow-ups
 
@@ -191,10 +205,15 @@ Implement refusal-first Box removal
   artifacts and interrupted atomic-write remnants. It refuses nonempty or
   unrecognized state and deliberately retains `plan.json` plus diagnostics so
   daemon recovery can diagnose and finalize partial cleanup.
-- Next slice must wire removal through the daemon's durable lease, quiescence,
-  journal, and state boundaries before exposing CLI `abox rm`. Full disposable
-  Box teardown evidence remains required before any acceptance criterion can
-  be checked.
+- Added an operation-scoped journal lease guard that acquires, continuously
+  renews, and exactly releases the persisted fence. Lease loss cancels the
+  coordinator's execution context and is checked before every later side
+  effect. Removal transitions now have a concrete redacted operation-event
+  recorder.
+- Next slice must add daemon writer quiescence and assemble the concrete steps
+  from the retained Plan plus persisted ownership state before exposing CLI
+  `abox rm`. Full disposable Box teardown evidence remains required before any
+  acceptance criterion can be checked.
 
 ## Original request
 
