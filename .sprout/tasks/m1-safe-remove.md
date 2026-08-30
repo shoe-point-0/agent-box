@@ -127,8 +127,18 @@ Implement refusal-first Box removal
   module verification, all unit and race tests, vet, Linux builds, spike smoke,
   shell checks, and Python automation tests passed. This Linux lane does not
   have `limactl`, so the slice makes no live Lima or Darwin runtime claim.
+- `go test -race -count=10 ./internal/gitstore ./internal/removal` passed after
+  adding the private-store removal step. Disposable real-Git fixtures proved
+  that only the exact recorded store inode below the canonical selected Box
+  root is removed, an unrelated Box and source repository remain intact, a
+  replacement inode after preview is refused unchanged, and a fresh absent
+  observation converges after deletion returned an injected interruption.
+- `make check` passed after the private-store slice: pinned lint reported `0
+  issues`; module verification, all unit and race tests, vet, Linux builds,
+  spike smoke, shell checks, and Python automation tests passed. `go vet
+  ./internal/gitstore ./internal/removal` and `git diff --check` also passed.
 - The task remains open: these results do not prove a live `abox rm` command or
-  concrete private-store teardown integration.
+  generated-state and daemon integration.
 
 ## Outcome and follow-ups
 
@@ -158,10 +168,15 @@ Implement refusal-first Box removal
   metadata; deletion independently revalidates the immutable config and
   ownership record, verifies terminal absence, and permits a fresh retry to
   converge after an interrupted successful delete.
-- Next slice must implement ownership-proved private-store teardown and its
-  interrupted-delete recovery. Generated-state, daemon, and CLI integration
-  plus full disposable Box teardown evidence remain required before any
-  acceptance criterion can be checked.
+- Added an ownership-proved private-store step. Preview binds the canonical
+  store path, base commit, and recorded device/inode; the leaf independently
+  revalidates the immutable Plan, persisted record, canonical Box containment,
+  and live inode before consuming a typed path proof. Terminal absence is
+  observable without replaying recursive deletion after an interruption.
+- Next slice must implement ownership-proved generated-state teardown while
+  retaining the durable records needed to diagnose partial cleanup. Daemon and
+  CLI integration plus full disposable Box teardown evidence remain required
+  before any acceptance criterion can be checked.
 
 ## Original request
 
