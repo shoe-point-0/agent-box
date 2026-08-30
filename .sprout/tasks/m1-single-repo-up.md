@@ -411,6 +411,36 @@ Deliver the single-repository up vertical slice
   explicit verified artifact installation; silently substituting the Machine
   Docker binary or an implicit Lima image would violate the existing toolchain
   and guest provisioning contracts.
+- Production-dispatch slice: `internal/installation.Load` now consumes bounded,
+  strict `abox.installation/v1alpha1` metadata and verifies the complete local
+  Lima, guest image, Docker, Compose, and required utility set through the
+  existing opaque toolchain contract. It performs no discovery, download, or
+  installation. Guest paths are explicit, utility artifact/path sets must match,
+  and the guest image path passed to Lima is canonicalized only after digest
+  verification.
+- `aboxd` accepts `--installation`, defaulting beside `state.db`, and uses that
+  one installation contract for Plan tool versions, up, and removal. The
+  production `up` dispatch now assembles the concrete private-store/worktree,
+  Lima, guest-toolchain, Compose, filesystem, context, READY, lease, and journal
+  adapters per operation. The previous host Docker/Compose/implicit `limactl`
+  probes were removed; missing metadata returns `ABOX_PREREQUISITE_FAILED`
+  through the real daemon API instead of `ABOX_FEATURE_NOT_SUPPORTED`.
+- The VZ-only adapter is refused with `ABOX_MACHINE_UNSUPPORTED` during
+  operation assembly on Linux, before generated-state or Git mutation. Fresh
+  inspection on this lane reported Linux `7.0.0-28-generic` x86_64 with KVM,
+  but no `limactl` and no default installation metadata at
+  `/home/shoecifer/.local/state/agent-box/installation.json`; no VM or Box
+  resource was created and no Linux runtime support is claimed.
+- `go test -race -count=10 ./internal/installation ./cmd/aboxd` passed. The
+  installation suite covered strict/trailing JSON rejection, schema and path
+  validation, required utility-set equality, digest mismatch classification,
+  symlinked metadata refusal, cancellation, and verified result isolation. The
+  daemon suite exercised production `up` dispatch and its typed missing-
+  installation failure. Focused `go vet` and `git diff --check` passed.
+- Post-slice `make check` passed with lint reporting `0 issues`; module
+  verification, all unit/race tests, vet, builds, smoke, shell, and Python
+  automation checks were green. `sprout check m1-single-repo-up` and `sprout
+  check --all` passed.
 
 ## Outcome and follow-ups
 
@@ -483,11 +513,11 @@ bytes and service readiness now come from the same fresh observation consumed
 by the filesystem gate, while one SQLite transaction promotes the generation
 and retires only matching partial authority.
 
-Next, add the explicit production artifact-installation configuration and use
-it to instantiate Git, Lima, guest-toolchain, Compose, and filesystem adapters
-in `cmd/aboxd`, then dispatch the pipeline's `OperationRunner`. Keep the packet
-open until the unchanged single-repository fixture passes through the real
-daemon and CLI, including detach and measured warm no-op assertions.
+Next, add the concrete read-only Machine preflight observer and execute it from
+production operation assembly before the fenced pipeline. Then use an explicit
+pinned installation plus the unchanged single-repository fixture on a supported
+Darwin/arm64 VZ Machine to prove real cold READY, measured warm no-op, and CLI
+detachment. Keep this packet open until those three acceptance criteria pass.
 
 ## Original request
 

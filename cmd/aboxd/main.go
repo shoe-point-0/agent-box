@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,15 +20,14 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/identity"
+	"github.com/shoe-point-0/agent-box/internal/installation"
 	"github.com/shoe-point-0/agent-box/internal/journal"
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/paths"
-	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/removal"
 	"github.com/shoe-point-0/agent-box/internal/state"
-	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/version"
 )
 
@@ -62,12 +59,17 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		return contract.ExitPrerequisite
 	}
 	runtimeDir, stateDatabase := userPaths.RuntimeDir, userPaths.StateDatabase
+	installationPath := ""
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&runtimeDir, "runtime-dir", runtimeDir, "secure daemon runtime directory")
 	flags.StringVar(&stateDatabase, "state-db", stateDatabase, "Agent Box state database")
+	flags.StringVar(&installationPath, "installation", installationPath, "offline runtime artifact installation metadata")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return contract.ExitUsage
+	}
+	if installationPath == "" {
+		installationPath = filepath.Join(filepath.Dir(stateDatabase), "installation.json")
 	}
 
 	store, err := state.Open(ctx, stateDatabase)
@@ -109,29 +111,24 @@ func serve(ctx context.Context, args []string, stderr io.Writer) int {
 		return contract.ExitInfrastructure
 	}
 	writers := daemon.NewWriterGate()
-	removeRunner := newProductionRemovalRunner(store, operationJournal, writers, pathProvider, gitClient, owner, applicationRoot)
+	removeRunner := newProductionRemovalRunner(store, operationJournal, writers, pathProvider, gitClient, owner, applicationRoot, installationPath)
+	upRunner := newProductionUpRunner(store, operationJournal, pathProvider, gitClient, owner, applicationRoot, installationPath)
+	planEndpoint := productionPlanEndpoint(store, pathProvider, gitClient, installationPath)
 	server, err := daemon.Start(daemon.Config{
 		RuntimeDir: runtimeDir,
 		Journal:    operationJournal,
 		Writers:    writers,
 		List:       boxInventory.List,
 		Plan: func(ctx context.Context, request daemon.PlanRequest) (contract.PlanOutput, error) {
-			gitPath, toolVersions, observeErr := observeToolVersions(ctx, applicationRoot)
-			if observeErr != nil {
-				return contract.PlanOutput{}, observeErr
-			}
-			requestGit := gitClient
-			requestGit.GitPath = gitPath
-			service := boxplan.Service{
-				State: store, Paths: pathProvider, Runtime: plancompiler.RuntimeFacts{Driver: runtimeDriver()}, Tools: toolVersions,
-				Git: requestGit,
-			}
-			return service.Compile(ctx, boxplan.Request{
+			return planEndpoint(ctx, boxplan.Request{
 				WorkspaceID: identity.WorkspaceID(request.WorkspaceID), BoxID: identity.BoxID(request.BoxID),
 				TaskKey: request.TaskKey, ManifestPath: request.ManifestPath,
 			})
 		},
 		Run: func(ctx context.Context, operation journal.Operation, input json.RawMessage, emit daemon.Emit) *contract.Failure {
+			if operation.Kind == "up" {
+				return upRunner.Run(ctx, operation, input, func(kind string, details any) error { return emit(kind, details) })
+			}
 			if operation.Kind == "remove" {
 				return removeRunner.Run(ctx, operation, input, removal.OperationEmit(emit))
 			}
@@ -165,6 +162,7 @@ func newProductionRemovalRunner(
 	gitClient machinegit.Client,
 	owner journal.Owner,
 	applicationRoot string,
+	installationPath string,
 ) removal.OperationRunner {
 	return removal.OperationRunner{Assemble: func(ctx context.Context, operation journal.Operation) (*removal.Coordinator, error) {
 		snapshot, found, err := store.CurrentRemovalSnapshot(ctx, operation.BoxID)
@@ -175,29 +173,17 @@ func newProductionRemovalRunner(
 			return nil, fmt.Errorf("assemble production Box removal: %w", removal.ErrRemovalSnapshotAbsent)
 		}
 
-		limaPath, err := exec.LookPath("limactl")
-		if err != nil {
-			return nil, fmt.Errorf("assemble production Box removal: locate Lima: %w", err)
-		}
-		limaPath, err = filepath.Abs(limaPath)
-		if err != nil {
-			return nil, fmt.Errorf("assemble production Box removal: canonicalize Lima path: %w", err)
-		}
-		provider, err := toolchain.NewPreinstalledProvider([]toolchain.Entry{{
-			Component: toolchain.Lima,
-			Candidate: toolchain.Candidate{Identity: snapshot.LimaArtifact, Path: limaPath},
-		}})
+		installed, err := installation.Load(ctx, installationPath)
 		if err != nil {
 			return nil, err
 		}
-		artifact, err := toolchain.VerifyArtifact(ctx, snapshot.LimaArtifact, provider)
-		if err != nil {
-			return nil, err
+		if installed.Toolchain.Lima.Identity() != snapshot.LimaArtifact {
+			return nil, fmt.Errorf("assemble production Box removal: installed Lima identity differs from removal authority")
 		}
 		environment := map[string]string{
 			"PATH": os.Getenv("PATH"), "HOME": applicationRoot, "LANG": "C", "LC_ALL": "C", "TZ": "UTC",
 		}
-		limaRuntime, err := lima.NewAdapter(artifact, process.Runner{}, applicationRoot, environment)
+		limaRuntime, err := lima.NewAdapter(installed.Toolchain.Lima, process.Runner{}, applicationRoot, environment)
 		if err != nil {
 			return nil, err
 		}
@@ -205,17 +191,13 @@ func newProductionRemovalRunner(
 		if err != nil {
 			return nil, err
 		}
-		gitPath, err := exec.LookPath("git")
+		requestGit, err := productionGitClient(gitClient)
 		if err != nil {
-			return nil, fmt.Errorf("assemble production Box removal: locate Git: %w", err)
-		}
-		gitClient.GitPath, err = filepath.Abs(gitPath)
-		if err != nil {
-			return nil, fmt.Errorf("assemble production Box removal: canonicalize Git path: %w", err)
+			return nil, err
 		}
 		return removal.AssembleCurrent(ctx, removal.AssemblyConfig{
 			Snapshots: store, Journal: operationJournal, Operation: operation, Owner: owner,
-			Quiescer: writers, Paths: pathProvider, MachineGit: gitClient,
+			Quiescer: writers, Paths: pathProvider, MachineGit: requestGit,
 			LimaArtifact: snapshot.LimaArtifact, Lima: limaRuntime, Compose: composeRuntime,
 			AppendEvent: func(ctx context.Context, operationID, kind string, details json.RawMessage, occurredAt time.Time) error {
 				_, err := operationJournal.AppendEvent(ctx, operationID, kind, details, occurredAt)
@@ -236,47 +218,3 @@ type toolObservationError struct{ message string }
 
 func (e *toolObservationError) Error() string                 { return e.message }
 func (e *toolObservationError) ErrorCode() contract.ErrorCode { return contract.CodePrerequisiteFailed }
-
-func observeToolVersions(ctx context.Context, directory string) (string, contract.ToolVersions, error) {
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		return "", contract.ToolVersions{}, &toolObservationError{message: "observe tool versions: git executable not found"}
-	}
-	gitPath, err = filepath.Abs(gitPath)
-	if err != nil {
-		return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: canonicalize Git path: %v", err)}
-	}
-	type probe struct {
-		name   string
-		argv   []string
-		prefix string
-	}
-	probes := []probe{
-		{name: "Git", argv: []string{gitPath, "--version"}, prefix: "git version "},
-		{name: "Lima", argv: []string{"limactl", "--version"}, prefix: "limactl version "},
-		{name: "Docker", argv: []string{"docker", "--version"}, prefix: "Docker version "},
-		{name: "Compose", argv: []string{"docker", "compose", "version", "--short"}},
-	}
-	versions := make([]string, 0, len(probes))
-	for _, current := range probes {
-		result, runErr := (process.Runner{}).Run(ctx, process.Command{
-			Argv: current.argv, Dir: directory,
-			Env: map[string]string{"PATH": os.Getenv("PATH"), "HOME": directory, "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
-		})
-		if runErr != nil || result.StdoutTruncated || result.StderrTruncated {
-			return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: %s unavailable", current.name)}
-		}
-		value := strings.TrimSpace(string(result.Stdout))
-		value = strings.TrimPrefix(value, current.prefix)
-		if current.name == "Docker" {
-			value = strings.TrimSuffix(strings.Split(value, ",")[0], ",")
-		}
-		if value == "" || strings.ContainsAny(value, "\x00\r\n") {
-			return "", contract.ToolVersions{}, &toolObservationError{message: fmt.Sprintf("observe tool versions: %s returned invalid output", current.name)}
-		}
-		versions = append(versions, value)
-	}
-	return gitPath, contract.ToolVersions{
-		AgentBox: version.Current().Version, Git: versions[0], Lima: versions[1], Docker: versions[2], Compose: versions[3],
-	}, nil
-}

@@ -111,6 +111,21 @@ func TestRunServesHandshakeAndShutsDown(t *testing.T) {
 		t.Fatalf("production remove failure = %#v, want ownership conflict", failure)
 	}
 
+	upBoxID, err := identity.Box(workspaceID, "TASK-UP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure, err = daemonClient.Up(t.Context(), daemon.MutationRequest{
+		WorkspaceID: workspaceID.String(), BoxID: upBoxID.String(), TaskKey: "TASK-UP",
+		ManifestPath: manifestPath, ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
+	}, "production-up-missing-installation", func(daemonclient.Event) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failure == nil || failure.Code != contract.CodePrerequisiteFailed {
+		t.Fatalf("production up failure = %#v, want prerequisite failure", failure)
+	}
+
 	cancel()
 	select {
 	case code := <-exit:
@@ -143,6 +158,7 @@ func TestProductionRemovalDispatchFailsClosedWithoutOwnershipAuthority(t *testin
 	runner := newProductionRemovalRunner(
 		store, operationJournal, daemon.NewWriterGate(), pathProvider, machinegit.Client{},
 		journal.Owner{InstanceID: "daemon-test", ProcessStartID: "process-test", BootID: "boot-test"}, root,
+		filepath.Join(root, "installation.json"),
 	)
 	failure := runner.Run(t.Context(), journal.Operation{
 		ID: "operation-remove", BoxID: "box-missing", Kind: "remove", State: journal.StateRunning,
