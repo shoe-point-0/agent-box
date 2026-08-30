@@ -141,6 +141,15 @@ func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 	if observation, err = adapter.Start(t.Context(), spec); err != nil || observation.State != lima.Running {
 		t.Fatalf("Start() = %#v, %v", observation, err)
 	}
+	liveMounts, err := adapter.InspectMounts(t.Context(), spec)
+	if err != nil || len(liveMounts) != len(spec.Mounts) || liveMounts[0].Source != spec.Mounts[0].Path {
+		t.Fatalf("InspectMounts() = %#v, %v", liveMounts, err)
+	}
+	liveMounts[0].Source = "/mutated-live-copy"
+	refreshedMounts, err := adapter.InspectMounts(t.Context(), spec)
+	if err != nil || refreshedMounts[0].Source != spec.Mounts[0].Path {
+		t.Fatalf("InspectMounts() retained caller mutation: %#v, %v", refreshedMounts, err)
+	}
 	if _, err := adapter.Start(t.Context(), spec); err != nil {
 		t.Fatal(err)
 	}

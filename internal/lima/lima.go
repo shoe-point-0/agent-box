@@ -101,6 +101,15 @@ type MountObservation struct {
 	Writable    bool
 }
 
+// Capture is bounded guest command output translated at the Lima boundary so
+// callers do not depend on the Machine process implementation.
+type Capture struct {
+	Stdout          []byte
+	Stderr          []byte
+	StdoutTruncated bool
+	StderrTruncated bool
+}
+
 // Mounts returns a defensive copy of the mounts from Lima's live inspection.
 func (o Observation) Mounts() []MountObservation {
 	if o.config == nil {
@@ -150,6 +159,20 @@ func (a *Adapter) Inspect(ctx context.Context, spec Spec) (Observation, error) {
 		return Observation{}, err
 	}
 	return a.inspect(ctx, spec.RuntimeHost.InstanceName)
+}
+
+// InspectMounts returns a defensive copy from fresh live Lima inspection. It
+// exists as a narrow boundary for readiness checks that must not trust the
+// generated configuration used to create the instance.
+func (a *Adapter) InspectMounts(ctx context.Context, spec Spec) ([]MountObservation, error) {
+	observation, err := a.Inspect(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := validateObservation("inspect-mounts", spec, observation); err != nil {
+		return nil, err
+	}
+	return observation.Mounts(), nil
 }
 
 // Create creates an absent instance, adopts a matching existing instance, and
@@ -294,6 +317,16 @@ func (a *Adapter) Invoke(ctx context.Context, spec Spec, workdir string, argv []
 		return result, classifyRunError("invoke", spec.RuntimeHost.InstanceName, before.State, ctx, runErr)
 	}
 	return result, nil
+}
+
+// Capture invokes a guest command without streaming and defensively copies its
+// bounded output into a Lima-owned observation type.
+func (a *Adapter) Capture(ctx context.Context, spec Spec, workdir string, argv []string) (Capture, error) {
+	result, err := a.Invoke(ctx, spec, workdir, argv, nil, nil)
+	return Capture{
+		Stdout: append([]byte(nil), result.Stdout...), Stderr: append([]byte(nil), result.Stderr...),
+		StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated,
+	}, err
 }
 
 func (a *Adapter) checkSpecAndVersion(ctx context.Context, spec Spec) error {

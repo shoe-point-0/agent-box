@@ -113,16 +113,29 @@ Verify mounted filesystem contracts
   generated input.
 - `go vet ./internal/filesystem/... ./internal/lima/... ./internal/compose/...`,
   `make lint` (`0 issues`), and `git diff --check` passed for this slice.
+- Live collection boundary: `go test -race -count=10
+  ./internal/filesystem/... ./internal/lima/... ./internal/compose/...` passed,
+  including the existing real-Docker Compose lifecycle. The collector now
+  obtains a defensive mount set from fresh Lima inspection, re-observes Docker
+  through the Compose runtime, reads guest mountinfo through the typed Lima
+  invocation, and reads each container's mountinfo with fixed argv addressed
+  by its immutable Docker ID. Deterministic tests prove sorted immutable-ID
+  calls, duplicate-ID refusal before container exec, bounded capture, stable
+  cancellation, and no command-output or underlying-error disclosure.
+- `go vet ./internal/filesystem/... ./internal/lima/... ./internal/compose/...`,
+  `make lint` (`0 issues`), and `git diff --check` passed for the live collector
+  slice. This does not yet claim a complete filesystem probe or real Lima
+  execution.
 
 ## Outcome and follow-ups
 
 In progress. Machine path identity protects Lima and Compose mutation, and the
-four-layer exact comparison now has a bounded typed contract. Remaining work is
-to collect guest/container mountinfo through the live invocation boundary, run
-the bidirectional byte/mode, rename/delete, watcher, and undeclared-canary
-probes, materialize the managed Git exclude, and execute that complete verifier
-against the real-container lane. Real Lima execution remains unavailable on
-this Machine and must not be inferred from fixtures or Docker evidence.
+four-layer exact comparison now collects through fresh live inspection and
+typed invocation boundaries. Remaining work is to run the bidirectional
+byte/mode, rename/delete, watcher, and undeclared-canary probes, materialize the
+managed Git exclude, and execute that complete verifier against the
+real-container lane. Real Lima execution remains unavailable on this Machine
+and must not be inferred from fixtures or Docker evidence.
 
 ## Original request
 
