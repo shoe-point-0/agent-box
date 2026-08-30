@@ -101,8 +101,23 @@ Implement refusal-first Box removal
   `0 issues`; all unit and race tests, vet, Linux builds, spike smoke, shell
   checks, and Python automation tests passed. `sprout check m1-safe-remove`,
   `sprout check --all`, and `git diff --check` also passed.
+- `go test -race -count=10 ./internal/removal ./internal/compose` passed after
+  adding the concrete Compose removal step. The digest-bound preview includes
+  exact container, network, volume, ownership-label, and explicit volume-delete
+  policy evidence; default execution refused the exact volume loss before any
+  lease or runtime removal call; changed ownership labels, volume inventory,
+  and unrecorded replacement IDs refused before mutation.
+- `go test -run '^TestRuntimeLifecycleAgainstRealDocker$' -v
+  ./internal/compose` passed against the live Linux Docker boundary in 12.40s.
+  The fixture proved an ownership-label forgery leaves the project intact, then
+  injected a container-only partial teardown and proved a fresh removal deletes
+  only the remaining recorded container, network, and volume set.
+- `make check` passed after the Compose slice: pinned lint reported `0 issues`;
+  module verification, all unit and race tests, vet, Linux builds, spike smoke,
+  shell checks, and Python automation tests passed. `sprout check
+  m1-safe-remove`, `sprout check --all`, and `git diff --check` also passed.
 - The task remains open: these results prove the coordinator slice, not a live
-  `abox rm` command or concrete Lima/Compose/private-store teardown integration.
+  `abox rm` command or concrete Lima/private-store teardown integration.
 
 ## Outcome and follow-ups
 
@@ -120,11 +135,17 @@ Implement refusal-first Box removal
   generated branch at its expected commit, verifies terminal absence, and
   models the worktree-removed/branch-remains interruption state for fresh
   preview and retry.
-- Next slice must implement concrete Compose teardown observation/removal,
-  including exact container/network/volume ownership and volume-loss policy.
-  Lima, private-store, generated-state, daemon, and CLI integration plus
-  disposable runtime teardown evidence remain required before any acceptance
-  criterion can be checked.
+- Added an ownership-proved concrete Compose step over the existing guest
+  runtime. It inventories exact containers, networks, volumes, labels, and
+  volume-loss policy; deep-copies persisted ownership records; independently
+  reobserves before the leaf call; and allows only absent members of the
+  recorded set so interrupted `compose down` retries converge without adopting
+  replacement resources. A live Docker fixture exercises refusal, partial
+  teardown, retry, and selected-project terminal absence.
+- Next slice must implement concrete Lima teardown observation/removal and its
+  interruption recovery. Private-store, generated-state, daemon, and CLI
+  integration plus full disposable Box teardown evidence remain required
+  before any acceptance criterion can be checked.
 
 ## Original request
 

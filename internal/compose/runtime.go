@@ -286,7 +286,7 @@ func (r *Runtime) Remove(ctx context.Context, spec RuntimeSpec, recorded Runtime
 	if err != nil {
 		return before, err
 	}
-	if err := proveRuntimeRecords(recorded, before); err != nil {
+	if err := VerifyRemovalRecords(recorded, before); err != nil {
 		return before, runtimeError(RuntimeNotOwned, "remove", err)
 	}
 	_, runErr := r.runCompose(ctx, spec, "remove", nil, nil, "down", "--volumes", "--remove-orphans")
@@ -780,46 +780,70 @@ func validateServiceAndArgv(spec RuntimeSpec, service string, argv []string) err
 	return nil
 }
 
-func proveRuntimeRecords(recorded RuntimeRecords, live RuntimeObservation) error {
-	liveResources := make(map[string]ownership.ComposeResourceObservation, len(live.Containers)+len(live.Networks))
-	for _, container := range live.Containers {
-		liveResources["container\x00"+container.ID] = ownership.ComposeResourceObservation{Kind: "container", ID: container.ID, Labels: container.Labels}
-	}
-	for _, network := range live.Networks {
-		liveResources["network\x00"+network.ID] = ownership.ComposeResourceObservation{Kind: "network", ID: network.ID, Labels: network.Labels}
-	}
-	if len(recorded.Resources) != len(liveResources) || len(recorded.Volumes) != len(live.Volumes) {
-		return errors.New("recorded and live resource sets differ")
-	}
-	seenResources := make(map[string]struct{}, len(recorded.Resources))
+// VerifyRemovalRecords proves that every live Compose resource is the same
+// persisted object Agent Box previously recorded. Recorded objects may already
+// be absent so an interrupted removal can converge, but an unrecorded live ID
+// or changed ownership label always refuses the next mutation.
+func VerifyRemovalRecords(recorded RuntimeRecords, live RuntimeObservation) error {
+	recordedResources := make(map[string]ownership.ComposeResourceRecord, len(recorded.Resources))
 	for _, record := range recorded.Resources {
 		key := record.Kind + "\x00" + record.ID
-		observed, ok := liveResources[key]
-		if !ok {
-			return errors.New("recorded resource is absent from live observation")
-		}
-		if _, duplicate := seenResources[key]; duplicate {
+		if _, duplicate := recordedResources[key]; duplicate {
 			return errors.New("recorded resource set contains a duplicate")
 		}
-		seenResources[key] = struct{}{}
+		if _, err := ownership.ProveComposeResource(record, ownership.ComposeResourceObservation(record)); err != nil {
+			return err
+		}
+		recordedResources[key] = record
+	}
+
+	liveResources := make(map[string]ownership.ComposeResourceObservation, len(live.Containers)+len(live.Networks))
+	for _, container := range live.Containers {
+		key := "container\x00" + container.ID
+		if _, duplicate := liveResources[key]; duplicate {
+			return errors.New("live resource set contains a duplicate")
+		}
+		liveResources[key] = ownership.ComposeResourceObservation{Kind: "container", ID: container.ID, Labels: container.Labels}
+	}
+	for _, network := range live.Networks {
+		key := "network\x00" + network.ID
+		if _, duplicate := liveResources[key]; duplicate {
+			return errors.New("live resource set contains a duplicate")
+		}
+		liveResources[key] = ownership.ComposeResourceObservation{Kind: "network", ID: network.ID, Labels: network.Labels}
+	}
+	for key, observed := range liveResources {
+		record, ok := recordedResources[key]
+		if !ok {
+			return errors.New("live resource is absent from recorded ownership set")
+		}
 		if _, err := ownership.ProveComposeResource(record, observed); err != nil {
 			return err
 		}
 	}
-	liveVolumes := make(map[string]ownership.VolumeObservation, len(live.Volumes))
-	for _, volume := range live.Volumes {
-		liveVolumes[volume.ID] = ownership.VolumeObservation{ID: volume.ID, Labels: volume.Labels}
-	}
-	seenVolumes := make(map[string]struct{}, len(recorded.Volumes))
+
+	recordedVolumes := make(map[string]ownership.VolumeRecord, len(recorded.Volumes))
 	for _, record := range recorded.Volumes {
-		observed, ok := liveVolumes[record.ID]
-		if !ok {
-			return errors.New("recorded volume is absent from live observation")
-		}
-		if _, duplicate := seenVolumes[record.ID]; duplicate {
+		if _, duplicate := recordedVolumes[record.ID]; duplicate {
 			return errors.New("recorded volume set contains a duplicate")
 		}
-		seenVolumes[record.ID] = struct{}{}
+		if _, err := ownership.ProveVolume(record, ownership.VolumeObservation(record)); err != nil {
+			return err
+		}
+		recordedVolumes[record.ID] = record
+	}
+	liveVolumes := make(map[string]ownership.VolumeObservation, len(live.Volumes))
+	for _, volume := range live.Volumes {
+		if _, duplicate := liveVolumes[volume.ID]; duplicate {
+			return errors.New("live volume set contains a duplicate")
+		}
+		liveVolumes[volume.ID] = ownership.VolumeObservation{ID: volume.ID, Labels: volume.Labels}
+	}
+	for id, observed := range liveVolumes {
+		record, ok := recordedVolumes[id]
+		if !ok {
+			return errors.New("live volume is absent from recorded ownership set")
+		}
 		if _, err := ownership.ProveVolume(record, observed); err != nil {
 			return err
 		}

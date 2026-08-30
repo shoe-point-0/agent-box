@@ -151,6 +151,9 @@ volumes:
 	if err != nil || len(stillThere.Containers) != 2 {
 		t.Fatalf("resources changed after ownership refusal: observation=%+v error=%v", stillThere, err)
 	}
+	if output, removeErr := exec.Command(docker, "container", "rm", stillThere.Containers[0].ID).CombinedOutput(); removeErr != nil {
+		t.Fatalf("inject interrupted Compose removal: %v: %s", removeErr, output)
+	}
 
 	after, err := runtime.Remove(t.Context(), spec, records)
 	if err != nil {
