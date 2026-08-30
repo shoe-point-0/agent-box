@@ -203,6 +203,72 @@ func TestForeignKeyViolationRollsBackTransaction(t *testing.T) {
 	}
 }
 
+func TestSQLiteFullRollsBackAndSurvivesRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "state.db")
+	store, err := Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pageCount int
+	if err := store.db.QueryRow(`PRAGMA page_count`).Scan(&pageCount); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.Exec(`PRAGMA max_page_count = ` + strconv.Itoa(pageCount)); err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Update(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO workspaces
+			(id, manifest_path, manifest_digest, created_at, updated_at)
+			VALUES ('workspace-full', printf('%*s', 16777216, 'x'), 'sha256:full', 1, 1)`)
+		return err
+	})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "database or disk is full") {
+		t.Fatalf("full transaction error = %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := Open(t.Context(), path)
+	if err != nil {
+		t.Fatalf("reopen after SQLITE_FULL: %v", err)
+	}
+	t.Cleanup(func() { _ = restarted.Close() })
+	var rows int
+	if err := restarted.db.QueryRow(`SELECT count(*) FROM workspaces WHERE id = 'workspace-full'`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Fatalf("failed full transaction retained %d candidate rows", rows)
+	}
+	var integrity string
+	if err := restarted.db.QueryRow(`PRAGMA quick_check(1)`).Scan(&integrity); err != nil || integrity != "ok" {
+		t.Fatalf("integrity after SQLITE_FULL = %q, %v", integrity, err)
+	}
+}
+
+func TestOpenFailsClosedWhenWALCannotBeCreated(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "state.db")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	walPath := path + "-wal"
+	if err := os.Mkdir(walPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(t.Context(), path)
+	if err == nil {
+		_ = store.Close()
+		t.Fatal("Open() succeeded with a directory at the WAL path")
+	}
+	info, statErr := os.Lstat(walPath)
+	if statErr != nil || !info.IsDir() {
+		t.Fatalf("hostile WAL path changed: info=%v error=%v", info, statErr)
+	}
+}
+
 func TestFailedMigrationIsAtomic(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "state", "state.db")
@@ -213,7 +279,7 @@ func TestFailedMigrationIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TABLE workspaces (wrong TEXT); PRAGMA user_version = 0`); err != nil {
+	if _, err := db.Exec(`CREATE TABLE workspaces (wrong TEXT); INSERT INTO workspaces VALUES ('original'); PRAGMA user_version = 0`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -246,6 +312,14 @@ func TestFailedMigrationIsAtomic(t *testing.T) {
 	}
 	if boxes != 0 {
 		t.Fatal("partial migration left boxes table behind")
+	}
+	var original string
+	if err := db.QueryRow(`SELECT wrong FROM workspaces`).Scan(&original); err != nil || original != "original" {
+		t.Fatalf("original schema/data after failed migration = %q, %v", original, err)
+	}
+	var integrity string
+	if err := db.QueryRow(`PRAGMA quick_check(1)`).Scan(&integrity); err != nil || integrity != "ok" {
+		t.Fatalf("integrity after failed migration = %q, %v", integrity, err)
 	}
 }
 

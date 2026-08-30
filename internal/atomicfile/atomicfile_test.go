@@ -36,6 +36,7 @@ func TestWriterFailureLeavesCompleteVersion(t *testing.T) {
 		name      string
 		stage     atomicfile.Stage
 		committed bool
+		wantErr   error
 		configure func(*atomicfile.Operations)
 	}{
 		{
@@ -53,10 +54,26 @@ func TestWriterFailureLeavesCompleteVersion(t *testing.T) {
 			},
 		},
 		{
+			name:    "write ENOSPC",
+			stage:   atomicfile.StageWrite,
+			wantErr: syscall.ENOSPC,
+			configure: func(operations *atomicfile.Operations) {
+				operations.Write = func(*os.File, []byte) (int, error) { return 0, syscall.ENOSPC }
+			},
+		},
+		{
 			name:  "file sync",
 			stage: atomicfile.StageFileSync,
 			configure: func(operations *atomicfile.Operations) {
 				operations.SyncFile = func(*os.File) error { return errInjected }
+			},
+		},
+		{
+			name:    "file sync ENOSPC",
+			stage:   atomicfile.StageFileSync,
+			wantErr: syscall.ENOSPC,
+			configure: func(operations *atomicfile.Operations) {
+				operations.SyncFile = func(*os.File) error { return syscall.ENOSPC }
 			},
 		},
 		{
@@ -100,12 +117,15 @@ func TestWriterFailureLeavesCompleteVersion(t *testing.T) {
 			if writeError.Stage != test.stage || writeError.Committed != test.committed {
 				t.Fatalf("WriteFile() error = stage %q committed %t, want stage %q committed %t", writeError.Stage, writeError.Committed, test.stage, test.committed)
 			}
-			if test.stage == atomicfile.StageDirectorySync {
-				if !errors.Is(err, syscall.ENOTSUP) {
-					t.Fatalf("WriteFile() error = %v, want wrapped ENOTSUP", err)
+			wantErr := test.wantErr
+			if wantErr == nil {
+				wantErr = errInjected
+				if test.stage == atomicfile.StageDirectorySync {
+					wantErr = syscall.ENOTSUP
 				}
-			} else if !errors.Is(err, errInjected) {
-				t.Fatalf("WriteFile() error = %v, want wrapped injected error", err)
+			}
+			if !errors.Is(err, wantErr) {
+				t.Fatalf("WriteFile() error = %v, want wrapped %v", err, wantErr)
 			}
 
 			want := oldContent

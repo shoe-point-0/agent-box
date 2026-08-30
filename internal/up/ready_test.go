@@ -158,6 +158,72 @@ func TestReconcileReadyKeepsPublicationInsideReadinessAndContextBoundaries(t *te
 	}
 }
 
+func TestReconcileReadyRetriesFailedPublicationAfterRestartWithFreshObservation(t *testing.T) {
+	fixture := newReadyFixture(t)
+	path := filepath.Join(t.TempDir(), "state.db")
+	store, err := state.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedReadyIntent(t, store, fixture.attempt)
+	if err := store.Update(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`CREATE TRIGGER inject_ready_failure BEFORE UPDATE OF recorded_state ON boxes
+			WHEN NEW.recorded_state = 'ready' BEGIN SELECT RAISE(ABORT, 'injected READY commit failure'); END`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ReconcileReady(t.Context(), fixture.config(store), fixture.attempt, fixture.foundation, fixture.compose); err == nil || !strings.Contains(err.Error(), "injected READY commit failure") {
+		t.Fatalf("first reconciliation error = %v", err)
+	}
+	assertNoReadyGeneration(t, store, fixture.attempt.Plan.BoxID)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := state.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = restarted.Close() })
+	if err := restarted.Update(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DROP TRIGGER inject_ready_failure`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fixture.gate.observation.Docker.Containers[0].Health = ""
+	if err := ReconcileReady(t.Context(), fixture.config(restarted), fixture.attempt, fixture.foundation, fixture.compose); err != nil {
+		t.Fatalf("restart reconciliation error = %v", err)
+	}
+	if fixture.gate.calls != 2 {
+		t.Fatalf("fresh readiness observations = %d, want 2", fixture.gate.calls)
+	}
+	retained, found, err := restarted.CurrentRemovalSnapshot(t.Context(), fixture.attempt.Plan.BoxID)
+	if err != nil || !found || retained.Generation != fixture.attempt.Generation {
+		t.Fatalf("durable restarted generation = %#v, found=%t error=%v", retained, found, err)
+	}
+}
+
+func assertNoReadyGeneration(t *testing.T, store *state.Store, boxID string) {
+	t.Helper()
+	var stateValue string
+	var generation int64
+	var rows int
+	if err := store.View(t.Context(), func(tx *sql.Tx) error {
+		if err := tx.QueryRow(`SELECT recorded_state, current_generation FROM boxes WHERE id = ?`, boxID).Scan(&stateValue, &generation); err != nil {
+			return err
+		}
+		return tx.QueryRow(`SELECT count(*) FROM box_generations WHERE box_id = ?`, boxID).Scan(&rows)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if stateValue == "ready" || generation != 0 || rows != 0 {
+		t.Fatalf("failed publication escaped durable boundary: state=%q generation=%d rows=%d", stateValue, generation, rows)
+	}
+}
+
 func TestReconcileReadyRefusesToReplaceRetainedContext(t *testing.T) {
 	fixture := newReadyFixture(t)
 	retained := []byte("retained-generation-context\n")
