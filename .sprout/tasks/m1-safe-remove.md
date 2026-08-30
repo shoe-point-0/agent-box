@@ -35,30 +35,68 @@ Implement refusal-first Box removal
 
 ## Technical approach
 
-_Refine this section after inspecting the repository and before editing._
+- Add a focused `internal/removal` coordinator above the existing Git, Lima,
+  Compose, ownership, journal, and reconcile boundaries. Leaf steps remain
+  responsible for producing freshly verified registration, branch, status,
+  publication, inode, label, and volume-policy facts; the coordinator owns
+  refusal policy and dependency ordering rather than duplicating adapters.
+- Model removal as a read-only `Preview` followed by an authorized `Execute`.
+  Canonicalize and hash the complete ordered resource/loss inventory, require
+  `--yes` semantics plus separate dirty-worktree, unpublished-commit, and
+  volume-discard grants, and never mutate during preview or authorization
+  refusal.
+- Acquire an exclusive Box lease and quiesce writers before execution. Reobserve
+  the entire inventory after quiescence, then reobserve and compare each exact
+  resource fact immediately before its destructive callback. Treat any change
+  in identity evidence or losses as drift requiring a fresh preview.
+- Execute only the explicit dependency-ordered resource steps, persist a
+  before/after transition around each side effect, skip already-absent steps,
+  and return completed/remaining resource keys on partial failure so a fresh
+  preview and retry converges without replaying deletion blindly.
+- Exercise policy, drift, partial-failure, lease/quiescence, durable-transition,
+  and selected-target isolation behavior with adversarial temporary-root tests.
 
 ## Execution checklist
 
-- [ ] Inspect the relevant code, tests, and repository instructions.
-- [ ] Refine the technical approach and acceptance criteria in this task before editing.
-- [ ] Implement the smallest complete change.
+- [x] Inspect the relevant code, tests, and repository instructions.
+- [x] Refine the technical approach and acceptance criteria in this task before editing.
+- [x] Implement the refusal/confirmation/removal coordination boundary.
 - [ ] Run every verification item and address failures.
 - [ ] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
-- [ ] go test ./...
-- [ ] go test -race ./...
-- [ ] go vet ./...
-- [ ] Run destructive safety tests only inside isolated temporary roots
+- [x] go test ./...
+- [x] go test -race ./...
+- [x] go vet ./...
+- [x] Run destructive safety tests only inside isolated temporary roots
 
 ## Validation evidence
 
-_Not recorded yet._
+- `go test -race -count=10 ./internal/removal` passed ten repetitions of
+  refusal, digest binding, drift, interruption/retry, dependency ordering,
+  lease/quiescence, and durable before-event tests.
+- The destructive isolation test operated only below `t.TempDir()`, removed the
+  selected Box root, and byte-verified that an unrelated sibling file retained
+  its original contents.
+- `make check` passed: pinned lint reported `0 issues`; module tidiness and
+  verification, all unit and race tests, vet, Linux builds, spike smoke, shell
+  checks, and Python automation tests passed.
+- The task remains open: these results prove the coordinator slice, not a live
+  `abox rm` command or concrete Git/Lima/Compose teardown integration.
 
 ## Outcome and follow-ups
 
-_Not completed yet._
+- Added a fail-closed removal coordinator with canonical exact-loss previews,
+  SHA-256 confirmation binding, separate discard grants, mandatory noninteractive
+  confirmation, fenced lease/quiescence hooks, per-resource immediate
+  reobservation, fixed teardown stages, durable before/after transitions, and
+  partial-progress results for convergent retries.
+- Next slice must implement concrete removal steps over the existing worktree,
+  publication, Compose, Lima, ownership, and state boundaries. It must include
+  ignored-file detection, wire daemon/CLI preview and execution without trusting
+  writable Box state, and exercise real Git plus disposable runtime resources
+  before any acceptance criterion can be checked.
 
 ## Original request
 
