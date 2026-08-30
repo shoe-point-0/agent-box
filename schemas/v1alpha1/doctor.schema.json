@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abox.dev/schemas/doctor/v1alpha1",
+  "title": "Agent Box Doctor Report v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mode", "checks"],
+  "properties": {
+    "schemaVersion": {"const": "abox.doctor/v1alpha1"},
+    "mode": {"enum": ["machine", "box", "filesystem"]},
+    "taskKey": {"type": "string", "minLength": 1, "maxLength": 128},
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/check"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "machine"}}, "required": ["mode"]},
+      "then": {"not": {"required": ["taskKey"]}},
+      "else": {"required": ["taskKey"]}
+    }
+  ],
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "evidence", "status", "observed", "required"],
+      "properties": {
+        "result": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$", "maxLength": 1024},
+        "evidence": {"enum": ["tested", "warning", "unsupported", "unknown"]},
+        "status": {"enum": ["pass", "fail", "advisory"]},
+        "observed": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "required": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "remediation": {"type": "string", "minLength": 1, "maxLength": 1024}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+          "then": {"not": {"required": ["remediation"]}},
+          "else": {"required": ["remediation"]}
+        }
+      ]
+    }
+  }
+}

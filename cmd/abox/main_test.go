@@ -16,6 +16,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/daemonclient"
+	"github.com/shoe-point-0/agent-box/internal/doctor"
 	"github.com/shoe-point-0/agent-box/internal/manifest"
 )
 
@@ -102,12 +103,12 @@ func TestHelpExposesOnlyImplementedCommands(t *testing.T) {
 	if code := run(context.Background(), []string{"help"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("help code = %d", code)
 	}
-	for _, command := range []string{"init", "list", "plan", "up", "version", "help"} {
+	for _, command := range []string{"init", "doctor", "list", "plan", "up", "version", "help"} {
 		if !strings.Contains(stdout.String(), "  "+command) {
 			t.Errorf("help does not expose %q: %q", command, stdout.String())
 		}
 	}
-	for _, unavailable := range []string{"status", "shell", "exec", "logs", "routes", "publish", "down", "rm", "doctor"} {
+	for _, unavailable := range []string{"status", "shell", "exec", "logs", "routes", "publish", "down", "rm"} {
 		if strings.Contains(stdout.String(), "  "+unavailable+" ") {
 			t.Errorf("help claims unavailable command %q", unavailable)
 		}
@@ -368,6 +369,76 @@ func TestPlanArgumentsAndNoOpRendering(t *testing.T) {
 	}
 }
 
+func TestDoctorModesRenderSchemaValidReadOnlyReports(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args    []string
+		mode    doctor.Mode
+		taskKey string
+	}{
+		{args: []string{"doctor", "--json"}, mode: doctor.ModeMachine},
+		{args: []string{"doctor", "TASK-1", "--json"}, mode: doctor.ModeBox, taskKey: "TASK-1"},
+		{args: []string{"doctor", "fs", "--json", "TASK-1"}, mode: doctor.ModeFilesystem, taskKey: "TASK-1"},
+	}
+	for _, test := range tests {
+		t.Run(string(test.mode), func(t *testing.T) {
+			cwd := t.TempDir()
+			calls := 0
+			deps := dependencies{
+				getwd:       func() (string, error) { return cwd, nil },
+				userPaths:   func() (daemon.UserPaths, error) { panic("doctor requested daemon paths") },
+				newClient:   func(string) (daemonAPI, error) { panic("doctor constructed a daemon client") },
+				startDaemon: func(daemon.UserPaths) (<-chan error, error) { panic("doctor started aboxd") },
+				doctor: func(_ context.Context, request doctor.Request, directory string) (doctor.Report, error) {
+					calls++
+					if request.Mode != test.mode || request.TaskKey != test.taskKey || directory != cwd {
+						t.Fatalf("doctor request/directory = %#v/%q", request, directory)
+					}
+					return doctorFixture(request), nil
+				},
+			}
+			var stdout, stderr bytes.Buffer
+			code := runWith(t.Context(), test.args, &stdout, &stderr, deps)
+			if code != contract.ExitPrerequisite || stderr.Len() != 0 || calls != 1 {
+				t.Fatalf("doctor code/stderr/calls = %d/%q/%d", code, stderr.String(), calls)
+			}
+			validateJSONLine(t, compileCLISchema(t, "doctor"), bytes.TrimSpace(stdout.Bytes()))
+		})
+	}
+}
+
+func TestDoctorHumanOutputAndArguments(t *testing.T) {
+	t.Parallel()
+	cwd := t.TempDir()
+	deps := dependencies{
+		getwd: func() (string, error) { return cwd, nil },
+		doctor: func(_ context.Context, request doctor.Request, _ string) (doctor.Report, error) {
+			return doctorFixture(request), nil
+		},
+	}
+	var stdout, stderr bytes.Buffer
+	if code := runWith(t.Context(), []string{"doctor"}, &stdout, &stderr, deps); code != contract.ExitPrerequisite {
+		t.Fatalf("doctor code = %d; stderr=%q", code, stderr.String())
+	}
+	for _, value := range []string{"Machine prerequisites", "RESULT", "machine.tested", "install it"} {
+		if !strings.Contains(stdout.String(), value) {
+			t.Errorf("human doctor output lacks %q: %q", value, stdout.String())
+		}
+	}
+	for _, args := range [][]string{{"doctor", "fs"}, {"doctor", "one", "two"}, {"doctor", "--json", "--json"}, {"doctor", "--help", "TASK"}} {
+		stdout.Reset()
+		stderr.Reset()
+		if code := runWith(t.Context(), args, &stdout, &stderr, dependencies{}); code != contract.ExitUsage {
+			t.Errorf("runWith(%v) code = %d, want %d", args, code, contract.ExitUsage)
+		}
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runWith(t.Context(), []string{"doctor", "--help"}, &stdout, &stderr, dependencies{}); code != contract.ExitOK || !strings.Contains(stdout.String(), "never starts aboxd") || stderr.Len() != 0 {
+		t.Fatalf("doctor help code/stdout/stderr = %d/%q/%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestUpDiscoversManifestAndRendersHumanProgressOnStderr(t *testing.T) {
 	t.Parallel()
 	root, nested, manifest := manifestFixture(t)
@@ -572,6 +643,18 @@ func listFixture() contract.ListOutput {
 		{ID: "box-stale", WorkspaceID: "ws-stale", TaskKey: "TASK-X", ManifestPath: "/work/stale/.abox/box.yaml", State: "stale", RecordedState: "ready", Drift: []string{"runtime host record is missing for a materialized generation"}},
 		{ID: "box-stopped", WorkspaceID: "ws-stopped", TaskKey: "TASK-S", ManifestPath: "/work/stopped/.abox/box.yaml", State: "stopped", RecordedState: "stopped", Drift: []string{}},
 	}}
+}
+
+func doctorFixture(request doctor.Request) doctor.Report {
+	return doctor.Report{
+		SchemaVersion: doctor.SchemaVersion, Mode: request.Mode, TaskKey: request.TaskKey,
+		Checks: []doctor.Check{
+			{Result: "machine.tested", Evidence: doctor.EvidenceTested, Status: doctor.StatusPass, Observed: "present", Required: "present"},
+			{Result: "machine.warning", Evidence: doctor.EvidenceWarning, Status: doctor.StatusAdvisory, Observed: "conditional", Required: "measured", Remediation: "measure it"},
+			{Result: "machine.unsupported", Evidence: doctor.EvidenceUnsupported, Status: doctor.StatusFail, Observed: "missing", Required: "supported", Remediation: "install it"},
+			{Result: "machine.unknown", Evidence: doctor.EvidenceUnknown, Status: doctor.StatusAdvisory, Observed: "not observed", Required: "live evidence", Remediation: "observe it"},
+		},
+	}
 }
 
 func planFixture() contract.PlanOutput {

@@ -18,6 +18,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/daemon"
 	"github.com/shoe-point-0/agent-box/internal/daemonclient"
+	"github.com/shoe-point-0/agent-box/internal/doctor"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/version"
 )
@@ -43,6 +44,7 @@ type dependencies struct {
 	userPaths   func() (daemon.UserPaths, error)
 	newClient   func(string) (daemonAPI, error)
 	startDaemon func(daemon.UserPaths) (<-chan error, error)
+	doctor      func(context.Context, doctor.Request, string) (doctor.Report, error)
 	random      io.Reader
 }
 
@@ -63,7 +65,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return runWith(ctx, args, stdout, stderr, dependencies{
 		getwd: os.Getwd, userPaths: daemon.DefaultUserPaths,
 		newClient:   func(socket string) (daemonAPI, error) { return daemonclient.New(socket) },
-		startDaemon: startDaemon, random: rand.Reader,
+		startDaemon: startDaemon,
+		doctor: func(ctx context.Context, request doctor.Request, cwd string) (doctor.Report, error) {
+			observer, err := doctor.NewLocalObserver(cwd)
+			if err != nil {
+				return doctor.Report{}, err
+			}
+			return doctor.Inspect(ctx, request, observer)
+		},
+		random: rand.Reader,
 	})
 }
 
@@ -128,6 +138,41 @@ func runWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps 
 			}
 		} else if err := renderList(stdout, output); err != nil {
 			return contract.ExitInternal
+		}
+		return contract.ExitOK
+	}
+	if args[0] == "doctor" {
+		options, parseFailure := parseDoctor(args[1:])
+		if parseFailure != nil {
+			return reportFailure(stdout, stderr, options.json, parseFailure)
+		}
+		if options.help {
+			return writeDoctorHelp(stdout)
+		}
+		cwd, err := deps.getwd()
+		if err != nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodePrerequisiteFailed, "cannot resolve current directory"))
+		}
+		cwd, err = filepath.Abs(cwd)
+		if err != nil || deps.doctor == nil {
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodeInternalInvariant, "cannot configure read-only doctor"))
+		}
+		report, err := deps.doctor(ctx, doctor.Request{Mode: options.mode, TaskKey: options.taskKey}, filepath.Clean(cwd))
+		if err != nil {
+			if ctx.Err() != nil {
+				return reportFailure(stdout, stderr, options.json, failure(contract.CodePrerequisiteFailed, "doctor observation was canceled"))
+			}
+			return reportFailure(stdout, stderr, options.json, failure(contract.CodeInternalInvariant, "doctor observation failed"))
+		}
+		if options.json {
+			if err := json.NewEncoder(stdout).Encode(report); err != nil {
+				return contract.ExitInternal
+			}
+		} else if err := renderDoctor(stdout, report); err != nil {
+			return contract.ExitInternal
+		}
+		if report.Failed() {
+			return contract.ExitPrerequisite
 		}
 		return contract.ExitOK
 	}
@@ -467,6 +512,7 @@ func writeHelp(writer io.Writer) int {
 
 Commands:
   init     create a strict starter manifest without provisioning
+  doctor   inspect Machine or Box prerequisites without repair
   list     list recorded Boxes and observed drift
   plan     show proposed reconciliation operations without changing state
   up       submit a versioned up request to aboxd
