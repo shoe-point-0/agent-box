@@ -2,19 +2,19 @@
 {"schema_version":1,"id":"m0-routing-probe","status":"implemented","created_at":"2026-08-29T06:48:35.876421469Z","implemented_at":"2026-08-29T08:59:07.330570647Z"}
 -->
 
-# Prove wildcard localhost routing through one listener
+# Wildcard localhost routing through one listener
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m0-routing-probe`.
 
-## Goal
+- Delivered the `localhost-routing` executable spike, typed retained report, exact-authority routing table, forwarding/control-header trust boundary, and protocol integration tests.
+- Browser profile creation is journaled before use, guarded by an exact owner marker, removed synchronously after Chromium exits, and recoverable through scenario cleanup after interruption. In-process listeners shut down with bounded contexts and create no persistent Machine networking state.
+- Linux curl, Chromium, WebSocket, SSE, streaming, active-Tailscale, IPv4 resolver, and controlled proxy behavior are proven. IPv6 wildcard resolution, ambient enterprise proxies, Lima forwarding, and Darwin resolver/browser behavior are explicit non-claims; unchanged final validation belongs to `m5-darwin-arm64-hardware-gate`.
 
-Prove wildcard localhost routing through one listener
-
-## Context
+## Scope and dependencies
 
 - Milestone 0 Linux implementation probe. Dependencies: m0-spike-harness. Prove host routing against isolated local backends now; the complete Lima-forward path is rerun by m5-darwin-arm64-hardware-gate. Source: THE_BEGINNING.md Sections 13 and 19.2.
 
-## Requirements
+## Behavior
 
 - Route two distinct Box hostnames under .abox.localhost through one unprivileged loopback HTTP listener.
 - Exercise curl, a browser resolver path, IPv4/IPv6 behavior, WebSocket, SSE, and streaming.
@@ -22,31 +22,22 @@ Prove wildcard localhost routing through one listener
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Requests for two exact `.abox.localhost` authorities reach only the selected backend; unknown or malformed authorities fail closed.
-- [x] The router removes every inbound `X-Abox-*` control header, injects only route-derived control identity, and rebuilds `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` from the trusted connection/request.
-- [x] Real curl and headless-Chromium requests resolve through the same unprivileged IPv4 loopback listener; WebSocket, SSE, streaming request, and streaming response behavior pass protocol assertions.
-- [x] IPv4/IPv6 resolver and listener behavior, active VPN-like interfaces, and explicit-proxy/bypass behavior are emitted as typed evidence; unexercised or unsupported cases remain explicit compatibility limits.
+- Requests for two exact `.abox.localhost` authorities reach only the selected backend; unknown or malformed authorities fail closed.
+- The router removes every inbound `X-Abox-*` control header, injects only route-derived control identity, and rebuilds `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` from the trusted connection/request.
+- Real curl and headless-Chromium requests resolve through the same unprivileged IPv4 loopback listener; WebSocket, SSE, streaming request, and streaming response behavior pass protocol assertions.
+- IPv4/IPv6 resolver and listener behavior, active VPN-like interfaces, and explicit-proxy/bypass behavior are emitted as typed evidence; unexercised or unsupported cases remain explicit compatibility limits.
 
-## Technical approach
+## Implementation details
 
 - Add one disposable `localhost-routing` spike to the existing retained-evidence harness. It starts two isolated loopback backends and one `127.0.0.1:0` Machine-router listener, with an exact normalized-authority table for two `.abox.localhost` names.
 - Use `httputil.ReverseProxy` with its `Rewrite` boundary: discard caller-supplied forwarding metadata and all `X-Abox-*` headers, rebuild forwarding metadata, preserve the original authority, then inject trusted Box/route identity. Reject unknown hosts and non-HTTP requests before proxying.
 - Exercise the route with real curl and installed headless Chromium, plus protocol-level WebSocket, SSE, and bidirectional streaming checks. Use only ephemeral process-local listeners and an owned browser profile beneath the retained spike root.
 - Inspect actual resolver results, loopback-family reachability, proxy environment presence, and active VPN-like interfaces. Run an explicit rejecting-proxy test and a `.localhost` bypass test without mutating Machine network configuration; report exact limits instead of extrapolating Darwin/Lima behavior.
 - Emit an `abox.spike.localhost-routing/v1` JSON report and unit/integration tests. All servers close synchronously; cleanup removes only the harness-owned root after marker/inventory checks.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -63,13 +54,3 @@ Prove wildcard localhost routing through one listener
 - The live resolver returned only `127.0.0.1`; IPv4 was reachable and IPv6 resolution/reachability were false for the intentionally IPv4-only listener. `tailscale0` was active while curl, Chromium, and protocol checks passed. No proxy environment was configured. A controlled explicit HTTP proxy intercepted the route, while curl's `.localhost` no-proxy bypass reached beta directly; this requirement is recorded as a compatibility limit.
 - The first real run exposed a bad validation hypothesis: it compared forwarding metadata to the hostname without the ephemeral listener port. The router had correctly preserved the complete original authority. The validator now normalizes authority only for route selection while requiring `X-Forwarded-Host` to preserve the exact authority.
 - The retained run root was ownership-cleaned after inspection. `make check`, `go test -race -count=10 ./...`, and `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed; cross-compilation is artifact evidence only and makes no Darwin runtime claim.
-
-## Outcome and follow-ups
-
-- Delivered the `localhost-routing` executable spike, typed retained report, exact-authority routing table, forwarding/control-header trust boundary, and protocol integration tests.
-- Browser profile creation is journaled before use, guarded by an exact owner marker, removed synchronously after Chromium exits, and recoverable through scenario cleanup after interruption. In-process listeners shut down with bounded contexts and create no persistent Machine networking state.
-- Linux curl, Chromium, WebSocket, SSE, streaming, active-Tailscale, IPv4 resolver, and controlled proxy behavior are proven. IPv6 wildcard resolution, ambient enterprise proxies, Lima forwarding, and Darwin resolver/browser behavior are explicit non-claims; unchanged final validation belongs to `m5-darwin-arm64-hardware-gate`.
-
-## Original request
-
-Implement prove wildcard localhost routing through one listener for Agent Box according to the cited specification and dependencies.

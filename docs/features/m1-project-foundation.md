@@ -2,19 +2,21 @@
 {"schema_version":1,"id":"m1-project-foundation","status":"implemented","created_at":"2026-08-29T06:48:35.92485512Z","implemented_at":"2026-08-29T15:13:59.387316546Z"}
 -->
 
-# Establish the Go project and contributor foundation
+# Go project and contributor foundation
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-project-foundation`.
 
-## Goal
+- Added minimal `abox` and `aboxd` entrypoints plus one shared internal build-identity package. Both binaries expose only version reporting and fail closed for unfinished commands.
+- Replaced the spike-only Make contract with a clean-clone product quality gate and remediated pre-existing spike findings exposed by the new standard linter set.
+- Added SHA-pinned Linux/macOS quality CI, pull-request dependency review, contributor onboarding, conduct and security policies, and an indexed ADR convention without claiming an implemented runtime.
+- Follow-up: a repository administrator must enable GitHub private vulnerability reporting (or publish another private channel) before release or broader governance-readiness claims.
+- Follow-up: remote Apple Silicon CI and the dedicated real-hardware VZ/VirtioFS gate remain separate evidence obligations; cross-compilation does not satisfy them.
 
-Establish the Go project and contributor foundation
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m0-substrate-report. Source: THE_BEGINNING.md Sections 18, 22, and 25.
 
-## Requirements
+## Behavior
 
 - Evolve the Milestone 0 module into cmd/abox and cmd/aboxd entrypoints, production Makefile targets, and only the package layout earned by the first slice.
 - Configure formatting, vet, unit tests, race tests, linting, dependency review, and supported macOS CI.
@@ -22,30 +24,21 @@ Establish the Go project and contributor foundation
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Both binaries build and report version information.
-- [x] CI runs the documented local quality gates.
-- [x] A new contributor can run the checks from a clean clone.
+- Both binaries build and report version information.
+- CI runs the documented local quality gates.
+- A new contributor can run the checks from a clean clone.
 
-## Technical approach
+## Implementation details
 
 - Keep the disposable `abox-spike` command and `internal/spike` evidence harness intact, while adding only the production `cmd/abox`, `cmd/aboxd`, and shared `internal/version` package earned by this slice.
 - Give both product binaries an explicit, tested `--version`/`version` path backed by build-time version, commit, and date fields; reject every unimplemented command rather than presenting a mock product.
 - Make `make check` the clean-clone contract: format verification, pinned `golangci-lint`, module tidiness/integrity, unit and race tests, vet, product builds, spike smoke, and automation checks. Keep generated binaries and the pinned tool under ignored repository-local directories.
 - Run the same aggregate gate on Linux and a GitHub-hosted Apple Silicon macOS 15 runner. Add a separate pull-request dependency-review job; pin all third-party actions to immutable commits.
 - Publish contributor, conduct, security, and ADR-process documents that describe the pre-alpha implementation boundary and do not claim Lima/VirtioFS runtime support.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -63,15 +56,3 @@ Establish the Go project and contributor foundation
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/abox ./cmd/aboxd` passed. This is compilation evidence only, not Darwin runtime evidence.
 - Ruby parsed both workflow files and `.golangci.yml`; a repository check verified that CI includes `ubuntu-24.04`, Apple Silicon `macos-15`, and `make check`, and that every action reference is a 40-character commit SHA. Remote CI has not run for this unpushed commit.
 - GitHub reported the repository is public and private vulnerability reporting is disabled. `SECURITY.md` records that missing channel as an explicit pre-release governance blocker instead of publishing a dead disclosure path as operational.
-
-## Outcome and follow-ups
-
-- Added minimal `abox` and `aboxd` entrypoints plus one shared internal build-identity package. Both binaries expose only version reporting and fail closed for unfinished commands.
-- Replaced the spike-only Make contract with a clean-clone product quality gate and remediated pre-existing spike findings exposed by the new standard linter set.
-- Added SHA-pinned Linux/macOS quality CI, pull-request dependency review, contributor onboarding, conduct and security policies, and an indexed ADR convention without claiming an implemented runtime.
-- Follow-up: a repository administrator must enable GitHub private vulnerability reporting (or publish another private channel) before release or broader governance-readiness claims.
-- Follow-up: remote Apple Silicon CI and the dedicated real-hardware VZ/VirtioFS gate remain separate evidence obligations; cross-compilation does not satisfy them.
-
-## Original request
-
-Implement establish the go project and contributor foundation for Agent Box according to the cited specification and dependencies.

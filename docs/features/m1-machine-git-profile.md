@@ -2,35 +2,43 @@
 {"schema_version":1,"id":"m1-machine-git-profile","status":"implemented","created_at":"2026-08-29T06:55:50.379176125Z","implemented_at":"2026-08-29T20:00:27.54247821Z"}
 -->
 
-# Harden every Machine-side Git invocation
+# Hardened Machine-side Git execution
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-machine-git-profile`.
 
-## Goal
+Implemented one typed `internal/machinegit` boundary over the shared safe
+process runner. It owns source observation, private bare-store initialization,
+explicit fetch, bundle verification/import, reachability, and non-forced push
+argv. The profile uses an absolute Git binary, a complete controlled
+environment, protocol deny-by-default, explicit credential channels, strict
+path/ref/URL validation, and repository execution-surface overrides.
 
-Harden every Machine-side Git invocation
+Repository-configured clean/smudge/process filters and object alternates are
+refused rather than guessed safe. HTTPS and SSH are the only network
+transports; local object transfer uses validated bundles. Future Machine-side
+Git operations must extend this typed adapter and its adversarial suite rather
+than invoke Git directly.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1 security prerequisite. Dependencies: m1-process-runner. Source: THE_BEGINNING.md Sections 10 and 16.6.
 
-## Requirements
+## Behavior
 
 - Define one controlled Git environment and argv profile for source observation, seeding, fetch, bundle import, reachability, and push.
 - Disable unintended hooks, pagers, editors, fsmonitor, replacements, alternates, environment config, unsafe protocols, remote helpers, and option injection while preserving explicitly supported credentials.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Adversarial source/global/system Git config cannot execute marker commands or redirect operations.
-- [x] Crafted refs, URLs, helpers, hooks, askpass, sshCommand, filters, and ext transports are rejected or inert.
-- [x] All Machine Git adapters use this profile.
+- Adversarial source/global/system Git config cannot execute marker commands or redirect operations.
+- Crafted refs, URLs, helpers, hooks, askpass, sshCommand, filters, and ext transports are rejected or inert.
+- All Machine Git adapters use this profile.
 
-## Technical approach
+## Implementation details
 
 - Add one `internal/machinegit` leaf adapter over `internal/process`; no other
   product package may assemble Machine-side Git commands.
@@ -51,14 +59,6 @@ Harden every Machine-side Git invocation
 - Prove the boundary with real Git 2.43.0 tests using hostile system, global,
   and repository configuration plus crafted refs, URLs, helper syntax,
   askpass, SSH commands, hooks, filters, replacement refs, and alternates.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -87,22 +87,3 @@ Harden every Machine-side Git invocation
   production imports of `os/exec` or `internal/process` outside the shared
   process runner and `machinegit` adapter; Milestone 0 spike code remains an
   explicitly excluded disposable harness.
-
-## Outcome and follow-ups
-
-Implemented one typed `internal/machinegit` boundary over the shared safe
-process runner. It owns source observation, private bare-store initialization,
-explicit fetch, bundle verification/import, reachability, and non-forced push
-argv. The profile uses an absolute Git binary, a complete controlled
-environment, protocol deny-by-default, explicit credential channels, strict
-path/ref/URL validation, and repository execution-surface overrides.
-
-Repository-configured clean/smudge/process filters and object alternates are
-refused rather than guessed safe. HTTPS and SSH are the only network
-transports; local object transfer uses validated bundles. Future Machine-side
-Git operations must extend this typed adapter and its adversarial suite rather
-than invoke Git directly.
-
-## Original request
-
-Implement harden every machine-side git invocation for Agent Box.

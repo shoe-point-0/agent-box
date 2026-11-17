@@ -2,35 +2,44 @@
 {"schema_version":1,"id":"m1-compose-policy-core","status":"implemented","created_at":"2026-08-29T06:55:50.434296344Z","implemented_at":"2026-08-29T20:50:43.83028602Z"}
 -->
 
-# Reject forbidden normalized Compose capabilities before apply
+# Pre-apply Compose security policy
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-compose-policy-core`.
 
-## Goal
+- Added a deterministic pre-apply policy gate to both the repository-normalized
+  model and the final Agent Box-adapted model. The first gate emits Agent Box's
+  stable field error before unsafe repository fields can conflict with the
+  generated override; the second proves the exact final bind and privilege
+  projection before artifacts are retained or a lifecycle adapter can apply.
+- Exported `PolicyViolation` as the typed service/field/reason contract for
+  future daemon and CLI error mapping. No lifecycle operation was added here;
+  the dependency-ready Compose adapter must consume only a successful compiler
+  result.
+- Broader unsafe Compose controls that are not part of this core packet remain
+  assigned to `m5-compose-security`; the core gate is deny-by-default for
+  capability additions and permits only `no-new-privileges=true` among
+  normalized `security_opt` entries.
 
-Reject forbidden normalized Compose capabilities before apply
-
-## Context
+## Scope and dependencies
 
 - Milestone 1 security prerequisite. Dependencies: m1-compose-compiler. Source: THE_BEGINNING.md Sections 12 and 16.3.
 
-## Requirements
+## Behavior
 
 - Validate normalized Compose JSON before pull, build, create, or start.
 - Reject privileged mode, host namespaces, unsafe capabilities/security options, devices, Docker API sockets, sensitive proc/sys/dev/cgroup mounts, and bind sources outside the exact Plan allowlist.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Rejected fixtures create no image build, container, network, volume, or listener.
-- [x] Field-aware stable errors identify every forbidden primitive.
-- [x] Live inspect tests prove allowed fixtures have the exact effective mount and privilege set.
+- Rejected fixtures create no image build, container, network, volume, or listener.
+- Field-aware stable errors identify every forbidden primitive.
+- Live inspect tests prove allowed fixtures have the exact effective mount and privilege set.
 
-## Technical approach
+## Implementation details
 
 - Keep policy enforcement inside `internal/compose.Compile`, immediately after
   the final pinned `docker compose config --format json` normalization and
@@ -53,14 +62,6 @@ Reject forbidden normalized Compose capabilities before apply
   and builds disabled, inspect the disposable container's effective host
   configuration and mounts, then perform ownership-scoped teardown and verify
   absence.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -100,23 +101,3 @@ Reject forbidden normalized Compose capabilities before apply
   `go test -race -count=10 ./...` passed, including `internal/compose` in
   132.290s. `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as
   compilation evidence only, not Darwin runtime support.
-
-## Outcome and follow-ups
-
-- Added a deterministic pre-apply policy gate to both the repository-normalized
-  model and the final Agent Box-adapted model. The first gate emits Agent Box's
-  stable field error before unsafe repository fields can conflict with the
-  generated override; the second proves the exact final bind and privilege
-  projection before artifacts are retained or a lifecycle adapter can apply.
-- Exported `PolicyViolation` as the typed service/field/reason contract for
-  future daemon and CLI error mapping. No lifecycle operation was added here;
-  the dependency-ready Compose adapter must consume only a successful compiler
-  result.
-- Broader unsafe Compose controls that are not part of this core packet remain
-  assigned to `m5-compose-security`; the core gate is deny-by-default for
-  capability additions and permits only `no-new-privileges=true` among
-  normalized `security_opt` entries.
-
-## Original request
-
-Implement reject forbidden normalized compose capabilities before apply for Agent Box.

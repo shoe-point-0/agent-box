@@ -2,19 +2,102 @@
 {"schema_version":1,"id":"m1-safe-remove","status":"implemented","created_at":"2026-08-29T06:48:36.249156679Z","implemented_at":"2026-08-30T05:45:13.364027059Z"}
 -->
 
-# Implement refusal-first Box removal
+# Refusal-first Box removal
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-safe-remove`.
 
-## Goal
+- Added a fail-closed removal coordinator with canonical exact-loss previews,
+  SHA-256 confirmation binding, separate discard grants, mandatory noninteractive
+  confirmation, fenced lease/quiescence hooks, per-resource immediate
+  reobservation, fixed teardown stages, durable before/after transitions, and
+  partial-progress results for convergent retries.
+- Added a hardened `git ls-files --others --ignored --exclude-standard -z`
+  boundary, a mutation-free worktree observation API, and a worktree removal
+  adapter that combines registration, branch, common-directory, inode, dirty,
+  ignored-file, and trusted publication evidence into exact coordinator facts.
+- Added an ownership-proved concrete Git remover. It uses Git's locked-worktree
+  force primitive only after exact typed reobservation, compare-and-deletes the
+  generated branch at its expected commit, verifies terminal absence, and
+  models the worktree-removed/branch-remains interruption state for fresh
+  preview and retry.
+- Added an ownership-proved concrete Compose step over the existing guest
+  runtime. It inventories exact containers, networks, volumes, labels, and
+  volume-loss policy; deep-copies persisted ownership records; independently
+  reobserves before the leaf call; and allows only absent members of the
+  recorded set so interrupted `compose down` retries converge without adopting
+  replacement resources. A live Docker fixture exercises refusal, partial
+  teardown, retry, and selected-project terminal absence.
+- Added an ownership-proved Lima step over the pinned typed adapter. Preview
+  binds exact instance name, lifecycle state, Lima status/version, and embedded
+  metadata; deletion independently revalidates the immutable config and
+  ownership record, verifies terminal absence, and permits a fresh retry to
+  converge after an interrupted successful delete.
+- Added an ownership-proved private-store step. Preview binds the canonical
+  store path, base commit, and recorded device/inode; the leaf independently
+  revalidates the immutable Plan, persisted record, canonical Box containment,
+  and live inode before consuming a typed path proof. Terminal absence is
+  observable without replaying recursive deletion after an interruption.
+- Added an ownership-proved generated-state step. Preview binds the persisted
+  Box-root inode, immutable retained Plan, and exact transient artifact set;
+  the leaf reobserves and consumes typed path proofs for only path-provider
+  artifacts and interrupted atomic-write remnants. It refuses nonempty or
+  unrecognized state and deliberately retains `plan.json` plus diagnostics so
+  daemon recovery can diagnose and finalize partial cleanup.
+- Added an operation-scoped journal lease guard that acquires, continuously
+  renews, and exactly releases the persisted fence. Lease loss cancels the
+  coordinator's execution context and is checked before every later side
+  effect. Removal transitions now have a concrete redacted operation-event
+  recorder.
+- Added daemon-local per-Box writer admission. Journaled non-removal mutations
+  enter the gate, while the removal operation bypasses self-admission and uses
+  its fenced journal lease to quiesce and drain that same gate before teardown.
+- Added an immutable, schema-versioned removal-ownership snapshot atomically
+  bound to the current Box generation and retained Plan digest. It preserves
+  Box-root and private-store inode identities, trusted publication destinations,
+  Lima metadata, exact Compose IDs/labels, and Lima/Compose path-chain evidence.
+  A generation accepts only byte-identical retry writes; loading strictly
+  validates the payload and independently compares its Box/generation/digest to
+  the selected database row. The snapshot also retains the full immutable Lima
+  and Compose specifications required to reconstruct destructive adapters after
+  daemon restart rather than depending on process-local reconciliation values.
+- Added the restart-safe assembly boundary that consumes the current persisted
+  authority and reconstructs every concrete removal step in dependency order.
+  The boundary fails closed before preview when the snapshot is missing or its
+  Box, Plan, generation, repository, or configured path identity differs, and
+  injects only daemon-incarnation capabilities that must never be persisted.
+- Added an operation runner that preserves the preview/authorization boundary
+  at daemon dispatch: callers must return the exact emitted digest with every
+  applicable grant, and malformed, stale, or unjournaled previews cannot enter
+  the removal lease lifecycle. Provider errors remain behind stable redacted
+  control-plane failures.
+- Added a typed daemon removal route and resumable client method over the same
+  durable operation stream as reconciliation. The route records operations as
+  `remove`, so daemon execution bypasses ordinary writer admission and leaves
+  lease/quiescence ownership with the removal coordinator.
+- Wired production `aboxd` dispatch to the operation runner and concrete
+  adapters. Removal ownership schema v1alpha3 now persists the immutable Lima
+  executable identity that authorized creation; daemon restart resolves the
+  local candidate, verifies its exact digest through `internal/toolchain`, and
+  binds that same identity to the assembly snapshot before any preview command.
+  Compose executes only through that verified Lima adapter. Missing authority
+  fails before executable lookup, preserving refusal behavior on clean daemon
+  installations without Lima.
+- There is not yet a production successful-reconciliation path to attach this
+  save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for non-removal
+  mutations. `m1-single-repo-up` must add the real reconciliation assembly and
+  save this snapshot only after all owned resources reconcile successfully.
+  `abox rm` now performs a mandatory preview operation, renders exact losses,
+  then starts a distinct digest-authorized operation only when `--yes` is
+  present; dirty-worktree, unpublished-commit, and volume loss each retain a
+  separate flag. The disposable assembled-operation fixture now proves refusal,
+  exact selected-Box loss, drift, and interrupted retry through persisted
+  production ownership rather than inferring those guarantees from leaf tests.
 
-Implement refusal-first Box removal
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-git-publication-status, m1-ownership-core, m1-operation-journal, m1-reconcile-engine, m1-compose-adapter, m1-lima-adapter. Source: THE_BEGINNING.md Sections 10.8 and 14.1.
 
-## Requirements
+## Behavior
 
 - Check canonical containment, Git registration, branch, dirtiness including ignored/untracked files, unpublished commits, and resource ownership.
 - Require separate explicit discard flags plus --yes for each applicable non-interactive destructive condition.
@@ -23,17 +106,16 @@ Implement refusal-first Box removal
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Default removal refuses dirty or unpublished work and leaves every file and resource intact.
-- [x] Explicit removal lists exact losses before confirmation and touches only the selected Box.
-- [x] Rerunning after interruption safely converges.
-- [x] Any drift in dirtiness, unpublished commits, inode identity, labels, or volume policy after preview forces a fresh refusal or confirmation before mutation.
+- Default removal refuses dirty or unpublished work and leaves every file and resource intact.
+- Explicit removal lists exact losses before confirmation and touches only the selected Box.
+- Rerunning after interruption safely converges.
+- Any drift in dirtiness, unpublished commits, inode identity, labels, or volume policy after preview forces a fresh refusal or confirmation before mutation.
 
-## Technical approach
+## Implementation details
 
 - Add a focused `internal/removal` coordinator above the existing Git, Lima,
   Compose, ownership, journal, and reconcile boundaries. Leaf steps remain
@@ -55,14 +137,6 @@ Implement refusal-first Box removal
   preview and retry converges without replaying deletion blindly.
 - Exercise policy, drift, partial-failure, lease/quiescence, durable-transition,
   and selected-target isolation behavior with adversarial temporary-root tests.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the refusal/confirmation/removal coordination boundary.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -288,96 +362,3 @@ Implement refusal-first Box removal
   --check` also passed. The runtime-host and Compose boundary remains a
   deterministic ownership-verifying fixture because `limactl` is unavailable;
   no live Lima or Darwin claim is made.
-
-## Outcome and follow-ups
-
-- Added a fail-closed removal coordinator with canonical exact-loss previews,
-  SHA-256 confirmation binding, separate discard grants, mandatory noninteractive
-  confirmation, fenced lease/quiescence hooks, per-resource immediate
-  reobservation, fixed teardown stages, durable before/after transitions, and
-  partial-progress results for convergent retries.
-- Added a hardened `git ls-files --others --ignored --exclude-standard -z`
-  boundary, a mutation-free worktree observation API, and a worktree removal
-  adapter that combines registration, branch, common-directory, inode, dirty,
-  ignored-file, and trusted publication evidence into exact coordinator facts.
-- Added an ownership-proved concrete Git remover. It uses Git's locked-worktree
-  force primitive only after exact typed reobservation, compare-and-deletes the
-  generated branch at its expected commit, verifies terminal absence, and
-  models the worktree-removed/branch-remains interruption state for fresh
-  preview and retry.
-- Added an ownership-proved concrete Compose step over the existing guest
-  runtime. It inventories exact containers, networks, volumes, labels, and
-  volume-loss policy; deep-copies persisted ownership records; independently
-  reobserves before the leaf call; and allows only absent members of the
-  recorded set so interrupted `compose down` retries converge without adopting
-  replacement resources. A live Docker fixture exercises refusal, partial
-  teardown, retry, and selected-project terminal absence.
-- Added an ownership-proved Lima step over the pinned typed adapter. Preview
-  binds exact instance name, lifecycle state, Lima status/version, and embedded
-  metadata; deletion independently revalidates the immutable config and
-  ownership record, verifies terminal absence, and permits a fresh retry to
-  converge after an interrupted successful delete.
-- Added an ownership-proved private-store step. Preview binds the canonical
-  store path, base commit, and recorded device/inode; the leaf independently
-  revalidates the immutable Plan, persisted record, canonical Box containment,
-  and live inode before consuming a typed path proof. Terminal absence is
-  observable without replaying recursive deletion after an interruption.
-- Added an ownership-proved generated-state step. Preview binds the persisted
-  Box-root inode, immutable retained Plan, and exact transient artifact set;
-  the leaf reobserves and consumes typed path proofs for only path-provider
-  artifacts and interrupted atomic-write remnants. It refuses nonempty or
-  unrecognized state and deliberately retains `plan.json` plus diagnostics so
-  daemon recovery can diagnose and finalize partial cleanup.
-- Added an operation-scoped journal lease guard that acquires, continuously
-  renews, and exactly releases the persisted fence. Lease loss cancels the
-  coordinator's execution context and is checked before every later side
-  effect. Removal transitions now have a concrete redacted operation-event
-  recorder.
-- Added daemon-local per-Box writer admission. Journaled non-removal mutations
-  enter the gate, while the removal operation bypasses self-admission and uses
-  its fenced journal lease to quiesce and drain that same gate before teardown.
-- Added an immutable, schema-versioned removal-ownership snapshot atomically
-  bound to the current Box generation and retained Plan digest. It preserves
-  Box-root and private-store inode identities, trusted publication destinations,
-  Lima metadata, exact Compose IDs/labels, and Lima/Compose path-chain evidence.
-  A generation accepts only byte-identical retry writes; loading strictly
-  validates the payload and independently compares its Box/generation/digest to
-  the selected database row. The snapshot also retains the full immutable Lima
-  and Compose specifications required to reconstruct destructive adapters after
-  daemon restart rather than depending on process-local reconciliation values.
-- Added the restart-safe assembly boundary that consumes the current persisted
-  authority and reconstructs every concrete removal step in dependency order.
-  The boundary fails closed before preview when the snapshot is missing or its
-  Box, Plan, generation, repository, or configured path identity differs, and
-  injects only daemon-incarnation capabilities that must never be persisted.
-- Added an operation runner that preserves the preview/authorization boundary
-  at daemon dispatch: callers must return the exact emitted digest with every
-  applicable grant, and malformed, stale, or unjournaled previews cannot enter
-  the removal lease lifecycle. Provider errors remain behind stable redacted
-  control-plane failures.
-- Added a typed daemon removal route and resumable client method over the same
-  durable operation stream as reconciliation. The route records operations as
-  `remove`, so daemon execution bypasses ordinary writer admission and leaves
-  lease/quiescence ownership with the removal coordinator.
-- Wired production `aboxd` dispatch to the operation runner and concrete
-  adapters. Removal ownership schema v1alpha3 now persists the immutable Lima
-  executable identity that authorized creation; daemon restart resolves the
-  local candidate, verifies its exact digest through `internal/toolchain`, and
-  binds that same identity to the assembly snapshot before any preview command.
-  Compose executes only through that verified Lima adapter. Missing authority
-  fails before executable lookup, preserving refusal behavior on clean daemon
-  installations without Lima.
-- There is not yet a production successful-reconciliation path to attach this
-  save to: `cmd/aboxd` still returns `ABOX_FEATURE_NOT_SUPPORTED` for non-removal
-  mutations. `m1-single-repo-up` must add the real reconciliation assembly and
-  save this snapshot only after all owned resources reconcile successfully.
-  `abox rm` now performs a mandatory preview operation, renders exact losses,
-  then starts a distinct digest-authorized operation only when `--yes` is
-  present; dirty-worktree, unpublished-commit, and volume loss each retain a
-  separate flag. The disposable assembled-operation fixture now proves refusal,
-  exact selected-Box loss, drift, and interrupted retry through persisted
-  production ownership rather than inferring those guarantees from leaf tests.
-
-## Original request
-
-Implement implement refusal-first box removal for Agent Box according to the cited specification and dependencies.

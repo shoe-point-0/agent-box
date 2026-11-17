@@ -2,19 +2,19 @@
 {"schema_version":1,"id":"m1-identity-paths","status":"implemented","created_at":"2026-08-29T06:48:35.984103316Z","implemented_at":"2026-08-29T15:35:02.570944634Z"}
 -->
 
-# Implement deterministic identity and platform paths
+# Deterministic identity and platform paths
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-identity-paths`.
 
-## Goal
+- Added typed Workspace and Box IDs, strict task-key and generated-ID validation, independent golden vectors, bounded display slugs, and the normative NUL-separated Box hash input.
+- Added one provider for explicit platform roots and the complete macOS Section 15 application/cache/log/runtime, Box, private-Git, and workspace layout. Dynamic state components and workspace-relative paths fail closed on traversal, malformed encoding, controls, unsafe separators, and length violations.
+- Linux unit and race execution proves deterministic construction and lexical containment. Real Darwin filesystem/runtime behavior remains deferred to the existing Darwin arm64 hardware gate.
 
-Implement deterministic identity and platform paths
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-project-foundation. Source: THE_BEGINNING.md Sections 3, 8, and 15.
 
-## Requirements
+## Behavior
 
 - Derive stable Workspace and Box IDs from canonical inputs using the specified hash and slug contract.
 - Centralize macOS application, cache, log, runtime, Box, Git, and workspace paths behind a path provider.
@@ -22,16 +22,15 @@ Implement deterministic identity and platform paths
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Repeated and randomized runs produce byte-identical IDs.
-- [x] Same task keys in unrelated Workspaces cannot collide.
-- [x] No package outside the path provider constructs state paths ad hoc.
+- Repeated and randomized runs produce byte-identical IDs.
+- Same task keys in unrelated Workspaces cannot collide.
+- No package outside the path provider constructs state paths ad hoc.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/identity` package that derives `ws_<8 lowercase,
   unpadded-base32 SHA-256 characters>` from an absolute, cleaned canonical
@@ -50,14 +49,6 @@ Implement deterministic identity and platform paths
   and exact Darwin layout tests runnable on the Linux implementation lane.
   Darwin runtime behavior remains unclaimed.
 
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
-
 ## Verification
 
 - [x] go test ./...
@@ -72,13 +63,3 @@ Implement deterministic identity and platform paths
 - `go test -race -count=10 ./...` passed across all eight Go packages.
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation evidence only; no Darwin runtime support is claimed.
 - `git diff --check` passed. A source search for Section 15 state filenames and roots found production construction only in `internal/paths`; the retained `internal/spike` Compose fixture remains disposable Milestone 0 probe input rather than application state.
-
-## Outcome and follow-ups
-
-- Added typed Workspace and Box IDs, strict task-key and generated-ID validation, independent golden vectors, bounded display slugs, and the normative NUL-separated Box hash input.
-- Added one provider for explicit platform roots and the complete macOS Section 15 application/cache/log/runtime, Box, private-Git, and workspace layout. Dynamic state components and workspace-relative paths fail closed on traversal, malformed encoding, controls, unsafe separators, and length violations.
-- Linux unit and race execution proves deterministic construction and lexical containment. Real Darwin filesystem/runtime behavior remains deferred to the existing Darwin arm64 hardware gate.
-
-## Original request
-
-Implement implement deterministic identity and platform paths for Agent Box according to the cited specification and dependencies.

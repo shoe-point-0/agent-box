@@ -2,35 +2,43 @@
 {"schema_version":1,"id":"m1-schema-contract","status":"implemented","created_at":"2026-08-29T06:55:50.368726934Z","implemented_at":"2026-08-29T20:17:00.246351204Z"}
 -->
 
-# Define versioned Plan, context, output, and error contracts
+# Versioned Plan, context, output, and error contracts
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-schema-contract`.
 
-## Goal
+- Added independently versioned Plan, context, CLI output, daemon API, and error
+  contracts. The strict Plan surface contains only the Milestone 1 executable
+  subset; routes, ports, caches, setup jobs, and secret references are rejected
+  until a consuming milestone adds them.
+- Added checked-in public schemas and realistic non-secret golden examples.
+  Unknown fields are rejected recursively, and no schema defines a secret value,
+  credential location, or Docker socket path.
+- Published the initial stable symbolic error registry and exhaustive exit-code
+  mapping from Section 14.3. Unknown codes fail closed as internal errors.
+- Follow-up: `m1-plan-compiler` should construct and canonicalize
+  `contract.Plan`; `m1-context-document`, daemon API, and CLI tasks should use
+  the same types rather than introducing transport-local copies.
 
-Define versioned Plan, context, output, and error contracts
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-project-foundation. Source: THE_BEGINNING.md Sections 8, 14, and 22.
 
-## Requirements
+## Behavior
 
 - Define minimal Milestone 1 schemas and stable symbolic error/exit-code mapping before implementations consume them.
 - Keep later milestone fields additive and reject unsupported executable features explicitly.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Schemas validate checked-in golden examples.
-- [x] Plan, daemon, CLI, and context packages consume one contract rather than redefining fields.
-- [x] No schema permits secret values.
+- Schemas validate checked-in golden examples.
+- Plan, daemon, CLI, and context packages consume one contract rather than redefining fields.
+- No schema permits secret values.
 
-## Technical approach
+## Implementation details
 
 - Add one dependency-free `internal/contract` package as the canonical Go
   ownership boundary for the independently versioned Plan, daemon API, context,
@@ -45,14 +53,6 @@ Define versioned Plan, context, output, and error contracts
 - Test Go-model/golden parity, real JSON Schema validation, unsupported fields,
   secret-field rejection, and exhaustive error-code mapping. Use the pinned
   validator only from tests so production binaries gain no schema dependency.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -76,22 +76,3 @@ Define versioned Plan, context, output, and error contracts
 - The current `abox` and `aboxd` entrypoints and their tests import
   `internal/contract` for the usage exit status. Plan, context, output, daemon
   error, schema-version, and symbolic-code definitions now have one Go owner.
-
-## Outcome and follow-ups
-
-- Added independently versioned Plan, context, CLI output, daemon API, and error
-  contracts. The strict Plan surface contains only the Milestone 1 executable
-  subset; routes, ports, caches, setup jobs, and secret references are rejected
-  until a consuming milestone adds them.
-- Added checked-in public schemas and realistic non-secret golden examples.
-  Unknown fields are rejected recursively, and no schema defines a secret value,
-  credential location, or Docker socket path.
-- Published the initial stable symbolic error registry and exhaustive exit-code
-  mapping from Section 14.3. Unknown codes fail closed as internal errors.
-- Follow-up: `m1-plan-compiler` should construct and canonicalize
-  `contract.Plan`; `m1-context-document`, daemon API, and CLI tasks should use
-  the same types rather than introducing transport-local copies.
-
-## Original request
-
-Implement define versioned plan, context, output, and error contracts for Agent Box.

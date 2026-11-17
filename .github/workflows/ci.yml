@@ -20,6 +20,7 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, macos-15]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,3 +32,21 @@ jobs:
           go-version-file: go.mod
       - name: Run local quality gate
         run: make check
+      - name: Smoke test installed commands outside the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch=$(mktemp -d "$RUNNER_TEMP/abox-onboarding.XXXXXX")
+          trap 'rm -rf "$scratch"' EXIT
+          make install INSTALL_DIR="$scratch/install bin"
+          export PATH="$scratch/install bin:$PATH"
+          test "$(command -v abox)" = "$scratch/install bin/abox"
+          test "$(command -v aboxd)" = "$scratch/install bin/aboxd"
+          abox --version
+          aboxd --version
+          mkdir "$scratch/another project"
+          cd "$scratch/another project"
+          abox --help
+          abox init
+          test -s .abox/box.yaml
+          # No daemon startup, artifact downloads, or VM provisioning here.

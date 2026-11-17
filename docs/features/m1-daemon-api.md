@@ -2,19 +2,34 @@
 {"schema_version":1,"id":"m1-daemon-api","status":"implemented","created_at":"2026-08-29T06:48:36.172957524Z","implemented_at":"2026-08-29T23:08:25.272276755Z"}
 -->
 
-# Serve the versioned daemon API over a Unix socket
+# Versioned daemon API over a Unix socket
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-daemon-api`.
 
-## Goal
+- Added a supervised `aboxd` serve path with explicit Linux/Darwin state and
+  runtime locations, signal-bounded shutdown, and no TCP listener. Unimplemented
+  Box mutation logic returns a typed feature-not-supported result rather than
+  pretending the later single-repository slice exists.
+- Added a secure Unix transport with a restrictive umask, no-follow lock open,
+  kernel flock, stale-path refusal, post-bind ownership/mode checks, Linux
+  `SO_PEERCRED`, Darwin `LOCAL_PEERCRED`, exact inode cleanup, and retained
+  exclusion when a shutdown deadline expires.
+- Added API-range negotiation, strict bounded request decoding, lossless
+  canonical request digests, durable idempotency through the operation journal,
+  same-daemon attachment, sequenced API-versioned NDJSON events, typed terminal
+  results, and resume from a caller sequence. Client disconnect only detaches.
+- A running operation recovered from a dead daemon is now refused with a
+  retryable operation conflict instead of hanging or executing twice. Adoption
+  and reconstruction remain owned by `m4-recovery-reconstruction`; this task
+  does not claim restart recovery before that dependency exists.
+- Real Darwin peer-credential and socket lifecycle execution remains part of
+  `m5-darwin-arm64-hardware-gate`; cross-compilation is not support evidence.
 
-Serve the versioned daemon API over a Unix socket
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-operation-journal, m1-reconcile-engine. Source: THE_BEGINNING.md Sections 6.1 and 14.5.
 
-## Requirements
+## Behavior
 
 - Serve HTTP+JSON and NDJSON operations from a user-owned mode-0700 runtime directory over a mode-0600 Unix socket, with no-follow path validation, restrictive umask, an exclusive kernel-backed daemon lock, safe stale-socket refusal, and post-bind UID/mode verification.
 - Implement API-range handshake, idempotency keys, operation attachment, and peer-identity checks where available.
@@ -22,16 +37,15 @@ Serve the versioned daemon API over a Unix socket
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A compatible client can start and reattach to one long operation.
-- [x] Incompatible API ranges produce stable version errors.
-- [x] Other local users cannot use the control socket.
+- A compatible client can start and reattach to one long operation.
+- Incompatible API ranges produce stable version errors.
+- Other local users cannot use the control socket.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/daemon` transport boundary that owns one HTTP server, its
   Unix listener, active requests, shutdown deadline, socket cleanup, and an
@@ -55,14 +69,6 @@ Serve the versioned daemon API over a Unix socket
 - Exercise the real Linux Unix socket with integration tests for permissions,
   same-UID access, injected foreign-UID refusal, duplicate-key reattachment,
   digest conflict, resumable streaming, and bounded graceful shutdown.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -92,28 +98,3 @@ Serve the versioned daemon API over a Unix socket
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed. This proves
   only that the `LOCAL_PEERCRED`/`Xucred` path compiles; it is not macOS runtime
   evidence.
-
-## Outcome and follow-ups
-
-- Added a supervised `aboxd` serve path with explicit Linux/Darwin state and
-  runtime locations, signal-bounded shutdown, and no TCP listener. Unimplemented
-  Box mutation logic returns a typed feature-not-supported result rather than
-  pretending the later single-repository slice exists.
-- Added a secure Unix transport with a restrictive umask, no-follow lock open,
-  kernel flock, stale-path refusal, post-bind ownership/mode checks, Linux
-  `SO_PEERCRED`, Darwin `LOCAL_PEERCRED`, exact inode cleanup, and retained
-  exclusion when a shutdown deadline expires.
-- Added API-range negotiation, strict bounded request decoding, lossless
-  canonical request digests, durable idempotency through the operation journal,
-  same-daemon attachment, sequenced API-versioned NDJSON events, typed terminal
-  results, and resume from a caller sequence. Client disconnect only detaches.
-- A running operation recovered from a dead daemon is now refused with a
-  retryable operation conflict instead of hanging or executing twice. Adoption
-  and reconstruction remain owned by `m4-recovery-reconstruction`; this task
-  does not claim restart recovery before that dependency exists.
-- Real Darwin peer-credential and socket lifecycle execution remains part of
-  `m5-darwin-arm64-hardware-gate`; cross-compilation is not support evidence.
-
-## Original request
-
-Implement serve the versioned daemon api over a unix socket for Agent Box according to the cited specification and dependencies.

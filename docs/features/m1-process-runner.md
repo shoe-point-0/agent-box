@@ -2,19 +2,34 @@
 {"schema_version":1,"id":"m1-process-runner","status":"implemented","created_at":"2026-08-29T06:48:35.952766065Z","implemented_at":"2026-08-29T19:48:47.509667038Z"}
 -->
 
-# Implement the safe subprocess runner
+# Safe subprocess execution
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-process-runner`.
 
-## Goal
+- Added `internal/process` with an argv-only runner, complete explicit child
+  environment, supplied-`PATH` executable resolution, absolute working
+  directories, separate redacted stdout/stderr capture and sinks, timing, and
+  typed exit, cancellation, sink, output-limit, pipe, start, and shutdown
+  failures. Returned errors never retain sink text or child output.
+- Every child starts in a fresh process group. Cancellation, sink failure, and
+  output overflow trigger group-wide TERM then KILL under caller-configurable
+  hard bounds; the direct child is reaped and both pipes are drained. Owned
+  descendants are also removed when the group leader exits first.
+- Secret registration is completed before process start and rejects empty,
+  oversized, excessive-count, or excessive-total registries. A shared immutable
+  trie drives independent stateful stream redactors, choosing the longest match
+  and retaining possible prefixes across reads.
+- Streaming sinks are synchronous and may apply backpressure; as with Go's
+  `io.Writer` contract, a sink must eventually return. A sink that returns an
+  error or short write is disabled, the process group is terminated, and both
+  pipes continue draining. The runner does not claim it can interrupt an
+  arbitrary writer implementation blocked forever inside `Write`.
 
-Implement the safe subprocess runner
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-project-foundation. Source: THE_BEGINNING.md Section 18.1 and Issue 4.
 
-## Requirements
+## Behavior
 
 - Execute argv arrays with explicit environment allowlists, working directories, context cancellation, separate bounded-capture and streaming sinks, timing, and typed exit, cancellation, sink, and output-limit errors.
 - Terminate owned process groups on cancellation and bound shutdown waits.
@@ -22,17 +37,16 @@ Implement the safe subprocess runner
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Shell metacharacters remain literal arguments.
-- [x] Cancellation leaves no owned descendant process running.
-- [x] Canary secrets never appear in captured output, errors, events, or logs.
-- [x] One-byte output chunking, overlapping secrets, blocked readers, sink failure, partial output, and cancellation races leave no secret, pipe goroutine, or descendant process behind.
+- Shell metacharacters remain literal arguments.
+- Cancellation leaves no owned descendant process running.
+- Canary secrets never appear in captured output, errors, events, or logs.
+- One-byte output chunking, overlapping secrets, blocked readers, sink failure, partial output, and cancellation races leave no secret, pipe goroutine, or descendant process behind.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/process` Unix runner rather than extending the disposable
   Milestone 0 spike runner. The command contract accepts only an argv vector,
@@ -59,14 +73,6 @@ Implement the safe subprocess runner
   one-byte redaction, overlapping/transformed secrets, output limits, partial
   output, sink failure, cancellation races, pipe backpressure, and descendant
   process-group cleanup.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -97,28 +103,3 @@ Implement the safe subprocess runner
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only; no Darwin runtime behavior is claimed.
 - `git diff --check` passed.
-
-## Outcome and follow-ups
-
-- Added `internal/process` with an argv-only runner, complete explicit child
-  environment, supplied-`PATH` executable resolution, absolute working
-  directories, separate redacted stdout/stderr capture and sinks, timing, and
-  typed exit, cancellation, sink, output-limit, pipe, start, and shutdown
-  failures. Returned errors never retain sink text or child output.
-- Every child starts in a fresh process group. Cancellation, sink failure, and
-  output overflow trigger group-wide TERM then KILL under caller-configurable
-  hard bounds; the direct child is reaped and both pipes are drained. Owned
-  descendants are also removed when the group leader exits first.
-- Secret registration is completed before process start and rejects empty,
-  oversized, excessive-count, or excessive-total registries. A shared immutable
-  trie drives independent stateful stream redactors, choosing the longest match
-  and retaining possible prefixes across reads.
-- Streaming sinks are synchronous and may apply backpressure; as with Go's
-  `io.Writer` contract, a sink must eventually return. A sink that returns an
-  error or short write is disabled, the process group is terminated, and both
-  pipes continue draining. The runner does not claim it can interrupt an
-  arbitrary writer implementation blocked forever inside `Write`.
-
-## Original request
-
-Implement implement the safe subprocess runner for Agent Box according to the cited specification and dependencies.

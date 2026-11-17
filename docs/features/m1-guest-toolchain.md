@@ -2,19 +2,29 @@
 {"schema_version":1,"id":"m1-guest-toolchain","status":"implemented","created_at":"2026-08-29T06:48:36.107508706Z","implemented_at":"2026-08-30T00:49:04.893818046Z"}
 -->
 
-# Provision and verify the guest toolchain
+# Guest toolchain provisioning and verification
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-guest-toolchain`.
 
-## Goal
+Implemented `internal/guesttoolchain` as the deterministic bridge between the
+verified artifact contract and the typed Lima guest invocation boundary. It
+accepts only explicit absolute preinstalled paths, reopens every opaque artifact
+before guest access, verifies matching guest digests and exact tool versions,
+starts only `docker.service`, and returns a typed observation only after pinned
+Docker/Compose, cgroup v2, `overlay2`, bridge networking, rootful operation, and
+a root-owned non-world-accessible socket are observed.
 
-Provision and verify the guest toolchain
+Provisioning has no acquisition, package-manager, shell interpolation, or
+container socket-mount behavior. A second call deliberately repeats the same
+verification and idempotent service operation rather than trusting cached
+state. Production guest execution remains owned by `lima.Adapter`; the process
+boundary allowlist now names `guesttoolchain` as an audited typed adapter.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-lima-adapter, m1-toolchain-contract. Source: THE_BEGINNING.md Sections 6.2, 12, 16.5, and 22.3.
 
-## Requirements
+## Behavior
 
 - Consume an already verified preinstalled or test-fixture artifact set for the guest image, Docker Engine, Compose, and required utilities; do not download implicit defaults.
 - Provision rootful Docker inside the VM without exposing its socket to workspace containers.
@@ -22,16 +32,15 @@ Provision and verify the guest toolchain
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A fresh runtime host reaches a verified Docker/Compose-ready state.
-- [x] Wrong versions or digest mismatches fail before project code executes.
-- [x] Provisioning is idempotent and diagnostics identify the failing layer.
+- A fresh runtime host reaches a verified Docker/Compose-ready state.
+- Wrong versions or digest mismatches fail before project code executes.
+- Provisioning is idempotent and diagnostics identify the failing layer.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/guesttoolchain` orchestration boundary over the typed Lima
   guest invocation contract. It consumes only opaque artifacts already verified
@@ -53,14 +62,6 @@ Provision and verify the guest toolchain
 - Exercise the complete fresh/warm path through an injected guest fixture on
   Linux. Real Lima VZ execution remains deferred to the Darwin hardware gate;
   this task will not infer that support from fixture execution or cross-builds.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -94,23 +95,3 @@ Provision and verify the guest toolchain
   mutated. The Linux evidence establishes the injected guest-control contract,
   not real Lima VZ, VirtioFS, guest-image, or Darwin runtime support. Those
   unchanged production fixtures remain required at the Darwin hardware gate.
-
-## Outcome and follow-ups
-
-Implemented `internal/guesttoolchain` as the deterministic bridge between the
-verified artifact contract and the typed Lima guest invocation boundary. It
-accepts only explicit absolute preinstalled paths, reopens every opaque artifact
-before guest access, verifies matching guest digests and exact tool versions,
-starts only `docker.service`, and returns a typed observation only after pinned
-Docker/Compose, cgroup v2, `overlay2`, bridge networking, rootful operation, and
-a root-owned non-world-accessible socket are observed.
-
-Provisioning has no acquisition, package-manager, shell interpolation, or
-container socket-mount behavior. A second call deliberately repeats the same
-verification and idempotent service operation rather than trusting cached
-state. Production guest execution remains owned by `lima.Adapter`; the process
-boundary allowlist now names `guesttoolchain` as an audited typed adapter.
-
-## Original request
-
-Implement provision and verify the guest toolchain for Agent Box according to the cited specification and dependencies.

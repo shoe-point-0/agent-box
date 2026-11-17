@@ -2,35 +2,46 @@
 {"schema_version":1,"id":"m1-toolchain-contract","status":"implemented","created_at":"2026-08-29T06:55:50.411239326Z","implemented_at":"2026-08-30T00:24:53.573766531Z"}
 -->
 
-# Define verified runtime artifact inputs
+# Verified runtime artifact inputs
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-toolchain-contract`.
 
-## Goal
+Implemented `internal/toolchain` as the single verification boundary for the
+Lima executable, guest image, Docker, Compose, and named utility artifacts.
+Specifications require canonical SHA-256 identities and exact versions;
+providers return local candidates; verification rejects invalid identities,
+missing/unsafe files, mismatched provider metadata, and changed content with
+typed prerequisite errors. Consumers receive opaque artifacts, can stage bytes
+only from an already verified open descriptor, and execute only through a path
+that rechecks content immediately before invoking the owned process runner.
 
-Define verified runtime artifact inputs
+`internal/toolchain/toolchaintest` is the reusable provider conformance suite
+for the preinstalled implementation, fixture providers, and the later explicit
+download/install implementation. `m1-machine-preflight`, `m1-lima-adapter`, and
+`m1-guest-toolchain` own wiring this contract into platform checks and runtime
+provisioning; `m5-toolchain-bootstrap` owns consent, download, signatures,
+atomic installation, and corrupt-partial cleanup.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-project-foundation. Source: THE_BEGINNING.md Sections 6, 16.5, and 22.3.
 
-## Requirements
+## Behavior
 
 - Define the immutable verified Lima, guest image, Docker, Compose, and utility identities consumed by preflight and runtime provisioning.
 - Support preinstalled/test-fixture providers now and a production download provider later without implicit network access.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Missing or mismatched artifacts fail with typed prerequisite errors.
-- [x] No consumer can execute an artifact lacking verified identity.
-- [x] Fixture and future production providers share contract tests.
+- Missing or mismatched artifacts fail with typed prerequisite errors.
+- No consumer can execute an artifact lacking verified identity.
+- Fixture and future production providers share contract tests.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/toolchain` boundary with immutable component identities for
   Lima, the guest image, Docker, Compose, and named utilities. An identity is
@@ -49,14 +60,6 @@ Define verified runtime artifact inputs
   reusable provider contract suite and run it against both the preinstalled
   provider and an injected fixture provider so future production providers use
   the same behavioral gate.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -84,25 +87,3 @@ Define verified runtime artifact inputs
 - The preinstalled provider only resolves caller-supplied local entries. The
   provider contract contains no download method; future bootstrap must perform
   explicit consent and acquisition before presenting a local candidate.
-
-## Outcome and follow-ups
-
-Implemented `internal/toolchain` as the single verification boundary for the
-Lima executable, guest image, Docker, Compose, and named utility artifacts.
-Specifications require canonical SHA-256 identities and exact versions;
-providers return local candidates; verification rejects invalid identities,
-missing/unsafe files, mismatched provider metadata, and changed content with
-typed prerequisite errors. Consumers receive opaque artifacts, can stage bytes
-only from an already verified open descriptor, and execute only through a path
-that rechecks content immediately before invoking the owned process runner.
-
-`internal/toolchain/toolchaintest` is the reusable provider conformance suite
-for the preinstalled implementation, fixture providers, and the later explicit
-download/install implementation. `m1-machine-preflight`, `m1-lima-adapter`, and
-`m1-guest-toolchain` own wiring this contract into platform checks and runtime
-provisioning; `m5-toolchain-bootstrap` owns consent, download, signatures,
-atomic installation, and corrupt-partial cleanup.
-
-## Original request
-
-Implement define verified runtime artifact inputs for Agent Box.

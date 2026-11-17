@@ -2,19 +2,32 @@
 {"schema_version":1,"id":"m1-context-document","status":"implemented","created_at":"2026-08-29T06:48:36.233617336Z","implemented_at":"2026-08-29T22:07:43.102383548Z"}
 -->
 
-# Generate versioned agent context and output schemas
+# Versioned agent context and output schemas
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-context-document`.
 
-## Goal
+- Added `internal/contextdoc` as the single READY-generation projection and
+  writer. It binds live observations to the expected Box, generation, and Plan
+  digest; requires complete repository and ready service observations; validates
+  ready routes and loopback ports when present; sorts collections; and persists
+  stable JSON through the crash-consistent atomic writer.
+- Context output is allowlist-based. It includes the versioned identity,
+  workspace/worktree paths, repository facts, workspace service, readiness,
+  optional endpoints, declared argv commands, policy facts, and the exact v0.1
+  accepted-loss statement. It has no projection for source repositories,
+  private Git stores, runtime metadata, credentials, environment, or socket
+  paths, and registered sensitive values are scanned before any write.
+- The existing context schema remains strict. Empty route/port arrays preserve
+  the Milestone 1 subset, while populated live arrays demonstrate the additive
+  endpoint shape for consuming milestones. Runtime adapters and daemon wiring
+  remain with their owning tasks; this package does not treat SQLite cache rows
+  as live-resource authority.
 
-Generate versioned agent context and output schemas
-
-## Context
+## Scope and dependencies
 
 - Milestone 1 core contract. Dependencies: m1-schema-contract, m1-atomic-writer, m1-state-store. Source: THE_BEGINNING.md Sections 14.2 and 14.4.
 
-## Requirements
+## Behavior
 
 - Implement the versioned context model, redaction rules, live-generation invariant, and atomic writer using the shared schema contract.
 - Include identity, repositories, service state, routes/ports when available, commands, policy, and durability language.
@@ -22,16 +35,15 @@ Generate versioned agent context and output schemas
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] The core writer produces a document matching supplied live observations and refuses an incomplete or stale generation.
-- [x] Schema validation and golden files cover stable field names and additive compatibility.
-- [x] Secret canaries and unrelated paths are absent.
+- The core writer produces a document matching supplied live observations and refuses an incomplete or stale generation.
+- Schema validation and golden files cover stable field names and additive compatibility.
+- Secret canaries and unrelated paths are absent.
 
-## Technical approach
+## Implementation details
 
 - Add a focused `internal/contextdoc` boundary that projects an immutable
   `contract.Plan` plus one complete live observation set into the existing
@@ -53,14 +65,6 @@ Generate versioned agent context and output schemas
   the published Draft 2020-12 schema. Exercise stale, incomplete, secret-canary,
   unrelated-path, and failed-write paths without claiming unavailable runtime
   observations.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -96,26 +100,3 @@ Generate versioned agent context and output schemas
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only; no Darwin runtime behavior is claimed. `git diff --check`
   passed.
-
-## Outcome and follow-ups
-
-- Added `internal/contextdoc` as the single READY-generation projection and
-  writer. It binds live observations to the expected Box, generation, and Plan
-  digest; requires complete repository and ready service observations; validates
-  ready routes and loopback ports when present; sorts collections; and persists
-  stable JSON through the crash-consistent atomic writer.
-- Context output is allowlist-based. It includes the versioned identity,
-  workspace/worktree paths, repository facts, workspace service, readiness,
-  optional endpoints, declared argv commands, policy facts, and the exact v0.1
-  accepted-loss statement. It has no projection for source repositories,
-  private Git stores, runtime metadata, credentials, environment, or socket
-  paths, and registered sensitive values are scanned before any write.
-- The existing context schema remains strict. Empty route/port arrays preserve
-  the Milestone 1 subset, while populated live arrays demonstrate the additive
-  endpoint shape for consuming milestones. Runtime adapters and daemon wiring
-  remain with their owning tasks; this package does not treat SQLite cache rows
-  as live-resource authority.
-
-## Original request
-
-Implement generate versioned agent context and output schemas for Agent Box according to the cited specification and dependencies.

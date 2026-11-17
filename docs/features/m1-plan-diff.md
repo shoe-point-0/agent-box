@@ -2,19 +2,27 @@
 {"schema_version":1,"id":"m1-plan-diff","status":"implemented","created_at":"2026-08-29T06:48:36.078727449Z","implemented_at":"2026-08-29T21:49:13.112703731Z"}
 -->
 
-# Classify Plan changes and conflicts
+# Plan change and conflict classification
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-plan-diff`.
 
-## Goal
+Implemented a pure `internal/plandiff` policy and executable-Plan comparator.
+Equal immutable Plan content takes a zero-allocation digest fast path; matching
+digests with divergent content and unexplained divergent digests fail closed.
+Changed Plans produce deterministically ordered no-op, in-place, restart,
+growth, removal, or conflict results with stable reason codes and human text.
 
-Classify Plan changes and conflicts
+Dirty worktree observations gate base/branch replacement and repository removal
+without exposing any mutation capability. Immutable Box/runtime/repository path
+drift and disk shrink fail closed. The complete Section 9.4 policy is represented
+as typed change facts so later route, setup, and secret Plan adapters reuse the
+same tested behavior without prematurely weakening the v1alpha1 Plan schema.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-plan-compiler. Source: THE_BEGINNING.md Sections 9.4 and Issue 6.
 
-## Requirements
+## Behavior
 
 - Compare current and desired Plans into no-op, in-place, restart, growth, removal, and conflict changes.
 - Reject disk shrink and base-ref or branch replacement for dirty existing worktrees.
@@ -22,16 +30,15 @@ Classify Plan changes and conflicts
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Every reconcile-change row in Section 9.4 has a test.
-- [x] No-op classification is stable and allocation-free enough for the warm path target.
-- [x] Conflicts never mutate observed resources.
+- Every reconcile-change row in Section 9.4 has a test.
+- No-op classification is stable and allocation-free enough for the warm path target.
+- Conflicts never mutate observed resources.
 
-## Technical approach
+## Implementation details
 
 - Preserve the executable Plan schema's explicit rejection of deferred routes,
   setup, ports, caches, and secret references. The first attempted approach of
@@ -57,14 +64,6 @@ Classify Plan changes and conflicts
   randomized ordering/property checks, a zero-allocation no-op assertion and
   benchmark, and assertions that conflict classification leaves all inputs
   byte-for-byte unchanged.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -100,21 +99,3 @@ Classify Plan changes and conflicts
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`: PASS as compilation
   evidence only; no Darwin runtime behavior is claimed.
 - `git diff --check`: PASS.
-
-## Outcome and follow-ups
-
-Implemented a pure `internal/plandiff` policy and executable-Plan comparator.
-Equal immutable Plan content takes a zero-allocation digest fast path; matching
-digests with divergent content and unexplained divergent digests fail closed.
-Changed Plans produce deterministically ordered no-op, in-place, restart,
-growth, removal, or conflict results with stable reason codes and human text.
-
-Dirty worktree observations gate base/branch replacement and repository removal
-without exposing any mutation capability. Immutable Box/runtime/repository path
-drift and disk shrink fail closed. The complete Section 9.4 policy is represented
-as typed change facts so later route, setup, and secret Plan adapters reuse the
-same tested behavior without prematurely weakening the v1alpha1 Plan schema.
-
-## Original request
-
-Implement classify plan changes and conflicts for Agent Box according to the cited specification and dependencies.

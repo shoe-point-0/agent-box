@@ -2,19 +2,28 @@
 {"schema_version":1,"id":"m1-filesystem-verifier","status":"implemented","created_at":"2026-08-29T06:48:36.123097622Z","implemented_at":"2026-08-30T02:51:15.293256001Z"}
 -->
 
-# Verify mounted filesystem contracts
+# Mounted filesystem verification
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-filesystem-verifier`.
 
-## Goal
+Completed for the Linux engineering lane. Machine path identity protects Lima
+and Compose mutation; fresh live inspection enforces exact mount sets and an
+undeclared canary; and the nonce-scoped bidirectional bytes, modes, rename,
+delete, and native watcher lifecycle runs behind a fixed-command immutable-
+container adapter. The READY gate composes those checks, performs one final
+complete path-identity revalidation, and cannot call its atomic READY publisher
+after any checked failure or substitution.
 
-Verify mounted filesystem contracts
+The unchanged probe and cleanup path passed through a real Linux Compose
+container. `limactl` remains unavailable on this Machine, so no Lima, VZ, or
+VirtioFS runtime behavior is claimed. That platform-specific execution remains
+with the explicitly deferred real Darwin/arm64 hardware gate.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-lima-adapter, m1-guest-toolchain. Source: THE_BEGINNING.md Sections 11.4, 11.5, and Issue 7.
 
-## Requirements
+## Behavior
 
 - Probe Machine-to-workspace and workspace-to-Machine bytes, modes, atomic rename, deletion, and watcher delivery under .abox-probe.
 - Verify every declared canonical path and prove undeclared canaries are absent.
@@ -23,17 +32,16 @@ Verify mounted filesystem contracts
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A Box cannot become ready when required visibility or ownership checks fail.
-- [x] Probe failures retain bounded, non-secret diagnostics.
-- [x] Cleanup never changes repository .gitignore or unrelated global Git configuration.
-- [x] Concurrent symlink and rename substitution of worktrees, Git stores, generated files, and bind sources is refused before READY.
+- A Box cannot become ready when required visibility or ownership checks fail.
+- Probe failures retain bounded, non-secret diagnostics.
+- Cleanup never changes repository .gitignore or unrelated global Git configuration.
+- Concurrent symlink and rename substitution of worktrees, Git stores, generated files, and bind sources is refused before READY.
 
-## Technical approach
+## Implementation details
 
 - Extend the existing filesystem ownership boundary with an immutable path-set
   record. Capture every component from the filesystem root through each exact
@@ -58,14 +66,6 @@ Verify mounted filesystem contracts
   fixtures, then run the unchanged probe against a real container. A real Lima
   VM result is required only where a supported `limactl` is available; Linux
   fixture/container evidence must not be described as VZ or VirtioFS evidence.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -227,22 +227,3 @@ Verify mounted filesystem contracts
   `alpine:3.20` Compose integration continued to exercise exact bytes, modes,
   rename, deletion, native inotify delivery, undeclared-canary absence, and
   cleanup through an immutable container ID.
-
-## Outcome and follow-ups
-
-Completed for the Linux engineering lane. Machine path identity protects Lima
-and Compose mutation; fresh live inspection enforces exact mount sets and an
-undeclared canary; and the nonce-scoped bidirectional bytes, modes, rename,
-delete, and native watcher lifecycle runs behind a fixed-command immutable-
-container adapter. The READY gate composes those checks, performs one final
-complete path-identity revalidation, and cannot call its atomic READY publisher
-after any checked failure or substitution.
-
-The unchanged probe and cleanup path passed through a real Linux Compose
-container. `limactl` remains unavailable on this Machine, so no Lima, VZ, or
-VirtioFS runtime behavior is claimed. That platform-specific execution remains
-with the explicitly deferred real Darwin/arm64 hardware gate.
-
-## Original request
-
-Implement verify mounted filesystem contracts for Agent Box according to the cited specification and dependencies.

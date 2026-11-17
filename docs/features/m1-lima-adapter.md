@@ -2,19 +2,29 @@
 {"schema_version":1,"id":"m1-lima-adapter","status":"implemented","created_at":"2026-08-29T06:48:36.094129071Z","implemented_at":"2026-08-30T00:39:19.680714239Z"}
 -->
 
-# Implement the Lima runtime-host adapter
+# Lima runtime-host adapter
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-lima-adapter`.
 
-## Goal
+Implemented `internal/lima` as the version-pinned Machine-to-runtime-host
+boundary. It consumes only a verified Lima 2.0.0 artifact, generates and
+revalidates owner-only deterministic configuration, decodes the upstream JSON
+Lines inventory, independently verifies immutable config and embedded ownership
+facts, and re-observes after every lifecycle side effect even when the client
+fails or is cancelled. Delete fails closed unless the exact persisted record,
+Plan-derived record, and live instance metadata agree.
 
-Implement the Lima runtime-host adapter
+The adapter intentionally does not claim Linux VZ execution or Darwin support.
+The next Linux tasks can consume this contract for guest-toolchain provisioning,
+mount verification, and refusal-first removal. The final Apple Silicon gate must
+still run the unchanged real VZ/VirtioFS lifecycle, cancellation, forwarding,
+and leak fixtures before the project claims macOS runtime support.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1 Linux implementation. Dependencies: m1-process-runner, m1-plan-compiler, m1-ownership-core, m1-toolchain-contract. Exercise machine-readable Lima contracts and Linux-supported runtime paths now; real VZ behavior is a final Darwin hardware gate. Source: THE_BEGINNING.md Sections 5.1, 6.2, 9, and Issue 7.
 
-## Requirements
+## Behavior
 
 - Generate minimal pinned VZ Lima configuration with explicit resources, metadata, and exact mount allowlist.
 - Create, start, stop, inspect, invoke, and delete through version-checked machine-readable limactl contracts.
@@ -22,16 +32,15 @@ Implement the Lima runtime-host adapter
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Lifecycle methods are idempotent against observed Lima state.
-- [x] Deletion requires recorded instance identity plus embedded Box metadata.
-- [x] Adapter contract tests cover expected supported Lima outputs and errors.
+- Lifecycle methods are idempotent against observed Lima state.
+- Deletion requires recorded instance identity plus embedded Box metadata.
+- Adapter contract tests cover expected supported Lima outputs and errors.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/lima` boundary pinned to the verified Lima 2.0.0 artifact.
   Every public operation first checks the executable version, invokes only
@@ -57,14 +66,6 @@ Implement the Lima runtime-host adapter
   postcondition failures, idempotency, ownership refusal, and exact argv.
   Attempt a real Linux smoke path only if a supported `limactl` is installed;
   do not infer VZ behavior or install a runtime merely to satisfy this task.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -98,23 +99,3 @@ Implement the Lima runtime-host adapter
   against upstream tag `v2.0.0`; real VZ execution remains assigned to
   `m5-darwin-arm64-hardware-gate`.
 - `git diff --check`: PASS.
-
-## Outcome and follow-ups
-
-Implemented `internal/lima` as the version-pinned Machine-to-runtime-host
-boundary. It consumes only a verified Lima 2.0.0 artifact, generates and
-revalidates owner-only deterministic configuration, decodes the upstream JSON
-Lines inventory, independently verifies immutable config and embedded ownership
-facts, and re-observes after every lifecycle side effect even when the client
-fails or is cancelled. Delete fails closed unless the exact persisted record,
-Plan-derived record, and live instance metadata agree.
-
-The adapter intentionally does not claim Linux VZ execution or Darwin support.
-The next Linux tasks can consume this contract for guest-toolchain provisioning,
-mount verification, and refusal-first removal. The final Apple Silicon gate must
-still run the unchanged real VZ/VirtioFS lifecycle, cancellation, forwarding,
-and leak fixtures before the project claims macOS runtime support.
-
-## Original request
-
-Implement implement the lima runtime-host adapter for Agent Box according to the cited specification and dependencies.

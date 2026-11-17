@@ -2,19 +2,20 @@
 {"schema_version":1,"id":"m1-state-store","status":"implemented","created_at":"2026-08-29T06:48:36.000249511Z","implemented_at":"2026-08-29T21:59:55.924768503Z"}
 -->
 
-# Implement SQLite state and migrations
+# SQLite state and migrations
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-state-store`.
 
-## Goal
+- Added the pure-Go SQLite state boundary with per-connection foreign keys, a 5-second busy timeout, WAL, full synchronous durability, immediate write transactions, integrity checks, and user-only database and sidecar permissions.
+- Added the forward-only embedded v1 migration and fixtures for every schema version from 0 through 1. The schema intentionally excludes routes, port allocations, and setup stamps until their consuming milestones.
+- Box-owned resources carry `box_id`; composite foreign keys prevent cross-Box repository, operation-event, and lease attachment. Cached external observations are named and documented as non-authoritative.
+- Newer or corrupt databases are refused without replacement. A failed migration leaves both schema objects and `user_version` rolled back.
 
-Implement SQLite state and migrations
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-identity-paths, m1-atomic-writer. Source: THE_BEGINNING.md Sections 15.1 and 22.1.
 
-## Requirements
+## Behavior
 
 - Implement only the Milestone 1 tables consumed by workspaces, Boxes, generations, repositories, worktrees, runtime hosts, Compose projects, operations, events, and leases; add routes, ports, and setup stamps with their consuming milestones.
 - Enable foreign keys, WAL mode, explicit durability and busy handling, monotonic migrations, transactions, and Box ownership on resource rows.
@@ -23,16 +24,15 @@ Implement SQLite state and migrations
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Fresh initialization creates the versioned v1 schema and asserts foreign keys, WAL, busy handling, durability, and restrictive DB/WAL/SHM permissions on every connection.
-- [x] Migration tests pass from every checked-in schema fixture.
-- [x] Foreign-key and ownership violations fail transactionally.
+- Fresh initialization creates the versioned v1 schema and asserts foreign keys, WAL, busy handling, durability, and restrictive DB/WAL/SHM permissions on every connection.
+- Migration tests pass from every checked-in schema fixture.
+- Foreign-key and ownership violations fail transactionally.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/state` package backed by the pure-Go `modernc.org/sqlite`
   `database/sql` driver. Open the path supplied by the central path provider,
@@ -52,14 +52,6 @@ Implement SQLite state and migrations
   permissions, rollback, foreign-key/ownership rejection, incompatible and
   corrupt inputs, and migration from every checked-in fixture.
 
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
-
 ## Verification
 
 - [x] go test ./...
@@ -75,14 +67,3 @@ Implement SQLite state and migrations
 - `go test -race -count=10 ./...` passed across all packages.
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as pure-Go cross-compilation evidence only; it is not Darwin runtime evidence.
 - `git diff --check` passed.
-
-## Outcome and follow-ups
-
-- Added the pure-Go SQLite state boundary with per-connection foreign keys, a 5-second busy timeout, WAL, full synchronous durability, immediate write transactions, integrity checks, and user-only database and sidecar permissions.
-- Added the forward-only embedded v1 migration and fixtures for every schema version from 0 through 1. The schema intentionally excludes routes, port allocations, and setup stamps until their consuming milestones.
-- Box-owned resources carry `box_id`; composite foreign keys prevent cross-Box repository, operation-event, and lease attachment. Cached external observations are named and documented as non-authoritative.
-- Newer or corrupt databases are refused without replacement. A failed migration leaves both schema objects and `user_version` rolled back.
-
-## Original request
-
-Implement implement sqlite state and migrations for Agent Box according to the cited specification and dependencies.

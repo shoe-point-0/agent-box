@@ -2,19 +2,21 @@
 {"schema_version":1,"id":"m0-spike-harness","status":"implemented","created_at":"2026-08-29T06:44:38.361259313Z","implemented_at":"2026-08-29T07:23:33.712761465Z"}
 -->
 
-# Build the disposable substrate spike harness
+# Substrate spike harness
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m0-spike-harness`.
 
-## Goal
+- Delivered internal JSON contracts for registry listing, run results, inspection, cleanup, root identity, and append-only inventory.
+- Delivered an argv-only bounded runner, retained command diagnostics, fsynced inventory/control files, explicit root ownership, and preflight-before-mutation cleanup using non-recursive removal.
+- Cleanup authorizes only `created` path resources bound to the persisted root ID; planned-only, unknown, outside-root, and unsupported resources cause refusal before mutation.
+- Added only the clearly labeled `harness-smoke` fixture. No Git, Lima, Compose, VirtioFS, routing, or platform capability is claimed.
+- Next stories add real substrate probes; scenario-specific external resource cleanup remains intentionally owned by those stories.
 
-Build the disposable substrate spike harness
-
-## Context
+## Scope and dependencies
 
 - Milestone 0 foundation. Dependencies: m0-project-bootstrap. THE_BEGINNING.md sections 19.2, 20, 21 Issue 1, and 25 define the required evidence.
 
-## Requirements
+## Behavior
 
 - Create a disposable command registry, bounded argv runner, append-only resource inventory, retained diagnostics, and temporary-root containment.
 - Let each probe own scenario-specific Git, Lima, Compose, mount, and forwarding records; add the shared deterministic kill-point protocol only in m0-failure-matrix after those operations exist.
@@ -25,27 +27,19 @@ Build the disposable substrate spike harness
 - Do not create product abstractions or claim platform support from simulated results.
 - Never delete a resource based only on a name prefix; teardown must verify recorded identity and ownership metadata.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A developer can run one command to execute a selected spike and receive a machine-readable pass/fail result plus retained diagnostics.
-- [x] Interrupted runs leave an inventory that a cleanup command can inspect and safely reconcile.
-- [x] Unit tests prove unowned resources and paths outside the temporary root are never removed.
+- A developer can run one command to execute a selected spike and receive a machine-readable pass/fail result plus retained diagnostics.
+- Interrupted runs leave an inventory that a cleanup command can inspect and safely reconcile.
+- Unit tests prove unowned resources and paths outside the temporary root are never removed.
 
-## Technical approach
+## Implementation details
 
 - Give every run a cryptographically random persisted root identity, restrictive control files, an fsynced append-only NDJSON resource inventory, a diagnostics directory, and one final JSON result.
 - Pass scenarios an internal environment that exposes owned-file creation, resource recording, and a bounded argv-only runner; do not expose shell-string execution or stable product APIs.
 - Retain run roots and diagnostics by default. `inspect` reads them without mutation; `cleanup` performs a complete preflight, accepts only resources tied to the persisted root identity, refuses unsupported kinds or unknown filesystem entries, and removes recorded paths deepest-first without recursive deletion.
 - Compile one explicitly non-substrate `harness-smoke` scenario to exercise the execution path without making a Lima, Git, Compose, filesystem-coherency, or platform support claim.
 - Keep deterministic kill-point injection out of this slice; `m0-failure-matrix` adds it after real probe operations exist.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -62,15 +56,3 @@ Build the disposable substrate spike harness
 - `abox-spike inspect <root>` returned the persisted root identity, complete inventory, and final result without mutation.
 - With explicit user consent, `abox-spike cleanup <root>` returned `abox.spike.cleanup/v1`; the owned run root no longer existed afterward.
 - Tests cover bounded independent stdout/stderr, literal argv handling, cancellation, failed-run retention, interrupted-run reopen, corrupt inventories, symlink roots, unsupported resource kinds, outside-root records, unknown in-root files, and failed exclusive writes against pre-existing files.
-
-## Outcome and follow-ups
-
-- Delivered internal JSON contracts for registry listing, run results, inspection, cleanup, root identity, and append-only inventory.
-- Delivered an argv-only bounded runner, retained command diagnostics, fsynced inventory/control files, explicit root ownership, and preflight-before-mutation cleanup using non-recursive removal.
-- Cleanup authorizes only `created` path resources bound to the persisted root ID; planned-only, unknown, outside-root, and unsupported resources cause refusal before mutation.
-- Added only the clearly labeled `harness-smoke` fixture. No Git, Lima, Compose, VirtioFS, routing, or platform capability is claimed.
-- Next stories add real substrate probes; scenario-specific external resource cleanup remains intentionally owned by those stories.
-
-## Original request
-
-Build the disposable substrate spike harness described by the implementation kickoff specification.

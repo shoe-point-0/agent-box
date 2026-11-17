@@ -2,35 +2,47 @@
 {"schema_version":1,"id":"m1-doctor-command","status":"implemented","created_at":"2026-08-29T06:55:50.510725152Z","implemented_at":"2026-08-30T03:26:04.589717043Z"}
 -->
 
-# Inspect Machine and Box filesystem prerequisites
+# Machine and Box prerequisite diagnostics
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-doctor-command`.
 
-## Goal
+Implemented deterministic read-only `abox doctor`, `abox doctor TASK`, and
+`abox doctor fs TASK` modes with human and strict versioned JSON output. Every
+check has a stable symbolic result plus an independent evidence class and
+status; all non-passing results require bounded remediation. The Linux observer
+reports Machine platform/identity, state and runtime filesystem capacity,
+hardened tool versions and Git relative-worktree capability, Docker runtime,
+router-port uncertainty, and artifact-integrity uncertainty without attempting
+to reserve or repair anything.
 
-Inspect Machine and Box filesystem prerequisites
+Box mount, port, runtime, ownership, filesystem-probe, and watcher facts are
+reported explicitly as unknown or warning when no retained live readiness
+evidence exists. Doctor does not start the daemon or rerun the mutating
+`.abox-probe` acceptance suite merely to manufacture an answer. Persisting and
+serving those facts from successful reconciliation remains with the consuming
+single-Box operation; until then filesystem mode gives polling guidance rather
+than claiming unexecuted VirtioFS behavior.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1 command. Dependencies: m1-machine-preflight, m1-filesystem-verifier, m1-cli-foundation. Source: THE_BEGINNING.md Sections 10.5, 11.4, 14.1, and 17.
 
-## Requirements
+## Behavior
 
 - Implement general, Box-specific, and fs doctor modes using read-only observations.
 - Report relative-worktree safety, watcher behavior/polling guidance, tools, mounts, ports, disk, runtime, and ownership evidence.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Doctor never provisions or repairs resources.
-- [x] Every failed prerequisite has a stable symbolic result and remediation text.
-- [x] JSON output distinguishes tested fact, warning, unsupported case, and unknown.
+- Doctor never provisions or repairs resources.
+- Every failed prerequisite has a stable symbolic result and remediation text.
+- JSON output distinguishes tested fact, warning, unsupported case, and unknown.
 
-## Technical approach
+## Implementation details
 
 - Add a value-only `internal/doctor` contract with explicit machine, Box, and
   filesystem modes. Each check carries a stable symbolic result, a separate
@@ -55,14 +67,6 @@ Inspect Machine and Box filesystem prerequisites
   dependencies. Exercise the built command on Linux and compare relevant
   filesystem state before and after; do not describe that as Darwin, Lima, VZ,
   or VirtioFS runtime evidence.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -108,26 +112,3 @@ Inspect Machine and Box filesystem prerequisites
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only. No Darwin, VZ, VirtioFS, mount, watcher, or port runtime
   behavior is claimed.
-
-## Outcome and follow-ups
-
-Implemented deterministic read-only `abox doctor`, `abox doctor TASK`, and
-`abox doctor fs TASK` modes with human and strict versioned JSON output. Every
-check has a stable symbolic result plus an independent evidence class and
-status; all non-passing results require bounded remediation. The Linux observer
-reports Machine platform/identity, state and runtime filesystem capacity,
-hardened tool versions and Git relative-worktree capability, Docker runtime,
-router-port uncertainty, and artifact-integrity uncertainty without attempting
-to reserve or repair anything.
-
-Box mount, port, runtime, ownership, filesystem-probe, and watcher facts are
-reported explicitly as unknown or warning when no retained live readiness
-evidence exists. Doctor does not start the daemon or rerun the mutating
-`.abox-probe` acceptance suite merely to manufacture an answer. Persisting and
-serving those facts from successful reconciliation remains with the consuming
-single-Box operation; until then filesystem mode gives polling guidance rather
-than claiming unexecuted VirtioFS behavior.
-
-## Original request
-
-Implement inspect machine and box filesystem prerequisites for Agent Box.

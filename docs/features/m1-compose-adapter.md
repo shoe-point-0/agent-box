@@ -2,19 +2,29 @@
 {"schema_version":1,"id":"m1-compose-adapter","status":"implemented","created_at":"2026-08-29T06:48:36.151865633Z","implemented_at":"2026-08-30T01:14:02.342658598Z"}
 -->
 
-# Implement Compose lifecycle, exec, logs, and observation
+# Compose lifecycle, exec, logs, and observation
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-compose-adapter`.
 
-## Goal
+- Added the typed `compose.Runtime` guest boundary for policy-gated observe,
+  pull, build, idempotent apply, stop, ownership-proved remove, noninteractive
+  exec, and bounded/cancelable logs. Every operation re-normalizes through the
+  exact generated inputs and compares canonical bytes and digest to compiler
+  evidence before mutation or streaming execution.
+- Docker JSON inspection is deterministic and fail-closed for project
+  containers, networks, volumes, referenced images, ownership labels, health,
+  mounts, attachments, and actual published ports. Human-formatted Compose
+  output is never parsed.
+- This Linux host does not have `limactl`; production invocation through a real
+  Lima VM remains covered by the typed `lima.Adapter` contract rather than a
+  runtime support claim. The real integration exercised the same adapter over
+  the local Linux Docker Engine. Darwin VZ/VirtioFS remains hardware-deferred.
 
-Implement Compose lifecycle, exec, logs, and observation
-
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-process-runner, m1-compose-compiler, m1-compose-policy-core, m1-guest-toolchain, m1-ownership-core. Source: THE_BEGINNING.md Sections 9.3, 12.2, and Issue 8.
 
-## Requirements
+## Behavior
 
 - Observe, pull/build, apply, inspect, stop, and remove using an explicit project name and generated files only after normalized policy validation succeeds.
 - Observe containers, health, networks, volumes, images, labels, and actual port bindings.
@@ -22,16 +32,15 @@ Implement Compose lifecycle, exec, logs, and observation
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A second apply does not duplicate Compose resources.
-- [x] Every observed resource is attributable by recorded ID and labels.
-- [x] Exec returns exact exit status and logs stop cleanly on cancellation.
+- A second apply does not duplicate Compose resources.
+- Every observed resource is attributable by recorded ID and labels.
+- Exec returns exact exit status and logs stop cleanly on cancellation.
 
-## Technical approach
+## Implementation details
 
 - Add a typed runtime adapter beside the read-only Compose compiler. Bind every
   invocation to the immutable Plan, positive generation, exact generated root
@@ -56,14 +65,6 @@ Implement Compose lifecycle, exec, logs, and observation
   uniquely named disposable project against the available Linux Docker Engine
   and Compose runtime. Exercise apply twice, observation, exact exec status,
   canceled follow logs, stop, ownership refusal, removal, and leak checks.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -104,23 +105,3 @@ Implement Compose lifecycle, exec, logs, and observation
   completed ten real lifecycle fixtures in 259.754s. `GOOS=darwin GOARCH=arm64
   CGO_ENABLED=0 go build ./...` and `git diff --check` passed; cross-compilation
   is compilation evidence only and makes no Darwin runtime claim.
-
-## Outcome and follow-ups
-
-- Added the typed `compose.Runtime` guest boundary for policy-gated observe,
-  pull, build, idempotent apply, stop, ownership-proved remove, noninteractive
-  exec, and bounded/cancelable logs. Every operation re-normalizes through the
-  exact generated inputs and compares canonical bytes and digest to compiler
-  evidence before mutation or streaming execution.
-- Docker JSON inspection is deterministic and fail-closed for project
-  containers, networks, volumes, referenced images, ownership labels, health,
-  mounts, attachments, and actual published ports. Human-formatted Compose
-  output is never parsed.
-- This Linux host does not have `limactl`; production invocation through a real
-  Lima VM remains covered by the typed `lima.Adapter` contract rather than a
-  runtime support claim. The real integration exercised the same adapter over
-  the local Linux Docker Engine. Darwin VZ/VirtioFS remains hardware-deferred.
-
-## Original request
-
-Implement implement compose lifecycle, exec, logs, and observation for Agent Box according to the cited specification and dependencies.

@@ -1,6 +1,6 @@
 # Agent Box Roadmap
 
-Agent Box is pre-alpha. This roadmap communicates direction, not release dates or support claims. A capability is complete only when its Sprout packet records passing execution evidence and moves to [`docs/features/`](docs/features/). Active packet dependencies, rather than this summary, determine executable order.
+Agent Box is pre-alpha. This roadmap communicates direction, not release dates or support claims. A capability is complete only when its Sprout packet records passing execution evidence and moves to [implemented feature documentation](docs/features.md). Active packet dependencies, rather than this summary, determine executable order.
 
 ## Delivery principles
 
@@ -18,7 +18,7 @@ Linux-exercisable Git, Compose, routing, and failure probes are recorded in [`do
 
 ### Milestone 1: one-repository Box
 
-Build the user daemon, versioned API and CLI, one private Git worktree, one Lima runtime host, Compose reconciliation, context output, and safe removal. The complete `abox up` runtime slice remains hardware-gated; completed foundation components are recorded under [`docs/features/`](docs/features/).
+Build the user daemon, versioned API and CLI, one private Git worktree, one Lima runtime host, Compose reconciliation, context output, and safe removal. The complete `abox up` runtime slice remains hardware-gated; completed foundation components are recorded under [implemented feature documentation](docs/features.md).
 
 ### Milestones 2 and 3: multi-repository workspaces and routing
 
@@ -38,6 +38,6 @@ IDE integrations, an MCP adapter, native Linux backend, managed TLS, checkpoints
 
 ## Tracking and changes
 
-The product baseline is [`THE_BEGINNING.md`](THE_BEGINNING.md), active work is in [`.sprout/tasks/`](.sprout/tasks/), and implemented evidence is in [`docs/features/`](docs/features/). Durable architectural changes require the ADR process in [`docs/decisions/README.md`](docs/decisions/README.md). Roadmap priority changes use an ordinary public pull request unless they alter a durable contract.
+The product baseline is [`THE_BEGINNING.md`](THE_BEGINNING.md), active work is in [`.sprout/tasks/`](.sprout/tasks/), and implemented evidence is in [implemented feature documentation](docs/features.md). Durable architectural changes require the ADR process in [`docs/decisions/README.md`](docs/decisions/README.md). Roadmap priority changes use an ordinary public pull request unless they alter a durable contract.
 
 Foundation membership is not a roadmap milestone. The project will consider neutral-home discussions only after the community evidence in [`PROJECT_HEALTH.md`](PROJECT_HEALTH.md) demonstrates repeat adoption, multi-organization maintenance, and sustainable operations.

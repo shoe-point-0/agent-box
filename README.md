@@ -2,7 +2,9 @@
 
 Agent Box is an early-stage local development runtime for humans and coding agents. Its intended unit of execution is a Box: one task workspace, one isolated Linux runtime host, one coordinated worktree set, and one container graph.
 
-Status: pre-alpha foundation work. The repository does not yet provide `abox up`, a running daemon, Lima provisioning, or a supported runtime. The only production-binary behavior currently implemented is version reporting. Milestone 0 substrate probes remain available through `cmd/abox-spike` and are evidence harnesses, not product APIs.
+Status: pre-alpha. The CLI implements `init`, `doctor`, `plan`, `up`, `list`, and refusal-first `rm`, backed by a user-scoped daemon and runtime adapters. This is not yet a turnkey supported runtime: provisioning requires an explicit verified artifact installation and matching preinstalled guest image, and the production preflight currently admits only Darwin/arm64 with VZ. A successful build or Linux test run does not establish runtime support. Milestone 0 substrate probes remain available through `cmd/abox-spike` and are evidence harnesses, not product APIs.
+
+Start with [`docs/getting-started.md`](docs/getting-started.md) for installation, command syntax, daemon configuration, and the current runtime blockers.
 
 ## Development quick start
 
@@ -24,16 +26,17 @@ make build
 
 `make check` is the local and CI quality gate. It verifies formatting, lint, module metadata, unit tests, race tests, vet, both product builds, the retained spike smoke path, and repository automation.
 
-Generated binaries are written to `bin/`. Run `make clean` to remove binaries and repository-local tools.
+Generated binaries are written to `bin/`. Install both commands for your user with `make install` (default `~/.local/bin`), or use `make install INSTALL_DIR="$HOME/bin"`. Put the selected directory on `PATH`. This installs the CLI and daemon only, not Lima, Docker, or a guest image. Run `make clean` to remove build outputs and repository-local tools.
 
 ## Platform boundary
 
-Linux is the implementation and continuous-verification lane. CI is configured to compile and test the platform-neutral foundation on a GitHub-hosted Apple Silicon macOS 15 runner; that remote job has not yet produced execution evidence for this foundation commit. The runner does not provide nested virtualization, so even a green job is not evidence that Lima VZ, VirtioFS, forwarding, or the Agent Box runtime works on macOS. Real Darwin/arm64 runtime support remains gated on the dedicated hardware acceptance tasks documented in `THE_BEGINNING.md`.
+Linux is the implementation and continuous-verification lane, not a supported production `abox up` host. Production preflight currently permits only Darwin/arm64 with VZ, and the Lima configuration adapter requires `lima-vz` with VirtioFS. CI is configured to run the quality gate on Ubuntu 24.04 and macOS 15; a green hosted job is not evidence that Lima VZ, VirtioFS, forwarding, or the Agent Box runtime works on real macOS hardware. Real Darwin/arm64 runtime support remains gated on the dedicated hardware acceptance tasks documented in `THE_BEGINNING.md`. See the [getting-started platform boundary](docs/getting-started.md#current-platform-boundary) before attempting provisioning.
 
 ## Project documents
 
 - Product and architecture baseline: [`THE_BEGINNING.md`](THE_BEGINNING.md)
 - Roadmap and evidence gates: [`ROADMAP.md`](ROADMAP.md)
+- Implemented components and validation evidence: [`docs/features.md`](docs/features.md)
 - Measured substrate boundary: [`docs/architecture/substrate-spikes.md`](docs/architecture/substrate-spikes.md)
 - Architecture decisions: [`docs/decisions/`](docs/decisions/README.md)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)

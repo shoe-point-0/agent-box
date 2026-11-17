@@ -70,12 +70,13 @@ func (observer *LocalObserver) Observe(ctx context.Context, request Request) ([]
 		checks = append(checks, unknown("disk.state", "user-scoped state path unavailable", "canonical user-scoped state path", "correct the home and XDG path configuration, then rerun abox doctor"))
 	} else {
 		checks = append(checks, observer.disk("disk.runtime", paths.RuntimeDir), observer.disk("disk.state", filepath.Dir(paths.StateDatabase)))
+		checks = append(checks, installationMetadata(filepath.Join(filepath.Dir(paths.StateDatabase), "installation.json")))
 	}
 
 	git := observer.gitVersion(ctx)
 	checks = append(checks, git)
 	checks = append(checks,
-		observer.tool(ctx, "tool.lima", toolchain.ProbeLimaVersion, "limactl version ", "install the pinned Lima release and place limactl on PATH"),
+		observer.tool(ctx, "tool.lima", toolchain.ProbeLimaVersion, "limactl version ", "install Lima using https://lima-vm.io/docs/installation/ and place limactl on PATH; runtime provisioning also requires installation.json (see docs/getting-started.md)"),
 		observer.tool(ctx, "tool.docker", toolchain.ProbeDockerVersion, "Docker version ", "install the pinned Docker client and place docker on PATH"),
 		observer.tool(ctx, "tool.compose", toolchain.ProbeComposeVersion, "", "install the pinned Docker Compose plugin"),
 		unknown("tool.artifact-integrity", "version probes do not establish artifact identity or SHA-256 integrity", "complete pinned toolchain identities and matching SHA-256 digests", "run Machine preflight with the installed toolchain specification"),
@@ -102,7 +103,7 @@ func (observer *LocalObserver) Observe(ctx context.Context, request Request) ([]
 func (observer *LocalObserver) platform() Check {
 	observed := runtime.GOOS + "/" + runtime.GOARCH
 	if runtime.GOOS == "linux" {
-		return warning("machine.platform", observed+" engineering lane; accelerator not inferred", "an explicitly supported OS, architecture, and accelerator tuple", "treat Linux results as engineering evidence only; validate VZ on real Darwin/arm64 hardware")
+		return warning("machine.platform", observed+" engineering lane; production up currently rejects Linux", "production preflight currently requires darwin/arm64 with VZ", "Linux supports build/control-plane testing, not production provisioning; installing QEMU does not unlock abox up (see docs/getting-started.md)")
 	}
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 		return warning("machine.platform", observed+"; VZ availability not inferred", "darwin/arm64 with an observed supported VZ accelerator", "run the real Darwin hardware gate before claiming runtime support")
@@ -195,9 +196,21 @@ func (observer *LocalObserver) runtime(ctx context.Context) Check {
 	result, err := observer.Tools.Observe(probeContext, toolchain.ProbeDockerRuntime)
 	value := string(bytes.TrimSpace(append(append([]byte(nil), result.Stdout...), result.Stderr...)))
 	if err != nil || result.StdoutTruncated || result.StderrTruncated || value == "" || len(value) > 256 || strings.ContainsAny(value, "\x00\r\n") {
-		return warning("runtime.docker", "Docker runtime was not observable", "read-only client/server runtime identity", "start the supported Docker runtime or inspect the Box runtime host")
+		return warning("runtime.docker", "host Docker runtime was not observable; this does not establish Box guest readiness", "optional host client/server runtime identity; Box Docker runs inside its Lima guest", "a host Docker daemon is not a substitute for the Box guest; configure the verified runtime installation before abox up (see docs/getting-started.md)")
 	}
 	return Check{Result: "runtime.docker", Evidence: EvidenceTested, Status: StatusPass, Observed: value, Required: "readable client/server runtime identity"}
+}
+
+// Doctor cannot know a running daemon's --installation override. Report only
+// the default metadata location, without claiming content or guest readiness.
+func installationMetadata(path string) Check {
+	const required = "verified runtime artifacts and a matching guest image, configured through installation.json or aboxd --installation"
+	const remediation = "see docs/getting-started.md for the installation contract; installing limactl alone is insufficient"
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return unknown("runtime.installation", "default installation metadata unavailable at "+path+"; daemon overrides were not inspected", required, remediation)
+	}
+	return unknown("runtime.installation", "default installation metadata present at "+path+"; contents and artifact digests were not verified", required, remediation)
 }
 
 func existingAncestor(path string) (ancestor string, exists bool, err error) {

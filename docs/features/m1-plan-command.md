@@ -2,35 +2,43 @@
 {"schema_version":1,"id":"m1-plan-command","status":"implemented","created_at":"2026-08-29T06:55:50.479423731Z","implemented_at":"2026-08-30T00:17:33.61517398Z"}
 -->
 
-# Render a read-only reconciliation plan
+# Read-only reconciliation plans with abox plan
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-plan-command`.
 
-## Goal
+Implemented `abox plan` as a bounded read-only daemon request with deterministic
+human and schema-valid JSON output. The planner composes only strict loading,
+hardened Git observation, path construction, immutable Plan compilation,
+read-only state lookup, retained-Plan verification, and pure diff
+classification. It has no materializer, reconciliation runner, Lima mutation,
+Compose apply, port allocator, journal write, or state-update capability.
 
-Render a read-only reconciliation plan
+Absent Boxes produce explicit create proposals without materialization.
+Existing Boxes expose no-op/in-place/growth/removal/restart/conflict classes and
+mark restart, destructive, and conflict implications independently. Retained
+Plan files and repository paths are constrained to the exact Box ownership root
+before observation; symlinked or mismatched retained paths are refused.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1 command. Dependencies: m1-plan-diff, m1-daemon-api, m1-cli-foundation, m1-repository-resolver. Source: THE_BEGINNING.md Section 14.1.
 
-## Requirements
+## Behavior
 
 - Implement abox plan with human and JSON proposed operations based on read-only resolution and observed state.
 - Expose stable conflicts and restart/destructive implications without materializing desired resources.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Running plan from an absent Box creates no private store, worktree, resource row, VM, port, or generated Box file.
-- [x] Repeated plan output is deterministic for unchanged facts.
-- [x] JSON validates against the output schema.
+- Running plan from an absent Box creates no private store, worktree, resource row, VM, port, or generated Box file.
+- Repeated plan output is deterministic for unchanged facts.
+- JSON validates against the output schema.
 
-## Technical approach
+## Implementation details
 
 - Add a versioned, bounded `POST /v1/boxes:plan` read endpoint. The request
   carries only canonical manifest and Box identity; unlike `up`, it has no
@@ -55,14 +63,6 @@ Render a read-only reconciliation plan
   deterministic human and JSON rendering, schema validation, and before/after
   snapshots proving no Box rows, private store, worktree, runtime, port, or
   generated Box artifacts are created.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -100,22 +100,3 @@ Render a read-only reconciliation plan
   state directories were absent. The owned daemon, socket, state, fixture, and
   fake-tool directory were removed afterward.
 - `git diff --check`: PASS.
-
-## Outcome and follow-ups
-
-Implemented `abox plan` as a bounded read-only daemon request with deterministic
-human and schema-valid JSON output. The planner composes only strict loading,
-hardened Git observation, path construction, immutable Plan compilation,
-read-only state lookup, retained-Plan verification, and pure diff
-classification. It has no materializer, reconciliation runner, Lima mutation,
-Compose apply, port allocator, journal write, or state-update capability.
-
-Absent Boxes produce explicit create proposals without materialization.
-Existing Boxes expose no-op/in-place/growth/removal/restart/conflict classes and
-mark restart, destructive, and conflict implications independently. Retained
-Plan files and repository paths are constrained to the exact Box ownership root
-before observation; symlinked or mismatched retained paths are refused.
-
-## Original request
-
-Implement render a read-only reconciliation plan for Agent Box.

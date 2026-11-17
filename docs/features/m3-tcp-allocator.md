@@ -2,19 +2,35 @@
 {"schema_version":1,"id":"m3-tcp-allocator","status":"implemented","created_at":"2026-08-29T06:48:36.42631655Z","implemented_at":"2026-08-30T08:50:16.462766373Z"}
 -->
 
-# Allocate and forward stable raw TCP endpoints
+# Stable raw TCP endpoints
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m3-tcp-allocator`.
 
-## Goal
+- Added `internal/tcpallocator`, whose manager owns the exact `net.Listener`
+  used for reservation and proxy publication. Target transport is a narrow
+  `Dialer`, allowing the later Lima/guest routing assembly to supply streams
+  without handing Machine listener ownership to Lima.
+- Allocation is fenced by the complete active Box lease in the same SQLite
+  transaction as insert, adoption, readiness update, recovery, or removal.
+  Schema v9 adds stable Box/name and globally unique Machine-port ownership.
+- Initial allocation probes before persistence, serving, or return. Restart
+  recovery rebinds the recorded port, refuses occupation rather than silently
+  reallocating, and retains a not-ready listener while its stopped target is
+  unavailable. Context generation accepts only a complete planned set of ready
+  loopback observations.
+- TCP intent is now canonical Plan content, included in the digest and schema.
+  Diff rules identify per-endpoint create/change versus removal, and absent-Box
+  planning exposes endpoint creation explicitly.
+- This Linux slice exercises real loopback allocation and forwarding. Wiring a
+  Lima-backed target `Dialer` into the complete route/readiness pipeline remains
+  owned by the dependent Milestone 3 integration tasks; it is not inferred from
+  the Darwin cross-build.
 
-Allocate and forward stable raw TCP endpoints
-
-## Context
+## Scope and dependencies
 
 - Milestone 3 transport. Dependencies: m1-operation-journal, m1-lima-adapter. Source: THE_BEGINNING.md Section 13.3.
 
-## Requirements
+## Behavior
 
 - Own a daemon-held loopback listener for each allocation and proxy to the Box target so reservation and publication use the same kernel object; if direct Lima binding is retained, prove an atomic descriptor handoff before implementation.
 - Persist allocation ownership under the Box lease and keep the listener bound while stopped; detect occupied recorded ports after daemon or Machine restart and refuse or explicitly reallocate with an atomic context update.
@@ -23,16 +39,15 @@ Allocate and forward stable raw TCP endpoints
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Concurrent allocations cannot receive the same Machine port.
-- [x] No allocation is published before its target is reachable.
-- [x] Removal releases only the selected Box allocation.
+- Concurrent allocations cannot receive the same Machine port.
+- No allocation is published before its target is reachable.
+- Removal releases only the selected Box allocation.
 
-## Technical approach
+## Implementation details
 
 - Add a daemon-local TCP allocation manager that binds each candidate port on
   `127.0.0.1` itself and retains that exact `net.Listener` for the allocation's
@@ -56,14 +71,6 @@ Allocate and forward stable raw TCP endpoints
   retention, and selected-allocation removal. No Lima or shared Machine
   resource is required for this Linux contract slice.
 
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
-
 ## Verification
 
 - [x] go test ./...
@@ -79,29 +86,3 @@ Allocate and forward stable raw TCP endpoints
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`: PASS as compilation evidence only; no Darwin networking or Lima runtime behavior is claimed.
 - `sprout check --all`: PASS for every active packet.
 - `git diff --check`: PASS.
-
-## Outcome and follow-ups
-
-- Added `internal/tcpallocator`, whose manager owns the exact `net.Listener`
-  used for reservation and proxy publication. Target transport is a narrow
-  `Dialer`, allowing the later Lima/guest routing assembly to supply streams
-  without handing Machine listener ownership to Lima.
-- Allocation is fenced by the complete active Box lease in the same SQLite
-  transaction as insert, adoption, readiness update, recovery, or removal.
-  Schema v9 adds stable Box/name and globally unique Machine-port ownership.
-- Initial allocation probes before persistence, serving, or return. Restart
-  recovery rebinds the recorded port, refuses occupation rather than silently
-  reallocating, and retains a not-ready listener while its stopped target is
-  unavailable. Context generation accepts only a complete planned set of ready
-  loopback observations.
-- TCP intent is now canonical Plan content, included in the digest and schema.
-  Diff rules identify per-endpoint create/change versus removal, and absent-Box
-  planning exposes endpoint creation explicitly.
-- This Linux slice exercises real loopback allocation and forwarding. Wiring a
-  Lima-backed target `Dialer` into the complete route/readiness pipeline remains
-  owned by the dependent Milestone 3 integration tasks; it is not inferred from
-  the Darwin cross-build.
-
-## Original request
-
-Implement allocate and forward stable raw tcp endpoints for Agent Box according to the cited specification and dependencies.

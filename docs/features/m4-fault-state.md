@@ -2,34 +2,39 @@
 {"schema_version":1,"id":"m4-fault-state","status":"implemented","created_at":"2026-08-29T06:55:50.649128882Z","implemented_at":"2026-08-30T08:57:16.578054754Z"}
 -->
 
-# Inject SQLite and generated-file durability failures
+# SQLite and generated-file durability failures
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m4-fault-state`.
 
-## Goal
+- Added deterministic Linux durability-fault coverage at the shared generated
+  file primitive, SQLite WAL/transaction boundary, and final READY generation
+  publication boundary without adding production fault switches.
+- Restart now has test evidence for complete old/new generated artifacts,
+  rolled-back `SQLITE_FULL` writes, and fresh external observation before a
+  retried generation can become READY.
+- Migration-specific injection and any future database backup implementation
+  remain in `m5-state-compatibility`; this task neither implements nor claims
+  backup semantics.
 
-Inject SQLite and generated-file durability failures
-
-## Context
+## Scope and dependencies
 
 - Milestone 4. Dependencies: m1-atomic-writer, m1-operation-journal, m1-state-store. Source: THE_BEGINNING.md Sections 15 and 17.
 
-## Requirements
+## Behavior
 
 - Inject ENOSPC, write/fsync/rename/directory-fsync, transaction, WAL, backup, and generation-publication failures at every current persistence boundary; migration-specific faults remain in m5-state-compatibility.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] No completion is reported before durable commit.
-- [x] Restart sees complete old or new generations and re-observes external reality.
-- [x] Failed migration preserves and verifies the original database.
+- No completion is reported before durable commit.
+- Restart sees complete old or new generations and re-observes external reality.
+- Failed migration preserves and verifies the original database.
 
-## Technical approach
+## Implementation details
 
 - Exercise the shared `internal/atomicfile` boundary with explicit Linux
   `ENOSPC` failures in addition to its existing partial-write, file-fsync,
@@ -50,14 +55,6 @@ Inject SQLite and generated-file durability failures
 - There is no database backup operation in the current product persistence
   surface, so there is no backup boundary to fault in this task; do not invent
   backup semantics or imply that WAL files are backups.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -91,19 +88,3 @@ Inject SQLite and generated-file durability failures
   table or version advance, and received `ok` from `quick_check(1)`.
 - `git diff --check` passed. No backup fault was claimed: the current product
   has no database backup operation, and WAL is explicitly not treated as one.
-
-## Outcome and follow-ups
-
-- Added deterministic Linux durability-fault coverage at the shared generated
-  file primitive, SQLite WAL/transaction boundary, and final READY generation
-  publication boundary without adding production fault switches.
-- Restart now has test evidence for complete old/new generated artifacts,
-  rolled-back `SQLITE_FULL` writes, and fresh external observation before a
-  retried generation can become READY.
-- Migration-specific injection and any future database backup implementation
-  remain in `m5-state-compatibility`; this task neither implements nor claims
-  backup semantics.
-
-## Original request
-
-Implement inject sqlite and generated-file durability failures for Agent Box.

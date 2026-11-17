@@ -2,19 +2,27 @@
 {"schema_version":1,"id":"m1-git-private-store","status":"implemented","created_at":"2026-08-29T06:48:36.031491662Z","implemented_at":"2026-08-29T21:04:38.679510154Z"}
 -->
 
-# Seed self-contained Box-private Git stores
+# Self-contained Box-private Git stores
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-git-private-store`.
 
-## Goal
+Implemented a digest-checked `internal/gitstore` materialization boundary over
+the hardened Machine Git adapter. It re-observes source cleanliness, the exact
+planned commit, branch validity, and generated-branch absence before mutation;
+atomically claims the destination directory; copies local objects without
+hardlinks or alternates; pins detached commits; enables reflogs; and performs
+identity-checked cleanup on failure.
 
-Seed self-contained Box-private Git stores
+The returned Machine-owned record carries the canonical publish destination
+from resolved facts. Box-writable Git configuration is deliberately not a
+publication authority. Linked worktree creation, locking, observation, and
+idempotent adoption remain scoped to `m1-git-worktrees`.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-process-runner, m1-machine-git-profile, m1-repository-resolver, m1-plan-compiler, m1-ownership-core. Source: THE_BEGINNING.md Sections 7.2, 10.1, and Issue 5.
 
-## Requirements
+## Behavior
 
 - Consume resolved repository facts and the immutable Plan; re-observe cleanliness and full commit IDs immediately before materialization.
 - Create a self-contained bare store without writable hardlinks or alternates and enable reflogs.
@@ -22,16 +30,15 @@ Seed self-contained Box-private Git stores
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Dirty local sources fail with exit semantics equivalent to ABOX_GIT_DIRTY_SOURCE before partial worktree creation.
-- [x] Object writes in the Box store cannot mutate source repository inodes or refs.
-- [x] Detached refs, spaces, Unicode, and branch collisions are covered by real-Git tests.
+- Dirty local sources fail with exit semantics equivalent to ABOX_GIT_DIRTY_SOURCE before partial worktree creation.
+- Object writes in the Box store cannot mutate source repository inodes or refs.
+- Detached refs, spaces, Unicode, and branch collisions are covered by real-Git tests.
 
-## Technical approach
+## Implementation details
 
 - Add one `internal/gitstore` materializer that accepts both the resolver's
   trusted `repository.Facts` and the digest-checked immutable Plan. Reject any
@@ -51,14 +58,6 @@ Seed self-contained Box-private Git stores
   generated-branch and destination collisions, dirty-after-plan refusal,
   no-hardlink/no-alternate checks, source ref/object non-mutation, and cleanup
   after injected failures.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -92,21 +91,3 @@ Seed self-contained Box-private Git stores
   and Python automation tests passed.
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only; no Darwin runtime support is claimed.
-
-## Outcome and follow-ups
-
-Implemented a digest-checked `internal/gitstore` materialization boundary over
-the hardened Machine Git adapter. It re-observes source cleanliness, the exact
-planned commit, branch validity, and generated-branch absence before mutation;
-atomically claims the destination directory; copies local objects without
-hardlinks or alternates; pins detached commits; enables reflogs; and performs
-identity-checked cleanup on failure.
-
-The returned Machine-owned record carries the canonical publish destination
-from resolved facts. Box-writable Git configuration is deliberately not a
-publication authority. Linked worktree creation, locking, observation, and
-idempotent adoption remain scoped to `m1-git-worktrees`.
-
-## Original request
-
-Implement seed self-contained box-private git stores for Agent Box according to the cited specification and dependencies.

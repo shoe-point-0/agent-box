@@ -2,19 +2,30 @@
 {"schema_version":1,"id":"m5-governance-readiness","status":"implemented","created_at":"2026-08-29T06:48:36.686316691Z","implemented_at":"2026-08-30T09:14:55.299751018Z"}
 -->
 
-# Establish credible project governance and maintenance
+# Project governance and maintenance
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m5-governance-readiness`.
 
-## Goal
+- Published a discoverable roadmap, governance model, maintainer/reviewer
+  roster, promotion and succession ladder, decision and review process, DCO
+  mechanics, release policy, compatibility/deprecation contract, no-telemetry
+  policy, trademark review status, and adoption/project-health measures.
+- Recorded bootstrap reality rather than inventing maturity: one independent
+  maintainer, no independent review, no operational private vulnerability
+  channel, no supported release, no trademark clearance, and no measured
+  adoption baseline. Governance explicitly permits maintainers from multiple
+  organizations without employer ownership or voting weight.
+- Added offline link and contributor-flow conformance to the existing
+  `automation-check` gate. The private security channel, release supply chain,
+  supported-version matrix, operational release runbook, name clearance, and
+  broader maintainer recruitment remain honest pre-release work owned by their
+  respective policies and milestone packets; none was simulated here.
 
-Establish credible project governance and maintenance
-
-## Context
+## Scope and dependencies
 
 - Milestone 5. Dependencies: m1-project-foundation. Source: THE_BEGINNING.md Sections 22.4 and Foundation Readiness.
 
-## Requirements
+## Behavior
 
 - Publish roadmap, governance, maintainer ladder, decision process, contribution path, release policy, compatibility policy, telemetry policy, and trademark/name review status.
 - Choose and document DCO or CLA mechanics and issue/review expectations.
@@ -22,16 +33,15 @@ Establish credible project governance and maintenance
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] A contributor can discover how decisions, reviews, releases, security reports, and maintainer promotion work.
-- [x] Governance permits maintainers from multiple organizations.
-- [x] No document claims CNCF or Linux Foundation readiness without measured community evidence.
+- A contributor can discover how decisions, reviews, releases, security reports, and maintainer promotion work.
+- Governance permits maintainers from multiple organizations.
+- No document claims CNCF or Linux Foundation readiness without measured community evidence.
 
-## Technical approach
+## Implementation details
 
 - Keep policy at stable, discoverable repository-root entry points: `GOVERNANCE.md`
   owns roles and decisions, `MAINTAINERS.md` owns the current roster,
@@ -47,14 +57,6 @@ Establish credible project governance and maintenance
 - Add an offline governance-document conformance test to the existing
   `automation-check` gate. Validate local links and the clean-clone path from a
   temporary tracked-file export rather than relying on review by inspection.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -87,24 +89,3 @@ Establish credible project governance and maintenance
   Foundation chartered project. `PROJECT_HEALTH.md` instead records the
   unmeasured pre-alpha baseline and evidence required before any neutral-home
   discussion.
-
-## Outcome and follow-ups
-
-- Published a discoverable roadmap, governance model, maintainer/reviewer
-  roster, promotion and succession ladder, decision and review process, DCO
-  mechanics, release policy, compatibility/deprecation contract, no-telemetry
-  policy, trademark review status, and adoption/project-health measures.
-- Recorded bootstrap reality rather than inventing maturity: one independent
-  maintainer, no independent review, no operational private vulnerability
-  channel, no supported release, no trademark clearance, and no measured
-  adoption baseline. Governance explicitly permits maintainers from multiple
-  organizations without employer ownership or voting weight.
-- Added offline link and contributor-flow conformance to the existing
-  `automation-check` gate. The private security channel, release supply chain,
-  supported-version matrix, operational release runbook, name clearance, and
-  broader maintainer recruitment remain honest pre-release work owned by their
-  respective policies and milestone packets; none was simulated here.
-
-## Original request
-
-Implement establish credible project governance and maintenance for Agent Box according to the cited specification and dependencies.

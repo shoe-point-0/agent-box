@@ -2,35 +2,41 @@
 {"schema_version":1,"id":"m1-git-publication-status","status":"implemented","created_at":"2026-08-29T06:55:50.449897416Z","implemented_at":"2026-08-29T21:32:48.83871901Z"}
 -->
 
-# Detect unpublished Box commits from trusted destinations
+# Box commit publication status
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-git-publication-status`.
 
-## Goal
+Implemented a read-only publication classifier in `internal/publication` and a
+single no-transport `ReachableCommits` operation in the hardened Machine Git
+profile. Publication status is a set-difference over exact commit IDs: a commit
+is published when reachable from at least one available caller-recorded
+destination. The result preserves per-ref and per-destination evidence, and
+unavailable destinations never become proof of safety.
 
-Detect unpublished Box commits from trusted destinations
+Remote destination transport and sanitized publication remain Milestone 2 work.
+The classifier accepts only canonical local destinations in this Milestone 1
+slice and does not commit, push, fetch, or mutate any destination.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-machine-git-profile, m1-git-worktrees. Source: THE_BEGINNING.md Sections 10.3 and 10.8.
 
-## Requirements
+## Behavior
 
 - Compute per-ref reachability against trusted destinations recorded outside Box-writable Git config.
 - Treat missing/unavailable destinations conservatively and return exact commit evidence.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Clean worktrees with Box-only commits are classified unpublished.
-- [x] Malicious Box config cannot redirect reachability checks.
-- [x] Local, missing, rewritten, detached, and multiple-destination cases pass real-Git tests.
+- Clean worktrees with Box-only commits are classified unpublished.
+- Malicious Box config cannot redirect reachability checks.
+- Local, missing, rewritten, detached, and multiple-destination cases pass real-Git tests.
 
-## Technical approach
+## Implementation details
 
 - Add a read-only `internal/publication` classifier that accepts the private
   store identity, exact Box refs/commits, and an explicit ordered list of
@@ -49,14 +55,6 @@ Detect unpublished Box commits from trusted destinations
   Box-only commit, missing and rewritten destinations, detached commits,
   multiple destinations, ref drift, malformed output, and hostile Box config
   that attempts to redirect or execute Machine Git.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -83,20 +81,3 @@ Detect unpublished Box commits from trusted destinations
 - `go test -race -count=10 ./...` passed; the publication package completed ten
   real-Git executions in 3.746s. `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go
   build ./...` passed as compilation evidence only, not Darwin runtime support.
-
-## Outcome and follow-ups
-
-Implemented a read-only publication classifier in `internal/publication` and a
-single no-transport `ReachableCommits` operation in the hardened Machine Git
-profile. Publication status is a set-difference over exact commit IDs: a commit
-is published when reachable from at least one available caller-recorded
-destination. The result preserves per-ref and per-destination evidence, and
-unavailable destinations never become proof of safety.
-
-Remote destination transport and sanitized publication remain Milestone 2 work.
-The classifier accepts only canonical local destinations in this Milestone 1
-slice and does not commit, push, fetch, or mutate any destination.
-
-## Original request
-
-Implement detect unpublished box commits from trusted destinations for Agent Box.

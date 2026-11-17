@@ -2,19 +2,35 @@
 {"schema_version":1,"id":"m1-ownership-core","status":"implemented","created_at":"2026-08-29T06:55:50.42129706Z","implemented_at":"2026-08-29T19:32:25.880876316Z"}
 -->
 
-# Authorize destructive operations with typed ownership evidence
+# Destructive-operation ownership proofs
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-ownership-core`.
 
-## Goal
+- Added opaque, resource-specific proof types for paths, Git worktrees, Lima
+  instances, Compose resources, volumes, Unix sockets, and listeners. Zero
+  values expose no destructive target; proof constructors fail with an
+  inspectable `ProofError` wrapping `ErrNotOwned`.
+- Filesystem proof requires canonical strict containment and matching recorded
+  and live device/inode identity. Git and socket proofs specialize that fresh
+  path proof with live Git registration/common-directory/lock facts or socket
+  file type respectively.
+- Runtime proofs require exact recorded/live opaque identity plus the mandatory
+  `dev.abox.box-id` live label or embedded metadata. Listener proof requires a
+  matching bound identity and active daemon lease. Prefix-shaped names and
+  generic Compose labels are never accepted as ownership evidence.
+- No production destructive leaf adapter exists yet; upcoming Git, Lima,
+  Compose, filesystem, and routing adapters can only receive the corresponding
+  opaque proof target contract. Policy remains centralized in `ownership`, and
+  this package performs no mutation.
+- Descriptor-relative deletion and revalidation against changes after proof
+  construction remain explicitly assigned to `m4-ownership-proofs`; this
+  Milestone 1 contract does not claim TOCTOU resistance.
 
-Authorize destructive operations with typed ownership evidence
-
-## Context
+## Scope and dependencies
 
 - Milestone 1 safety prerequisite. Dependencies: m1-identity-paths. Source: THE_BEGINNING.md Sections 9.2 and 15.3.
 
-## Requirements
+## Behavior
 
 - Define consuming-package proof types for paths, Git worktrees, Lima instances, Compose resources, volumes, sockets, and listeners.
 - Require canonical containment and independent recorded/live identity facts before mutation or deletion.
@@ -22,16 +38,15 @@ Authorize destructive operations with typed ownership evidence
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Forged names, labels, paths, symlinks, and stale records cannot authorize deletion.
-- [x] Every destructive adapter API requires proof rather than raw identifiers.
-- [x] Temporary-root adversarial tests show unrelated resources survive.
+- Forged names, labels, paths, symlinks, and stale records cannot authorize deletion.
+- Every destructive adapter API requires proof rather than raw identifiers.
+- Temporary-root adversarial tests show unrelated resources survive.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/ownership` policy package whose exported proof values have
   no exported fields and can only be produced by fail-closed verification.
@@ -54,14 +69,6 @@ Authorize destructive operations with typed ownership evidence
   mutation out of this package. Exercise proof-consuming test adapters only
   under temporary roots, including forged labels/names/paths, stale records,
   symlink escapes, and unrelated-resource survival.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -86,29 +93,3 @@ Authorize destructive operations with typed ownership evidence
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only; no Darwin runtime behavior is claimed.
 - `git diff --check` passed.
-
-## Outcome and follow-ups
-
-- Added opaque, resource-specific proof types for paths, Git worktrees, Lima
-  instances, Compose resources, volumes, Unix sockets, and listeners. Zero
-  values expose no destructive target; proof constructors fail with an
-  inspectable `ProofError` wrapping `ErrNotOwned`.
-- Filesystem proof requires canonical strict containment and matching recorded
-  and live device/inode identity. Git and socket proofs specialize that fresh
-  path proof with live Git registration/common-directory/lock facts or socket
-  file type respectively.
-- Runtime proofs require exact recorded/live opaque identity plus the mandatory
-  `dev.abox.box-id` live label or embedded metadata. Listener proof requires a
-  matching bound identity and active daemon lease. Prefix-shaped names and
-  generic Compose labels are never accepted as ownership evidence.
-- No production destructive leaf adapter exists yet; upcoming Git, Lima,
-  Compose, filesystem, and routing adapters can only receive the corresponding
-  opaque proof target contract. Policy remains centralized in `ownership`, and
-  this package performs no mutation.
-- Descriptor-relative deletion and revalidation against changes after proof
-  construction remain explicitly assigned to `m4-ownership-proofs`; this
-  Milestone 1 contract does not claim TOCTOU resistance.
-
-## Original request
-
-Implement authorize destructive operations with typed ownership evidence for Agent Box.

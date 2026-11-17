@@ -2,34 +2,39 @@
 {"schema_version":1,"id":"m1-list-command","status":"implemented","created_at":"2026-08-29T06:55:50.494935974Z","implemented_at":"2026-08-29T23:55:30.836118413Z"}
 -->
 
-# List Boxes from observed and recorded state
+# Box inventory with abox list
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-list-command`.
 
-## Goal
+Implemented `abox list` through the version-negotiated daemon API. The daemon
+reads Box/Workspace identity and the latest persisted runtime-host and Compose
+observations in one read transaction, derives a stable state and drift summary,
+and exposes no reconciliation or cleanup capability to the listing service.
+Human output is tabular; `--json` conforms to `abox.list/v1alpha1`.
 
-List Boxes from observed and recorded state
+Live external observation remains owned by the future Lima and Compose adapters;
+this command intentionally reports their persisted observation cache rather than
+shelling out or inventing a second observer before those dependency tasks land.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1 command. Dependencies: m1-daemon-api, m1-cli-foundation. Source: THE_BEGINNING.md Section 14.1.
 
-## Requirements
+## Behavior
 
 - Implement abox list in human and JSON forms with identity, state, task, workspace, and observed drift summary.
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Empty, active, stopped, degraded, and stale-record cases render deterministically.
-- [x] Listing is read-only and never reconciles or deletes resources.
-- [x] Output validates against the versioned schema.
+- Empty, active, stopped, degraded, and stale-record cases render deterministically.
+- Listing is read-only and never reconciles or deletes resources.
+- Output validates against the versioned schema.
 
-## Technical approach
+## Implementation details
 
 - Add a dedicated `abox.list/v1alpha1` contract and strict JSON Schema rather
   than overloading the single-Box operation output.
@@ -43,14 +48,6 @@ List Boxes from observed and recorded state
 - Render either schema-valid JSON or a deterministic tabular human view in the
   thin CLI. Cover empty output and every required state with persisted fixtures,
   plus a read-only regression check.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -78,19 +75,3 @@ List Boxes from observed and recorded state
 - The first smoke hypothesis used a `0775` runtime parent and was correctly
   rejected by the daemon's secure-directory preflight. The rerun used `0700`;
   do not weaken the preflight or repeat the permissive fixture.
-
-## Outcome and follow-ups
-
-Implemented `abox list` through the version-negotiated daemon API. The daemon
-reads Box/Workspace identity and the latest persisted runtime-host and Compose
-observations in one read transaction, derives a stable state and drift summary,
-and exposes no reconciliation or cleanup capability to the listing service.
-Human output is tabular; `--json` conforms to `abox.list/v1alpha1`.
-
-Live external observation remains owned by the future Lima and Compose adapters;
-this command intentionally reports their persisted observation cache rather than
-shelling out or inventing a second observer before those dependency tasks land.
-
-## Original request
-
-Implement list boxes from observed and recorded state for Agent Box.

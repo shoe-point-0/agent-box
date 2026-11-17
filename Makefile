@@ -1,7 +1,8 @@
-.PHONY: help fmt fmt-check lint deps test test-race vet build smoke automation-check check clean
+.PHONY: help fmt fmt-check lint deps test test-race vet build install smoke automation-check check clean
 
 GO ?= go
 BIN_DIR ?= bin
+INSTALL_DIR ?= $(HOME)/.local/bin
 TOOLS_DIR ?= .tools/bin
 GOLANGCI_LINT_VERSION := v2.13.1
 GOLANGCI_LINT := $(TOOLS_DIR)/golangci-lint
@@ -16,6 +17,7 @@ help:
 	@printf '%s\n' \
 		'make check      run the complete local quality gate' \
 		'make build      build bin/abox and bin/aboxd with version metadata' \
+		'make install    install abox and aboxd to ~/.local/bin (override INSTALL_DIR)' \
 		'make fmt        format Go source' \
 		'make test       run unit tests' \
 		'make test-race  run tests with the race detector' \
@@ -59,6 +61,21 @@ build:
 	$(GO) build ./...
 	@test "$$('$(BIN_DIR)/abox' --version)" = "abox $(VERSION) (commit $(COMMIT), built $(BUILD_DATE))"
 	@test "$$('$(BIN_DIR)/aboxd' --version)" = "aboxd $(VERSION) (commit $(COMMIT), built $(BUILD_DATE))"
+
+# Stage on the destination filesystem, then rename each binary atomically.
+# Never truncate an installed executable that may still be running.
+install: build
+	@set -eu; \
+		mkdir -p "$(INSTALL_DIR)"; \
+		stage=$$(mktemp -d "$(INSTALL_DIR)/.abox-install.XXXXXX"); \
+		trap 'rm -rf "$$stage"' EXIT HUP INT TERM; \
+		for binary in abox aboxd; do \
+			test ! -d "$(INSTALL_DIR)/$$binary"; \
+			install -m 0755 "$(BIN_DIR)/$$binary" "$$stage/$$binary"; \
+		done; \
+		for binary in abox aboxd; do \
+			mv -f "$$stage/$$binary" "$(INSTALL_DIR)/$$binary"; \
+		done
 
 smoke:
 	$(GO) run ./cmd/abox-spike list --json

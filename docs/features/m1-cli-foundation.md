@@ -2,19 +2,28 @@
 {"schema_version":1,"id":"m1-cli-foundation","status":"implemented","created_at":"2026-08-29T06:48:36.18714109Z","implemented_at":"2026-08-29T23:31:56.219620274Z"}
 -->
 
-# Implement thin CLI transport and output contracts
+# CLI transport and output contracts
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-cli-foundation`.
 
-## Goal
+Implemented the thin `abox up` boundary: deterministic manifest identity and
+digest input, idempotent versioned Unix-socket requests, bounded daemon
+auto-start, resumable strict event streams, human/NDJSON rendering, versioned
+event schema, and stable symbolic exit mapping. Shared user-path construction
+now prevents `abox` and `aboxd` from drifting.
 
-Implement thin CLI transport and output contracts
+The CLI deliberately does not remove a stale socket after daemon death. Exact
+ownership reconstruction and stale-endpoint adoption remain owned by
+`m4-recovery-reconstruction`; this slice detects the failed launch quickly and
+fails closed rather than deleting ambiguous state. Successful Box creation also
+remains owned by `m1-single-repo-up`; current `aboxd` correctly returns
+`ABOX_FEATURE_NOT_SUPPORTED` until that backend is implemented.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-daemon-api. Source: THE_BEGINNING.md Sections 14.1 through 14.3.
 
-## Requirements
+## Behavior
 
 - Discover the manifest, validate local arguments, start or connect to aboxd, send versioned requests, and render events.
 - Keep stdout parseable in --json/NDJSON mode while human progress uses stderr.
@@ -22,16 +31,15 @@ Implement thin CLI transport and output contracts
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] CLI help exposes only implemented commands and never claims unavailable behavior.
-- [x] JSON output validates against its versioned schema.
-- [x] Transport, usage, not-found, safety, readiness, and compatibility errors map consistently.
+- CLI help exposes only implemented commands and never claims unavailable behavior.
+- JSON output validates against its versioned schema.
+- Transport, usage, not-found, safety, readiness, and compatibility errors map consistently.
 
-## Technical approach
+## Implementation details
 
 - Keep command parsing and rendering in `cmd/abox`; isolate the reusable,
   bounded Unix-socket protocol in an internal daemon-client package.
@@ -47,14 +55,6 @@ Implement thin CLI transport and output contracts
 - Render human events and errors on stderr. In `--json` mode emit only versioned
   NDJSON event/error objects on stdout and validate representative golden output
   against repository schemas.
-
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
 
 ## Verification
 
@@ -84,22 +84,3 @@ Implement thin CLI transport and output contracts
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...` passed as compilation
   evidence only. Darwin runtime behavior remains unclaimed.
 - `sprout check --all` passed.
-
-## Outcome and follow-ups
-
-Implemented the thin `abox up` boundary: deterministic manifest identity and
-digest input, idempotent versioned Unix-socket requests, bounded daemon
-auto-start, resumable strict event streams, human/NDJSON rendering, versioned
-event schema, and stable symbolic exit mapping. Shared user-path construction
-now prevents `abox` and `aboxd` from drifting.
-
-The CLI deliberately does not remove a stale socket after daemon death. Exact
-ownership reconstruction and stale-endpoint adoption remain owned by
-`m4-recovery-reconstruction`; this slice detects the failed launch quickly and
-fails closed rather than deleting ambiguous state. Successful Box creation also
-remains owned by `m1-single-repo-up`; current `aboxd` correctly returns
-`ABOX_FEATURE_NOT_SUPPORTED` until that backend is implemented.
-
-## Original request
-
-Implement implement thin cli transport and output contracts for Agent Box according to the cited specification and dependencies.

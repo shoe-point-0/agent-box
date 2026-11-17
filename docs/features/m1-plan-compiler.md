@@ -2,19 +2,19 @@
 {"schema_version":1,"id":"m1-plan-compiler","status":"implemented","created_at":"2026-08-29T06:48:36.064104371Z","implemented_at":"2026-08-29T20:25:05.756754299Z"}
 -->
 
-# Compile canonical immutable Plans
+# Canonical immutable Plans
 
-Execute this task end to end. Inspect before editing, keep scope tight, update this packet as work progresses, and do not claim completion without recorded verification evidence.
+Status: implemented. Implementation record for `m1-plan-compiler`.
 
-## Goal
+Implemented `internal/plan` as a read-only compiler over validated manifest intent, deterministic identities, repository resolution facts, and explicit runtime/tool facts. It rejects deferred resources and unsupported Milestone 1 cardinalities before input access, validates identity/fact consistency, hashes bounded regular manifest and Compose inputs, and projects the exact one-repository ownership and mount allowlist into the versioned contract.
 
-Compile canonical immutable Plans
+Set-like profiles, services, and map-derived mounts are sorted and deduplicated before JSON encoding. `planDigest` is SHA-256 over the canonical map-free Plan document with the self-referential digest field omitted; `CanonicalJSON` refuses a Plan mutated after compilation. Compose validation and normalized-model hashing remain owned by the later Compose adapter, while Plan change classification remains in `m1-plan-diff`.
 
-## Context
+## Scope and dependencies
 
 - Milestone 1. Dependencies: m1-schema-contract, m1-manifest-loader, m1-identity-paths, m1-repository-resolver. Source: THE_BEGINNING.md Section 8.2 and Issue 6.
 
-## Requirements
+## Behavior
 
 - Compile the Milestone 1 executable subset—one local repository, host resources, one Compose include, workspace service, and required mounts—plus platform and repository facts into the versioned Plan model.
 - Add routes, ports, caches, setup keys, remote sources, and opaque secret references only in the milestone that first consumes each field; reject recognized unsupported intent before side effects.
@@ -22,16 +22,15 @@ Compile canonical immutable Plans
 
 ## Constraints
 
-- Do not commit, push, or mutate shared infrastructure as part of this task.
 - Support claims require real execution evidence on the claimed platform.
 
-## Acceptance criteria
+## Verified acceptance criteria
 
-- [x] Random map order and repeated runs yield byte-identical Plans and digests.
-- [x] The Plan contains every ownership and observation key required by adapters.
-- [x] No secret value can enter the Plan or its hash input.
+- Random map order and repeated runs yield byte-identical Plans and digests.
+- The Plan contains every ownership and observation key required by adapters.
+- No secret value can enter the Plan or its hash input.
 
-## Technical approach
+## Implementation details
 
 - Add an `internal/plan` compiler that accepts the already validated Workspace,
   deterministic identities, read-only repository facts, a canonical manifest
@@ -54,14 +53,6 @@ Compile canonical immutable Plans
   and repeated runs. Recognized deferred intent remains rejected by the loader's
   stable feature-not-supported gate, so secret values have no input channel.
 
-## Execution checklist
-
-- [x] Inspect the relevant code, tests, and repository instructions.
-- [x] Refine the technical approach and acceptance criteria in this task before editing.
-- [x] Implement the smallest complete change.
-- [x] Run every verification item and address failures.
-- [x] Record concrete validation evidence and completion notes in this task.
-
 ## Verification
 
 - [x] go test ./...
@@ -79,13 +70,3 @@ Compile canonical immutable Plans
 - `go test -race -count=10 ./...`: PASS across all 16 Go packages, including canonical compilation and mutation detection.
 - `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`: PASS as cross-compilation evidence only; no Darwin runtime behavior is claimed.
 - `git diff --check`: PASS.
-
-## Outcome and follow-ups
-
-Implemented `internal/plan` as a read-only compiler over validated manifest intent, deterministic identities, repository resolution facts, and explicit runtime/tool facts. It rejects deferred resources and unsupported Milestone 1 cardinalities before input access, validates identity/fact consistency, hashes bounded regular manifest and Compose inputs, and projects the exact one-repository ownership and mount allowlist into the versioned contract.
-
-Set-like profiles, services, and map-derived mounts are sorted and deduplicated before JSON encoding. `planDigest` is SHA-256 over the canonical map-free Plan document with the self-referential digest field omitted; `CanonicalJSON` refuses a Plan mutated after compilation. Compose validation and normalized-model hashing remain owned by the later Compose adapter, while Plan change classification remains in `m1-plan-diff`.
-
-## Original request
-
-Implement compile canonical immutable plans for Agent Box according to the cited specification and dependencies.
