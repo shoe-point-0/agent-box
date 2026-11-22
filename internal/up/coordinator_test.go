@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/journal"
 	"github.com/shoe-point-0/agent-box/internal/reconcile"
@@ -44,7 +45,7 @@ func TestCoordinatorColdThenWarmReobservesWithoutDuplicateApply(t *testing.T) {
 		if err := coordinator.Reconcile(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if err := operationJournal.Finish(t.Context(), operation.ID, journal.StateSucceeded, "", time.Now().UTC()); err != nil {
+		if err := operationJournal.Complete(t.Context(), operation.ID, contract.NewOperationResult(nil), time.Now().UTC()); err != nil {
 			t.Fatal(err)
 		}
 		if got := recorder.transitionCount(reconcile.TransitionApplyStarted); got != map[int]int{1: 9, 2: 0}[attempt] {

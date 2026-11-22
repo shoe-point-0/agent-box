@@ -2,6 +2,7 @@ package daemonclient_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,60 @@ import (
 )
 
 func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
+	client, _, request := completionTestDaemon(t)
+	if failure, err := client.Handshake(t.Context()); err != nil || failure != nil {
+		t.Fatalf("Handshake() = %#v, %v", failure, err)
+	}
+	planned, failure, err := client.Plan(t.Context(), daemon.PlanRequest{
+		WorkspaceID: request.WorkspaceID, BoxID: request.BoxID, TaskKey: request.TaskKey, ManifestPath: request.ManifestPath,
+	})
+	if err != nil || failure != nil || planned.SchemaVersion != contract.PlanOutputSchemaVersion || planned.Operations == nil {
+		t.Fatalf("Plan() = %#v, %#v, %v", planned, failure, err)
+	}
+	var events []daemonclient.Event
+	failure, err = client.Up(t.Context(), request, "client-test-1", func(event daemonclient.Event) error {
+		events = append(events, event)
+		return nil
+	})
+	if err != nil || failure != nil {
+		t.Fatalf("Up() = %#v, %v", failure, err)
+	}
+	if len(events) != 2 || events[0].Kind != "reconcile.started" || events[1].Kind != "operation.finished" {
+		t.Fatalf("events = %#v", events)
+	}
+	for index, event := range events {
+		if event.Sequence != int64(index+1) || event.OperationID == "" {
+			t.Errorf("event %d = %#v", index, event)
+		}
+	}
+}
+
+func TestClientRequiresRecoveryWhenDaemonCannotCommitCompletion(t *testing.T) {
+	client, store, request := completionTestDaemon(t)
+	if err := store.Update(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`CREATE TRIGGER fail_finish BEFORE UPDATE OF recorded_state ON operations
+			BEGIN SELECT RAISE(ABORT, 'injected completion failure'); END`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	failure, err := client.Up(ctx, request, "cannot-finish", func(event daemonclient.Event) error {
+		kinds = append(kinds, event.Kind)
+		return nil
+	})
+	if err != nil || failure == nil || failure.Code != contract.CodeOperationConflict || !failure.Retryable {
+		t.Fatalf("Up() = %#v, %v; want recovery conflict", failure, err)
+	}
+	if len(kinds) != 1 || kinds[0] != "reconcile.started" {
+		t.Fatalf("delivered %v; want only committed progress", kinds)
+	}
+}
+
+func completionTestDaemon(t *testing.T) (*daemonclient.Client, *state.Store, daemon.MutationRequest) {
+	t.Helper()
 	root := testutil.TempDir(t)
 	if err := os.Chmod(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -64,22 +119,19 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
 			t.Errorf("Shutdown() error = %v", err)
 		}
-	}()
+	})
 
 	client, err := daemonclient.New(server.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
-	if failure, err := client.Handshake(t.Context()); err != nil || failure != nil {
-		t.Fatalf("Handshake() = %#v, %v", failure, err)
-	}
+	t.Cleanup(client.Close)
 	manifest := filepath.Join(root, "workspace", ".abox", "box.yaml")
 	workspaceID, err := identity.Workspace(manifest)
 	if err != nil {
@@ -89,30 +141,9 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	planned, failure, err := client.Plan(t.Context(), daemon.PlanRequest{
+	return client, store, daemon.MutationRequest{
 		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-1", ManifestPath: manifest,
-	})
-	if err != nil || failure != nil || planned.SchemaVersion != contract.PlanOutputSchemaVersion || planned.Operations == nil {
-		t.Fatalf("Plan() = %#v, %#v, %v", planned, failure, err)
-	}
-	var events []daemonclient.Event
-	failure, err = client.Up(t.Context(), daemon.MutationRequest{
-		WorkspaceID: workspaceID.String(), BoxID: boxID.String(), TaskKey: "TASK-1",
-		ManifestPath: manifest, ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
-	}, "client-test-1", func(event daemonclient.Event) error {
-		events = append(events, event)
-		return nil
-	})
-	if err != nil || failure != nil {
-		t.Fatalf("Up() = %#v, %v", failure, err)
-	}
-	if len(events) != 2 || events[0].Kind != "reconcile.started" || events[1].Kind != "operation.finished" {
-		t.Fatalf("events = %#v", events)
-	}
-	for index, event := range events {
-		if event.Sequence != int64(index+1) || event.OperationID == "" {
-			t.Errorf("event %d = %#v", index, event)
-		}
+		ManifestDigest: "sha256:manifest", Input: json.RawMessage(`{}`),
 	}
 }
 

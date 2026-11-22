@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -449,13 +450,12 @@ func (s *Server) execute(operation journal.Operation, input json.RawMessage) {
 		}
 	}
 	result := contract.NewOperationResult(failure)
-
 	persistContext, cancel := context.WithTimeout(context.Background(), persistTimeout)
 	defer cancel()
-	if _, err := s.journal.AppendEvent(persistContext, operation.ID, contract.OperationFinished, mustJSON(result), time.Now().UTC()); err != nil {
-		result = contract.NewOperationResult(&contract.Failure{Code: contract.CodeInternalInvariant})
+	if err := s.journal.Complete(persistContext, operation.ID, result, time.Now().UTC()); err != nil {
+		// Leave the row running and unowned for recovery; never stream a guessed outcome.
+		slog.Error("cannot persist operation completion", "operation", operation.ID, "error", err)
 	}
-	_ = s.journal.Finish(persistContext, operation.ID, result.State, string(result.ErrorCode), time.Now().UTC())
 }
 
 func (s *Server) ownsOperation(operationID string) bool {
@@ -488,6 +488,9 @@ func (s *Server) streamEventsAfter(writer http.ResponseWriter, request *http.Req
 	defer ticker.Stop()
 	sequence := after
 	for {
+		// Decide whether to stop before reading events. Once ownership is gone
+		// the completion transaction has ended, so this read drains its last event.
+		owned := s.ownsOperation(operationID)
 		events, err := s.journal.Events(request.Context(), operationID, sequence)
 		if err != nil {
 			return
@@ -498,15 +501,11 @@ func (s *Server) streamEventsAfter(writer http.ResponseWriter, request *http.Req
 			}
 			sequence = event.Sequence
 			flusher.Flush()
+			if event.Kind == contract.OperationFinished {
+				return
+			}
 		}
-		operation, err := s.journal.Operation(request.Context(), operationID)
-		if err != nil {
-			return
-		}
-		if operation.State != journal.StateRunning {
-			return
-		}
-		if !s.ownsOperation(operationID) {
+		if !owned {
 			return
 		}
 		select {
@@ -653,14 +652,6 @@ func writeJSON(writer http.ResponseWriter, status int, value any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(value)
-}
-
-func mustJSON(value any) json.RawMessage {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-	return encoded
 }
 
 func runtimeSocketPath(runtimeDir string) string {

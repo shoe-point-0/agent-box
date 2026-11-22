@@ -489,11 +489,7 @@ func (f *fullRemovalFixture) attempt(input OperationInput, afterPreview func()) 
 		}
 		return nil
 	})
-	finalState, errorCode := journal.StateSucceeded, ""
-	if failure != nil {
-		finalState, errorCode = journal.StateFailed, string(failure.Code)
-	}
-	if err := f.journal.Finish(f.t.Context(), operation.ID, finalState, errorCode, time.Now().UTC()); err != nil {
+	if err := f.journal.Complete(f.t.Context(), operation.ID, contract.NewOperationResult(failure), time.Now().UTC()); err != nil {
 		f.t.Fatal(err)
 	}
 	return preview, failure
