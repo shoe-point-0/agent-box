@@ -449,9 +449,10 @@ func (s *Server) execute(operation journal.Operation, input json.RawMessage) {
 			release()
 		}
 	}
+	result := contract.NewOperationResult(failure)
 	persistContext, cancel := context.WithTimeout(context.Background(), persistTimeout)
 	defer cancel()
-	if err := s.journal.Complete(persistContext, operation.ID, contract.NewOperationResult(failure), time.Now().UTC()); err != nil {
+	if err := s.journal.Complete(persistContext, operation.ID, result, time.Now().UTC()); err != nil {
 		// Leave the row running and unowned for recovery; never stream a guessed outcome.
 		slog.Error("cannot persist operation completion", "operation", operation.ID, "error", err)
 	}

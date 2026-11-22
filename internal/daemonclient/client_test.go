@@ -214,6 +214,12 @@ func TestClientRemovalPreservesPreviewAuthorizationOverRealDaemon(t *testing.T) 
 		if event.Kind == "removal.preview" {
 			return json.Unmarshal(event.Details, &preview)
 		}
+		if event.Kind == "operation.finished" {
+			const want = `{"apiVersion":"abox.api/v1alpha1","errorCode":"ABOX_CLEANUP_REFUSED","state":"failed"}`
+			if string(event.Details) != want {
+				t.Errorf("journaled terminal details = %s, want %s", event.Details, want)
+			}
+		}
 		return nil
 	})
 	if err != nil || failure == nil || failure.Code != contract.CodeCleanupRefused || preview.Digest == "" || step.removes != 0 {
@@ -364,6 +370,7 @@ func TestClientResumesStreamFromLastDurableSequence(t *testing.T) {
 
 func TestClientRemoveResumesStreamFromLastDurableSequence(t *testing.T) {
 	const operationID = "op_0123456789ABCDEF"
+	const details = `{"state": "failed", "errorCode": "ABOX_CLEANUP_REFUSED", "apiVersion": "abox.api/v1alpha1"}`
 	var eventRequests atomic.Int32
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
@@ -381,7 +388,7 @@ func TestClientRemoveResumesStreamFromLastDurableSequence(t *testing.T) {
 			}
 			writer.Header().Set(daemon.HeaderOperationID, operationID)
 			writer.Header().Set("Content-Type", "application/x-ndjson")
-			_, _ = fmt.Fprintln(writer, eventLine(operationID, 2, "operation.finished", `{"apiVersion":"abox.api/v1alpha1","state":"succeeded"}`))
+			_, _ = fmt.Fprintln(writer, eventLine(operationID, 2, "operation.finished", details))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -396,10 +403,14 @@ func TestClientRemoveResumesStreamFromLastDurableSequence(t *testing.T) {
 	var sequences []int64
 	failure, err := client.Remove(t.Context(), daemon.MutationRequest{}, "remove-resume-key", func(event daemonclient.Event) error {
 		sequences = append(sequences, event.Sequence)
+		if event.Sequence == 2 && string(event.Details) != details {
+			t.Errorf("resumed terminal details = %s, want original %s", event.Details, details)
+		}
 		return nil
 	})
-	if err != nil || failure != nil {
-		t.Fatalf("Remove() = %#v, %v", failure, err)
+	want := contract.Failure{SchemaVersion: contract.ErrorSchemaVersion, Code: contract.CodeCleanupRefused, Message: "operation failed"}
+	if err != nil || failure == nil || *failure != want {
+		t.Fatalf("Remove() = %#v, %v; want %#v, nil", failure, err, want)
 	}
 	if fmt.Sprint(sequences) != "[1 2]" || eventRequests.Load() != 1 {
 		t.Fatalf("sequences/resumes = %v/%d", sequences, eventRequests.Load())
@@ -409,7 +420,7 @@ func TestClientRemoveResumesStreamFromLastDurableSequence(t *testing.T) {
 func TestClientRejectsUnknownEventFields(t *testing.T) {
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(daemon.HeaderOperationID, "op_ABCDEF")
-		_, _ = fmt.Fprintln(writer, `{"apiVersion":"abox.api/v1alpha1","operationId":"op_ABCDEF","sequence":1,"kind":"operation.finished","details":{},"occurredAt":"2026-08-29T22:00:00Z","unknown":true}`)
+		_, _ = fmt.Fprintln(writer, `{"apiVersion":"abox.api/v1alpha1","operationId":"op_ABCDEF","sequence":1,"kind":"operation.finished","details":{"apiVersion":"abox.api/v1alpha1","state":"succeeded"},"occurredAt":"2026-08-29T22:00:00Z","unknown":true}`)
 	})
 	socket, stop := serveUnixHTTP(t, handler)
 	defer stop()
@@ -447,24 +458,39 @@ func TestClientRejectsSequenceGap(t *testing.T) {
 }
 
 func TestClientValidatesTerminalDetailsBeforeOutput(t *testing.T) {
-	handler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		writer.Header().Set(daemon.HeaderOperationID, "op_ABCDEF")
-		_, _ = fmt.Fprintln(writer, eventLine("op_ABCDEF", 1, "operation.finished", `{}`))
-	})
-	socket, stop := serveUnixHTTP(t, handler)
-	defer stop()
-	client, err := daemonclient.New(socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	consumed := false
-	_, err = client.Up(t.Context(), daemon.MutationRequest{}, "key", func(daemonclient.Event) error {
-		consumed = true
-		return nil
-	})
-	if !errors.Is(err, daemonclient.ErrProtocol) || consumed {
-		t.Fatalf("Up() error/consumed = %v/%v, want protocol violation before output", err, consumed)
+	const v1 = `{"apiVersion":"abox.api/v1alpha1",`
+	for _, test := range []struct {
+		name, details, trailing, why string
+	}{
+		{"missing version", `{}`, "", "invalid terminal event"},
+		{"bad version", `{"apiVersion":"v2","state":"succeeded"}`, "", "invalid terminal event"},
+		{"unknown state", v1 + `"state":"running"}`, "", "terminal event has invalid state"},
+		{"successful with code", v1 + `"state":"succeeded","errorCode":"ABOX_CLEANUP_REFUSED"}`, "", "successful terminal event contains an error"},
+		{"failed without code", v1 + `"state":"failed"}`, "", "terminal event contains an unknown error"},
+		{"failed with unknown code", v1 + `"state":"failed","errorCode":"ABOX_UNKNOWN"}`, "", "terminal event contains an unknown error"},
+		{"unknown field", v1 + `"state":"succeeded","extra":true}`, "", "invalid terminal event"},
+		{"trailing JSON", v1 + `"state":"succeeded"}`, ` {}`, "decode event: multiple JSON values"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+				writer.Header().Set(daemon.HeaderOperationID, "op_ABCDEF")
+				_, _ = fmt.Fprintln(writer, eventLine("op_ABCDEF", 1, "operation.finished", test.details)+test.trailing)
+			})
+			socket, stop := serveUnixHTTP(t, handler)
+			defer stop()
+			client, err := daemonclient.New(socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			failure, err := client.Up(t.Context(), daemon.MutationRequest{}, "key", func(daemonclient.Event) error {
+				t.Error("consumed invalid terminal event")
+				return nil
+			})
+			if failure != nil || !errors.Is(err, daemonclient.ErrProtocol) || err.Error() != daemonclient.ErrProtocol.Error()+": "+test.why {
+				t.Fatalf("Up() = %#v, %v; want protocol violation: %s", failure, err, test.why)
+			}
+		})
 	}
 }
 

@@ -4,6 +4,7 @@ package daemon
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -230,6 +231,9 @@ func TestMutationStartsOnceReattachesAndResumesNDJSON(t *testing.T) {
 	resumeEvent := decodeEvent(t, resumeDecoder)
 	if resumeEvent.Sequence != firstFinished.Sequence || resumeEvent.Kind != "operation.finished" {
 		t.Fatalf("resumed event = %+v", resumeEvent)
+	}
+	if !bytes.Equal(firstFinished.Details, resumeEvent.Details) {
+		t.Fatalf("resumed details = %s, first stream had %s", resumeEvent.Details, firstFinished.Details)
 	}
 	assertStreamEOF(t, resumeDecoder)
 	_ = resumed.Body.Close()
