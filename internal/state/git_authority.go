@@ -58,27 +58,12 @@ func (s *Store) SaveReconciliationGitAuthority(ctx context.Context, authority Re
 		return errors.New("save reconciliation Git authority: update time is required")
 	}
 	return s.Update(ctx, func(tx *sql.Tx) error {
-		var currentGeneration int64
-		var operationKind, operationState string
-		err := tx.QueryRowContext(ctx, `SELECT b.current_generation, o.kind, o.recorded_state
-			FROM boxes AS b JOIN operations AS o ON o.box_id = b.id
-			WHERE b.id = ? AND o.id = ?`, authority.BoxID, authority.OperationID).
-			Scan(&currentGeneration, &operationKind, &operationState)
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("save reconciliation Git authority: Box operation is absent")
-		}
-		if err != nil {
-			return fmt.Errorf("save reconciliation Git authority: query Box operation: %w", err)
-		}
-		if operationKind != "up" || operationState != "running" {
-			return errors.New("save reconciliation Git authority: running up operation is required")
-		}
-		if authority.Generation != currentGeneration && authority.Generation != currentGeneration+1 {
-			return errors.New("save reconciliation Git authority: generation is not current or next")
+		if err := requireAuthorityWrite(ctx, tx, "Git", authority.BoxID, authority.OperationID, authority.Generation); err != nil {
+			return err
 		}
 
 		var existingJSON []byte
-		err = tx.QueryRowContext(ctx, `SELECT authority_json FROM reconciliation_git_authority
+		err := tx.QueryRowContext(ctx, `SELECT authority_json FROM reconciliation_git_authority
 			WHERE box_id = ? AND generation = ? AND repository_name = ?`,
 			authority.BoxID, authority.Generation, authority.Repository.Name).Scan(&existingJSON)
 		if err == nil {

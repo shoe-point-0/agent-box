@@ -52,27 +52,12 @@ func (s *Store) SaveReconciliationLimaAuthority(ctx context.Context, authority R
 		return errors.New("save reconciliation Lima authority: update time is required")
 	}
 	return s.Update(ctx, func(tx *sql.Tx) error {
-		var currentGeneration int64
-		var operationKind, operationState string
-		err := tx.QueryRowContext(ctx, `SELECT b.current_generation, o.kind, o.recorded_state
-			FROM boxes AS b JOIN operations AS o ON o.box_id = b.id
-			WHERE b.id = ? AND o.id = ?`, authority.BoxID, authority.OperationID).
-			Scan(&currentGeneration, &operationKind, &operationState)
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("save reconciliation Lima authority: Box operation is absent")
-		}
-		if err != nil {
-			return fmt.Errorf("save reconciliation Lima authority: query Box operation: %w", err)
-		}
-		if operationKind != "up" || operationState != "running" {
-			return errors.New("save reconciliation Lima authority: running up operation is required")
-		}
-		if authority.Generation != currentGeneration && authority.Generation != currentGeneration+1 {
-			return errors.New("save reconciliation Lima authority: generation is not current or next")
+		if err := requireAuthorityWrite(ctx, tx, "Lima", authority.BoxID, authority.OperationID, authority.Generation); err != nil {
+			return err
 		}
 
 		var existingJSON []byte
-		err = tx.QueryRowContext(ctx, `SELECT authority_json FROM reconciliation_lima_authority
+		err := tx.QueryRowContext(ctx, `SELECT authority_json FROM reconciliation_lima_authority
 			WHERE box_id = ? AND generation = ?`, authority.BoxID, authority.Generation).Scan(&existingJSON)
 		if err == nil {
 			existing, decodeErr := decodeLimaAuthority(existingJSON)
