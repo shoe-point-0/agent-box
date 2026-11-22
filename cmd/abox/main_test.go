@@ -193,8 +193,12 @@ func TestInitCreatesDeterministicStrictManifestWithoutDaemonOrBoxState(t *testin
 	if err != nil {
 		t.Fatalf("strict loader rejected starter manifest: %v", err)
 	}
-	if got := workspace.Spec.Repositories[0].CanonicalLocal; got != root {
-		t.Fatalf("starter repository = %q, want %q", got, root)
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := workspace.Spec.Repositories[0].CanonicalLocal; got != canonicalRoot {
+		t.Fatalf("starter repository = %q, want %q", got, canonicalRoot)
 	}
 	rootEntries, err := os.ReadDir(root)
 	if err != nil {
@@ -466,6 +470,82 @@ func TestDoctorHumanOutputAndArguments(t *testing.T) {
 	}
 }
 
+func TestDoctorEnvironmentPrerequisitesInHumanAndJSONOutput(t *testing.T) {
+	schema := compileCLISchema(t, "doctor")
+	root := t.TempDir()
+	t.Chdir(root)
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(root, "runtime"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv("HERMES_CRUSHER_REAL_GIT", "")
+	bin := filepath.Join(root, "private-tools with spaces")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"git", "limactl", "docker"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf '1.0.0\\n'\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, test := range []struct {
+		name  string
+		path  string
+		valid bool
+	}{
+		{"empty", "", false},
+		{"leading empty", ":" + bin, false},
+		{"middle empty", bin + "::/usr/bin", false},
+		{"trailing empty", bin + ":", false},
+		{"relative", bin + ":private-relative-bin", false},
+		{"current directory", bin + ":.", false},
+		{"trailing slash", bin + "/", false},
+		{"spaces", bin, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("PATH", test.path)
+			for _, jsonOutput := range []bool{false, true} {
+				args := []string{"doctor"}
+				if jsonOutput {
+					args = append(args, "--json")
+				}
+				var stdout, stderr bytes.Buffer
+				code := run(t.Context(), args, &stdout, &stderr)
+				wantCode := contract.ExitPrerequisite
+				if test.valid {
+					wantCode = contract.ExitOK
+				}
+				if code != wantCode || stderr.Len() != 0 {
+					t.Fatalf("json=%v: code=%d, want %d; stderr=%q; stdout=%q", jsonOutput, code, wantCode, stderr.String(), stdout.String())
+				}
+				if strings.Contains(stdout.String(), "private-") || strings.Contains(stdout.String(), "ABOX_INTERNAL_INVARIANT") {
+					t.Fatal("doctor leaked an environment value or reported an internal error")
+				}
+				if jsonOutput {
+					validateJSONLine(t, schema, bytes.TrimSpace(stdout.Bytes()))
+					var report doctor.Report
+					if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+						t.Fatal(err)
+					}
+					found := false
+					for _, check := range report.Checks {
+						if check.Result == "environment.path" {
+							found = true
+							if check.Status != doctor.StatusFail || !strings.Contains(check.Remediation, "rerun abox doctor") {
+								t.Fatalf("PATH prerequisite = %#v", check)
+							}
+						}
+					}
+					if found == test.valid {
+						t.Fatalf("PATH prerequisite present=%v for valid=%v", found, test.valid)
+					}
+				} else if !strings.Contains(stdout.String(), "Machine prerequisites") || (!test.valid && (!strings.Contains(stdout.String(), "environment.path") || !strings.Contains(stdout.String(), "rerun abox doctor"))) {
+					t.Fatalf("missing human prerequisite diagnostics: %q", stdout.String())
+				}
+			}
+		})
+	}
+}
+
 func TestUpDiscoversManifestAndRendersHumanProgressOnStderr(t *testing.T) {
 	t.Parallel()
 	root, nested, manifest := manifestFixture(t)
@@ -620,7 +700,7 @@ func TestStartDaemonLaunchesPathExecutableWithPrivateLog(t *testing.T) {
 	root := t.TempDir()
 	marker := filepath.Join(root, "started")
 	executable := filepath.Join(root, "aboxd")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$ABOX_START_MARKER\"\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$1\" > \"$ABOX_START_MARKER\"\nshift\n/bin/sleep 0.05\nprintf '%s\\n' \"$@\" >> \"$ABOX_START_MARKER\"\n"
 	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -634,20 +714,22 @@ func TestStartDaemonLaunchesPathExecutableWithPrivateLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(time.Second)
-	for {
-		contents, err := os.ReadFile(marker)
-		if err == nil {
-			want := "serve\n--runtime-dir\n" + paths.RuntimeDir + "\n--state-db\n" + paths.StateDatabase + "\n"
-			if string(contents) != want {
-				t.Fatalf("daemon argv = %q, want %q", contents, want)
-			}
-			break
+	// File creation does not mean the child has finished writing its argv.
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("daemon launcher wait = %v", err)
 		}
-		if !errors.Is(err, os.ErrNotExist) || time.Now().After(deadline) {
-			t.Fatalf("wait for daemon marker: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
+	case <-time.After(3 * time.Second):
+		t.Fatal("daemon launcher did not exit")
+	}
+	contents, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "serve\n--runtime-dir\n" + paths.RuntimeDir + "\n--state-db\n" + paths.StateDatabase + "\n"
+	if string(contents) != want {
+		t.Fatalf("daemon argv = %q, want %q", contents, want)
 	}
 	for path, want := range map[string]os.FileMode{filepath.Dir(paths.LogFile): 0o700, paths.LogFile: 0o600} {
 		info, err := os.Stat(path)
@@ -657,9 +739,6 @@ func TestStartDaemonLaunchesPathExecutableWithPrivateLog(t *testing.T) {
 		if got := info.Mode().Perm(); got != want {
 			t.Errorf("mode %s = %04o, want %04o", path, got, want)
 		}
-	}
-	if err := <-done; err != nil {
-		t.Fatalf("daemon launcher wait = %v", err)
 	}
 }
 

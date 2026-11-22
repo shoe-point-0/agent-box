@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -115,7 +116,7 @@ func TestProbeVerifierCleansNonceAndRedactsEveryWorkspaceFailure(t *testing.T) {
 
 func TestProbeVerifierRejectsVisibilityMismatchAndCleansNonce(t *testing.T) {
 	worktree := t.TempDir()
-	workspace := &sharedWorkspace{corruptFirstObservation: true}
+	workspace := &sharedWorkspace{corruptObservations: true}
 	verifier, err := filesystem.NewProbeVerifier(workspace)
 	if err != nil {
 		t.Fatal(err)
@@ -247,12 +248,12 @@ type workspaceCall struct {
 }
 
 type sharedWorkspace struct {
-	calls                   []workspaceCall
-	failOperation           string
-	err                     error
-	corruptFirstObservation bool
-	cancel                  context.CancelFunc
-	cancelOperation         string
+	calls               []workspaceCall
+	failOperation       string
+	err                 error
+	corruptObservations bool
+	cancel              context.CancelFunc
+	cancelOperation     string
 }
 
 func (w *sharedWorkspace) Observe(_ context.Context, containerID, path string) (filesystem.ProbeFile, error) {
@@ -271,8 +272,7 @@ func (w *sharedWorkspace) Observe(_ context.Context, containerID, path string) (
 	if err != nil {
 		return filesystem.ProbeFile{}, err
 	}
-	if w.corruptFirstObservation {
-		w.corruptFirstObservation = false
+	if w.corruptObservations {
 		data = []byte("corrupt")
 	}
 	return filesystem.ProbeFile{Exists: true, Regular: info.Mode().IsRegular(), Mode: info.Mode(), Data: data}, nil
@@ -330,5 +330,126 @@ func (w *sharedWorkspace) Watch(ctx context.Context, containerID, target, ready 
 				return err
 			}
 		}
+	}
+}
+
+// Model name and attribute caches independently of mutations. The first two
+// observations of each state are stale; subsequent observations are exact.
+type cachedWorkspace struct {
+	*sharedWorkspace
+	observations map[string]int
+	readRace     bool
+}
+
+func (w *cachedWorkspace) Observe(ctx context.Context, id, path string) (filesystem.ProbeFile, error) {
+	actual, err := w.sharedWorkspace.Observe(ctx, id, path)
+	if err != nil {
+		return actual, err
+	}
+	key := path + strconv.FormatBool(actual.Exists)
+	w.observations[key]++
+	if w.observations[key] <= 2 {
+		if actual.Exists {
+			return filesystem.ProbeFile{}, nil
+		}
+		if w.readRace {
+			return filesystem.ProbeFile{Exists: true}, nil
+		}
+		return filesystem.ProbeFile{Exists: true, Regular: true, Mode: 0o600, Data: []byte("stale")}, nil
+	}
+	return actual, nil
+}
+func TestProbeVerifierWaitsForVisibilityWithoutRepeatingMutations(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		readRace bool
+	}{
+		{name: "stale regular cache", readRace: false},
+		{name: "stale stat read race", readRace: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			worktree := t.TempDir()
+			workspace := &cachedWorkspace{sharedWorkspace: &sharedWorkspace{}, observations: map[string]int{}, readRace: tc.readRace}
+			verifier, err := filesystem.NewProbeVerifier(workspace)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := verifier.Verify(t.Context(), probePlan([]string{worktree}, true), workspaceObservation("container-1")); err != nil {
+				t.Fatal(err)
+			}
+			counts := map[string]int{}
+			for _, call := range workspace.calls {
+				counts[call.operation]++
+			}
+			for _, operation := range []string{"write", "rename", "remove", "watch"} {
+				if counts[operation] != 1 {
+					t.Fatalf("%s repeated: %d", operation, counts[operation])
+				}
+			}
+			if _, err := os.Stat(filepath.Join(worktree, ".abox-probe")); !os.IsNotExist(err) {
+				t.Fatalf("probe residue: %v", err)
+			}
+		})
+	}
+}
+
+type unreadableWorkspace struct {
+	*sharedWorkspace
+	blockDelete bool
+}
+
+func (w *unreadableWorkspace) Observe(ctx context.Context, id, path string) (filesystem.ProbeFile, error) {
+	actual, err := w.sharedWorkspace.Observe(ctx, id, path)
+	if err != nil {
+		return actual, err
+	}
+	if w.blockDelete && !actual.Exists && strings.HasSuffix(path, "machine-target") {
+		return filesystem.ProbeFile{Exists: true}, nil
+	}
+	if !w.blockDelete && actual.Exists {
+		return filesystem.ProbeFile{Exists: true}, nil
+	}
+	return actual, nil
+}
+
+func TestProbeVerifierRefusesPermanentUnreadableObservation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		blockDelete bool
+		wantLayer   string
+	}{
+		{name: "unreadable read", blockDelete: false, wantLayer: "workspace-read"},
+		{name: "unreadable delete", blockDelete: true, wantLayer: "workspace-delete-visibility"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			worktree := t.TempDir()
+			ctx, cancel := context.WithTimeout(t.Context(), 40*time.Millisecond)
+			defer cancel()
+			verifier, err := filesystem.NewProbeVerifier(&unreadableWorkspace{sharedWorkspace: &sharedWorkspace{}, blockDelete: tc.blockDelete})
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = verifier.Verify(ctx, probePlan([]string{worktree}, true), workspaceObservation("container-1"))
+			assertError(t, err, filesystem.ProbeFailed, tc.wantLayer)
+			if _, statErr := os.Lstat(filepath.Join(worktree, ".abox-probe")); !errors.Is(statErr, fs.ErrNotExist) {
+				t.Fatalf("probe residue remains: %v", statErr)
+			}
+		})
+	}
+}
+func TestProbeVisibilityWaitHonorsCancellation(t *testing.T) {
+	worktree := t.TempDir()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	verifier, err := filesystem.NewProbeVerifier(&sharedWorkspace{corruptObservations: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = verifier.Verify(ctx, probePlan([]string{worktree}, true), workspaceObservation("container-1"))
+	if err == nil || !strings.Contains(err.Error(), "canceled") {
+		t.Fatalf("visibility wait did not honor cancellation: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, ".abox-probe")); !os.IsNotExist(err) {
+		t.Fatalf("probe residue: %v", err)
 	}
 }

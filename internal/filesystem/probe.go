@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,13 +19,15 @@ import (
 )
 
 const (
-	probeDirectory       = ".abox-probe"
-	probeNonceBytes      = 16
-	watchReadyName       = "watch-ready"
-	watchTargetName      = "watch-target"
-	watchSetupTimeout    = 2 * time.Second
-	watchDeliveryTimeout = time.Second
-	watchPollInterval    = 5 * time.Millisecond
+	probeDirectory         = ".abox-probe"
+	probeNonceBytes        = 16
+	visibilityTimeout      = 2 * time.Second
+	visibilityPollInterval = 10 * time.Millisecond
+	watchReadyName         = "watch-ready"
+	watchTargetName        = "watch-target"
+	watchSetupTimeout      = 2 * time.Second
+	watchDeliveryTimeout   = time.Second
+	watchPollInterval      = 5 * time.Millisecond
 )
 
 // ProbeFile is the bounded workspace-service view of one probe file. Data must
@@ -48,7 +51,7 @@ type WorkspaceProbe interface {
 }
 
 // ProbeVerifier checks bidirectional bytes, modes, atomic rename and deletion
-// visibility, and native workspace watcher delivery under a nonce-scoped
+// visibility within two seconds, and workspace watcher delivery under a nonce-scoped
 // directory in every worktree. Every created nonce is removed on all return
 // paths.
 type ProbeVerifier struct {
@@ -241,8 +244,10 @@ func (v *ProbeVerifier) machineToWorkspace(ctx context.Context, containerID, roo
 	if err := writeProbeFile(source, data, 0o600); err != nil {
 		return probeFailure(ctx, "machine-write", err)
 	}
-	observed, err := v.workspace.Observe(ctx, containerID, source)
-	if err != nil || !matchesProbe(observed, data, 0o600) {
+	if err := awaitProbeVisibility(ctx, func(ctx context.Context) (bool, error) {
+		observed, err := v.workspace.Observe(ctx, containerID, source)
+		return matchesProbe(observed, data, 0o600), err
+	}); err != nil {
 		return probeFailure(ctx, "workspace-read", err)
 	}
 	if err := os.Rename(source, target); err != nil {
@@ -254,8 +259,10 @@ func (v *ProbeVerifier) machineToWorkspace(ctx context.Context, containerID, roo
 	if err := os.Remove(target); err != nil {
 		return probeFailure(ctx, "machine-delete", err)
 	}
-	observed, err = v.workspace.Observe(ctx, containerID, target)
-	if err != nil || observed.Exists {
+	if err := awaitProbeVisibility(ctx, func(ctx context.Context) (bool, error) {
+		observed, err := v.workspace.Observe(ctx, containerID, target)
+		return !observed.Exists, err
+	}); err != nil {
 		return probeFailure(ctx, "workspace-delete-visibility", err)
 	}
 	return nil
@@ -267,35 +274,69 @@ func (v *ProbeVerifier) workspaceToMachine(ctx context.Context, containerID, roo
 	if err := v.workspace.Write(ctx, containerID, source, data, 0o640); err != nil {
 		return probeFailure(ctx, "workspace-write", err)
 	}
-	observed, err := observeMachine(source)
-	if err != nil || !matchesProbe(observed, data, 0o640) {
+	if err := awaitProbeVisibility(ctx, func(context.Context) (bool, error) {
+		observed, err := observeMachine(source)
+		return matchesProbe(observed, data, 0o640), err
+	}); err != nil {
 		return probeFailure(ctx, "machine-read", err)
 	}
 	if err := v.workspace.Rename(ctx, containerID, source, target); err != nil {
 		return probeFailure(ctx, "workspace-rename", err)
 	}
-	sourceObserved, sourceErr := observeMachine(source)
-	targetObserved, targetErr := observeMachine(target)
-	if sourceErr != nil || targetErr != nil || sourceObserved.Exists || !matchesProbe(targetObserved, data, 0o640) {
-		return probeFailure(ctx, "machine-rename-visibility", errors.Join(sourceErr, targetErr))
+	if err := awaitProbeVisibility(ctx, func(context.Context) (bool, error) {
+		sourceObserved, sourceErr := observeMachine(source)
+		targetObserved, targetErr := observeMachine(target)
+		return !sourceObserved.Exists && matchesProbe(targetObserved, data, 0o640), errors.Join(sourceErr, targetErr)
+	}); err != nil {
+		return probeFailure(ctx, "machine-rename-visibility", err)
 	}
 	if err := v.workspace.Remove(ctx, containerID, target); err != nil {
 		return probeFailure(ctx, "workspace-delete", err)
 	}
-	targetObserved, err = observeMachine(target)
-	if err != nil || targetObserved.Exists {
+	if err := awaitProbeVisibility(ctx, func(context.Context) (bool, error) {
+		observed, err := observeMachine(target)
+		return !observed.Exists, err
+	}); err != nil {
 		return probeFailure(ctx, "machine-delete-visibility", err)
 	}
 	return nil
 }
 
 func (v *ProbeVerifier) requireWorkspaceRename(ctx context.Context, containerID, source, target string, data []byte, mode fs.FileMode) error {
-	sourceObserved, sourceErr := v.workspace.Observe(ctx, containerID, source)
-	targetObserved, targetErr := v.workspace.Observe(ctx, containerID, target)
-	if sourceErr != nil || targetErr != nil || sourceObserved.Exists || !matchesProbe(targetObserved, data, mode) {
-		return probeFailure(ctx, "workspace-rename-visibility", errors.Join(sourceErr, targetErr))
+	if err := awaitProbeVisibility(ctx, func(ctx context.Context) (bool, error) {
+		sourceObserved, sourceErr := v.workspace.Observe(ctx, containerID, source)
+		targetObserved, targetErr := v.workspace.Observe(ctx, containerID, target)
+		return !sourceObserved.Exists && matchesProbe(targetObserved, data, mode), errors.Join(sourceErr, targetErr)
+	}); err != nil {
+		return probeFailure(ctx, "workspace-rename-visibility", err)
 	}
 	return nil
+}
+
+// Retry observations, never mutations. A stale name or attribute may converge;
+// command errors, cancellation, and expiry still prevent READY publication.
+func awaitProbeVisibility(ctx context.Context, observe func(context.Context) (bool, error)) error {
+	bounded, cancel := context.WithTimeout(ctx, visibilityTimeout)
+	defer cancel()
+	ticker := time.NewTicker(visibilityPollInterval)
+	defer ticker.Stop()
+	for {
+		if err := bounded.Err(); err != nil {
+			return err
+		}
+		matched, err := observe(bounded)
+		if err != nil {
+			return err
+		}
+		if matched {
+			return bounded.Err()
+		}
+		select {
+		case <-bounded.Done():
+			return bounded.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (v *ProbeVerifier) nonce() (string, error) {
@@ -356,10 +397,29 @@ func observeMachine(path string) (ProbeFile, error) {
 	if !observed.Regular {
 		return observed, nil
 	}
-	data, err := os.ReadFile(path)
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ProbeFile{Exists: true}, nil
+	}
 	if err != nil {
 		return ProbeFile{}, err
 	}
+	defer func() { _ = file.Close() }()
+	current, err := file.Stat()
+	if err != nil {
+		return ProbeFile{}, err
+	}
+	if !current.Mode().IsRegular() {
+		return ProbeFile{Exists: true}, nil
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxProbeDataBytes+1))
+	if err != nil {
+		return ProbeFile{}, err
+	}
+	if len(data) > maxProbeDataBytes {
+		return ProbeFile{}, errors.New("probe file exceeds size limit")
+	}
+	observed.Mode = current.Mode()
 	observed.Data = data
 	return observed, nil
 }

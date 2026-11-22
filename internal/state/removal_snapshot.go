@@ -332,15 +332,13 @@ func cloneRemovalSnapshot(snapshot RemovalSnapshot) RemovalSnapshot {
 	cloned.LimaSpec = cloneLimaSpec(snapshot.LimaSpec)
 	cloned.Lima.Metadata = maps.Clone(snapshot.Lima.Metadata)
 	cloned.ComposeSpec = cloneComposeSpec(snapshot.ComposeSpec)
-	cloned.Compose.Resources = make([]ownership.ComposeResourceRecord, len(snapshot.Compose.Resources))
-	for index, record := range snapshot.Compose.Resources {
-		record.Labels = maps.Clone(record.Labels)
-		cloned.Compose.Resources[index] = record
+	cloned.Compose.Resources = slices.Clone(snapshot.Compose.Resources)
+	for index := range cloned.Compose.Resources {
+		cloned.Compose.Resources[index].Labels = maps.Clone(cloned.Compose.Resources[index].Labels)
 	}
-	cloned.Compose.Volumes = make([]ownership.VolumeRecord, len(snapshot.Compose.Volumes))
-	for index, record := range snapshot.Compose.Volumes {
-		record.Labels = maps.Clone(record.Labels)
-		cloned.Compose.Volumes[index] = record
+	cloned.Compose.Volumes = slices.Clone(snapshot.Compose.Volumes)
+	for index := range cloned.Compose.Volumes {
+		cloned.Compose.Volumes[index].Labels = maps.Clone(cloned.Compose.Volumes[index].Labels)
 	}
 	cloned.LimaPathEvidence = clonePathSet(snapshot.LimaPathEvidence)
 	cloned.ComposePathEvidence = clonePathSet(snapshot.ComposePathEvidence)
@@ -367,16 +365,16 @@ func cloneComposeSpec(spec compose.RuntimeSpec) compose.RuntimeSpec {
 	for index := range cloned.Plan.Mounts {
 		cloned.Plan.Mounts[index].Services = slices.Clone(spec.Plan.Mounts[index].Services)
 	}
+	cloned.Plan.TCPPorts = slices.Clone(spec.Plan.TCPPorts)
 	cloned.Compiled.ResolvedModel = slices.Clone(spec.Compiled.ResolvedModel)
 	cloned.PathEvidence = clonePathSet(spec.PathEvidence)
 	return cloned
 }
 
 func clonePathSet(record ownership.PathSetRecord) ownership.PathSetRecord {
-	cloned := ownership.PathSetRecord{Paths: make([]ownership.PathChainRecord, len(record.Paths))}
-	for index, chain := range record.Paths {
-		chain.Ancestors = slices.Clone(chain.Ancestors)
-		cloned.Paths[index] = chain
+	cloned := ownership.PathSetRecord{Paths: slices.Clone(record.Paths)}
+	for index := range cloned.Paths {
+		cloned.Paths[index].Ancestors = slices.Clone(cloned.Paths[index].Ancestors)
 	}
 	return cloned
 }

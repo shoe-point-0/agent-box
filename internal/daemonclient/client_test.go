@@ -20,10 +20,11 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/journal"
 	"github.com/shoe-point-0/agent-box/internal/removal"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	if err := os.Chmod(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +117,7 @@ func TestClientNegotiatesAndStreamsRealDaemonOperation(t *testing.T) {
 }
 
 func TestClientRemovalPreservesPreviewAuthorizationOverRealDaemon(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	if err := os.Chmod(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +439,7 @@ func TestClientValidatesTerminalDetailsBeforeOutput(t *testing.T) {
 
 func serveUnixHTTP(t *testing.T, handler http.Handler) (string, func()) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "server.sock")
+	path := filepath.Join(testutil.TempDir(t), "server.sock")
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatal(err)

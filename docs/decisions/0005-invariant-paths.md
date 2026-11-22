@@ -1,6 +1,6 @@
 # ADR 0005: Preserve canonical absolute paths across Machine, VM, and container
 
-- Status: Accepted
+- Status: Accepted; filesystem timing and event assumptions amended by [ADR 0011](0011-bounded-filesystem-visibility.md)
 - Date: 2026-08-29
 - Scope: v0.1 worktree and Git metadata path topology
 
@@ -35,7 +35,7 @@ This is accepted design intent plus Linux bind-mount evidence. VZ/VirtioFS trans
 
 ## Evidence
 
-- [`m0-git-path-probe`](../features/m0-git-path-probe.md) passed plain, spaces, Unicode, 200-character, and symlink fixtures using identical paths through a Linux bind mount.
+- [Git path invariance spike](../features/spike-git-path.md) passed plain, spaces, Unicode, 200-character, and symlink fixtures using identical paths through a Linux bind mount.
 - [The substrate report](../architecture/substrate-spikes.md) records that this did not exercise VirtioFS and that Git 2.43.0/2.47.3 did not advertise relative-worktree support.
 - [ADR 0001](0001-milestone-0-substrate-gate.md) explicitly forbids treating bind-mount evidence as Darwin support.
 - Lima documents explicit host mounts and VZ VirtioFS behavior in [Filesystem mounts](https://lima-vm.io/docs/config/mount). This is an upstream capability contract, not coherency evidence.

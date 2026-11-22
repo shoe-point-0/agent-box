@@ -11,6 +11,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/ownership"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestReadinessGatePublishesOnlyAfterLiveAndProbeVerification(t *testing.T) {
@@ -162,7 +163,7 @@ func (verify probeVerifierFunc) Verify(ctx context.Context, plan contract.Plan, 
 
 func readinessFixture(t *testing.T) (LiveSpec, map[string]string) {
 	t.Helper()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	paths := map[string]string{
 		"image":             filepath.Join(root, "guest.img"),
 		"worktree":          filepath.Join(root, "workspace", "repo"),

@@ -38,7 +38,7 @@ Removal refuses dirty files, ignored/untracked residue, unpublished commits, reg
 
 ## Evidence
 
-- The retained [`git-path` probe](../features/m0-git-path-probe.md) passed private bare-store creation, locked worktrees, source-metadata isolation, inode isolation, Machine/container commits, and ownership-aware cleanup with Git 2.43.0 and 2.47.3 on Linux.
+- The retained [`git-path` probe](../features/spike-git-path.md) passed private bare-store creation, locked worktrees, source-metadata isolation, inode isolation, Machine/container commits, and ownership-aware cleanup with Git 2.43.0 and 2.47.3 on Linux.
 - [The aggregate substrate report](../architecture/substrate-spikes.md) records the exact matrix and limits the result to Linux bind mounts.
 - Git documents script-oriented worktree inspection and locking in [`git worktree`](https://git-scm.com/docs/git-worktree), and object-copy isolation in [`git clone`](https://git-scm.com/docs/git-clone).
 - [ADR 0001](0001-milestone-0-substrate-gate.md) makes a red Git or cleanup probe blocking.

@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestDocumentedWorkspaceExampleParses(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	manifestDir := filepath.Join(root, "workspace", ".abox")
 	payments := filepath.Join(root, "workspace", "payment-service")
 	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
@@ -51,7 +53,7 @@ func TestDocumentedWorkspaceExampleParses(t *testing.T) {
 
 func TestStrictStructureAndValidation(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	repository := filepath.Join(root, "repo")
 	if err := os.Mkdir(repository, 0o755); err != nil {
 		t.Fatal(err)
@@ -103,7 +105,7 @@ func TestStrictStructureAndValidation(t *testing.T) {
 
 func TestNamedFeatureValidation(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	repository := filepath.Join(root, "repo")
 	if err := os.Mkdir(repository, 0o755); err != nil {
 		t.Fatal(err)
@@ -141,7 +143,7 @@ func TestNamedFeatureValidation(t *testing.T) {
 
 func TestCanonicalPathBoundaries(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	allowed := filepath.Join(root, "allowed")
 	outside := filepath.Join(root, "outside")
 	for _, directory := range []string{allowed, filepath.Join(allowed, "repo"), outside} {
@@ -179,7 +181,7 @@ func TestCanonicalPathBoundaries(t *testing.T) {
 
 func TestParserLimits(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	repository := filepath.Join(root, "repo")
 	if err := os.Mkdir(repository, 0o755); err != nil {
 		t.Fatal(err)

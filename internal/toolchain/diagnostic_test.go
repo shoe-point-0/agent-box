@@ -2,8 +2,10 @@ package toolchain
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/process"
@@ -50,5 +52,52 @@ func TestDiagnosticsExposeOnlyFixedReadOnlyProbes(t *testing.T) {
 	}
 	if _, err := NewDiagnostics("relative", root, filepath.Clean(root)); err == nil {
 		t.Fatal("NewDiagnostics accepted a relative PATH")
+	}
+}
+
+func TestDiagnosticsKeepsStrictPathValidation(t *testing.T) {
+	root := t.TempDir()
+	for _, test := range []struct {
+		name string
+		path string
+	}{
+		{"unset", ""},
+		{"leading empty", ":" + root},
+		{"middle empty", root + "::" + root},
+		{"trailing empty", root + ":"},
+		{"current directory", root + ":."},
+		{"relative directory", root + ":private-relative-bin"},
+		{"trailing slash", root + "/"},
+		{"unclean directory", root + "/../bin"},
+		{"control character", root + "\nprivate-path-value"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			diagnostics, err := NewDiagnostics(test.path, root, root)
+			if err == nil || diagnostics != nil {
+				t.Fatal("unsafe PATH accepted")
+			}
+			if strings.Contains(err.Error(), root) || strings.Contains(err.Error(), "private-") {
+				t.Fatal("diagnostic error disclosed a PATH value")
+			}
+		})
+	}
+}
+
+func TestDiagnosticsExecutesFromAbsolutePathContainingSpaces(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "tools with spaces")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "limactl"), []byte("#!/bin/sh\nprintf 'limactl version 1.0.0\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := NewDiagnostics(bin, root, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := diagnostics.Observe(t.Context(), ProbeLimaVersion)
+	if err != nil || string(result.Stdout) != "limactl version 1.0.0\n" {
+		t.Fatalf("space-containing PATH probe = %q, %v", result.Stdout, err)
 	}
 }

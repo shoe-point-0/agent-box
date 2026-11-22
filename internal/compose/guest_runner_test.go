@@ -3,6 +3,8 @@ package compose_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -70,4 +72,48 @@ func (i *recordingGuestInvoker) InvokeCommand(_ context.Context, spec lima.Spec,
 	i.spec = spec
 	i.command = command
 	return i.result, i.err
+}
+
+func TestGuestRunnerTransfersOnlyOwnedGeneratedFiles(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, compose.RootFileName)
+	content := []byte("include: []\n")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	invoker := &recordingGuestInvoker{}
+	runner, err := compose.NewGuestRunner(invoker, lima.Spec{RuntimeHost: contract.RuntimeHostPlan{InstanceName: "runtime"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := compose.Command{Argv: []string{"/usr/bin/docker", "compose", "-f", path, "config"}, Dir: root}
+	if _, err := runner.Run(t.Context(), command); err != nil {
+		t.Fatal(err)
+	}
+	if len(invoker.command.InputFiles) != 1 || invoker.command.InputFiles[0].ArgIndex != 3 || string(invoker.command.InputFiles[0].Data) != string(content) {
+		t.Fatalf("input transfer = %#v", invoker.command.InputFiles)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	invoker.command = lima.GuestCommand{}
+	if _, err := runner.Run(t.Context(), command); err == nil || len(invoker.command.Argv) != 0 {
+		t.Fatal("unsafe input reached the guest")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "other.yaml")
+	if err := os.WriteFile(target, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Run(t.Context(), command); err == nil {
+		t.Fatal("symlinked input accepted")
+	}
 }

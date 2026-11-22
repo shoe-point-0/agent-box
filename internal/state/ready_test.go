@@ -15,6 +15,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestPublishReadyCommitsCompleteGenerationAtomicallyAndIsIdempotent(t *testing.T) {
@@ -180,7 +181,7 @@ func readyGenerationFixture(t *testing.T) ReadyGeneration {
 	if err != nil {
 		t.Fatal(err)
 	}
-	applicationRoot := t.TempDir()
+	applicationRoot := testutil.TempDir(t)
 	provider, err := paths.New(applicationRoot, filepath.Join(applicationRoot, "cache"), filepath.Join(applicationRoot, "logs"))
 	if err != nil {
 		t.Fatal(err)

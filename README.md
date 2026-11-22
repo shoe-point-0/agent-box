@@ -30,7 +30,9 @@ Generated binaries are written to `bin/`. Install both commands for your user wi
 
 ## Platform boundary
 
-Linux is the implementation and continuous-verification lane, not a supported production `abox up` host. Production preflight currently permits only Darwin/arm64 with VZ, and the Lima configuration adapter requires `lima-vz` with VirtioFS. CI is configured to run the quality gate on Ubuntu 24.04 and macOS 15; a green hosted job is not evidence that Lima VZ, VirtioFS, forwarding, or the Agent Box runtime works on real macOS hardware. Real Darwin/arm64 runtime support remains gated on the dedicated hardware acceptance tasks documented in `THE_BEGINNING.md`. See the [getting-started platform boundary](docs/getting-started.md#current-platform-boundary) before attempting provisioning.
+Linux is the implementation and continuous-verification lane, not a supported production `abox up` host. Production preflight currently permits only Darwin/arm64 with VZ, and the Lima configuration adapter requires `lima-vz` with VirtioFS. CI runs the quality gate on Ubuntu 24.04 and macOS 15; a green hosted job is not evidence that Lima VZ, VirtioFS, forwarding, or the Agent Box runtime works on real macOS hardware.
+
+The single-repository Milestone 1 slice (`abox up` cold READY, warm no-op, detached CLI completion, and refusal-first `abox rm`) has passed real Apple M1 VZ validation; see [`docs/architecture/apple-silicon-m1-gate.md`](docs/architecture/apple-silicon-m1-gate.md). Broad Darwin/arm64 release support (multi-version macOS, two-VM forwarding isolation, and full fault recovery) remains gated on the Milestone 5 hardware acceptance task in `THE_BEGINNING.md`. See the [getting-started platform boundary](docs/getting-started.md#current-platform-boundary) before attempting provisioning.
 
 ## Project documents
 
@@ -38,6 +40,7 @@ Linux is the implementation and continuous-verification lane, not a supported pr
 - Roadmap and evidence gates: [`ROADMAP.md`](ROADMAP.md)
 - Implemented components and validation evidence: [`docs/features.md`](docs/features.md)
 - Measured substrate boundary: [`docs/architecture/substrate-spikes.md`](docs/architecture/substrate-spikes.md)
+- Apple Silicon M1 validation report: [`docs/architecture/apple-silicon-m1-gate.md`](docs/architecture/apple-silicon-m1-gate.md)
 - Architecture decisions: [`docs/decisions/`](docs/decisions/README.md)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Governance and decision process: [`GOVERNANCE.md`](GOVERNANCE.md)

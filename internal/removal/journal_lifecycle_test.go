@@ -202,3 +202,54 @@ func beginRemovalOperation(t *testing.T) (*journal.Journal, journal.Operation) {
 	}
 	return operationJournal, operation
 }
+
+func TestLeaseReleaseDoesNotReportItsOwnRenewalCancellation(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		failure error
+	}{
+		{name: "intentional release"},
+		{name: "concurrent lease loss", failure: journal.ErrLeaseLost},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := &blockedRenewalJournal{started: make(chan struct{}), failure: test.failure}
+			guard, err := removal.NewJournalLeaseGuard(removal.JournalLeaseGuardConfig{
+				Journal:   store,
+				Operation: journal.Operation{ID: "operation-release", BoxID: "box-release", State: journal.StateRunning},
+				Owner:     journal.Owner{InstanceID: "daemon", ProcessStartID: "process", BootID: "boot"},
+				TTL:       3 * time.Millisecond,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			lease, err := guard.Acquire(t.Context(), "box-release")
+			if err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-store.started:
+			case <-time.After(time.Second):
+				t.Fatal("renewal did not start")
+			}
+			err = guard.Release(t.Context(), lease)
+			if !errors.Is(err, test.failure) {
+				t.Fatalf("Release() = %v, want %v", err, test.failure)
+			}
+		})
+	}
+}
+
+type blockedRenewalJournal struct {
+	failingRenewalJournal
+	started chan struct{}
+	failure error
+}
+
+func (store *blockedRenewalJournal) RenewLease(ctx context.Context, _ journal.Lease, _ time.Time, _ time.Duration) (journal.Lease, error) {
+	close(store.started)
+	<-ctx.Done()
+	if store.failure != nil {
+		return journal.Lease{}, store.failure
+	}
+	return journal.Lease{}, ctx.Err()
+}

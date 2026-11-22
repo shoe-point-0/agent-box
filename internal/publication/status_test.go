@@ -16,6 +16,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/publication"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestRealGitPublicationStatus(t *testing.T) {
@@ -123,7 +124,7 @@ func TestRealGitPublicationStatus(t *testing.T) {
 }
 
 func TestMalformedBoxGraphIsRejected(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	identity, err := ownership.InspectPath(root)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +168,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	f := &fixture{
 		gitPath: gitPath, home: filepath.Join(root, "controlled-home"),
 		source: filepath.Join(root, "source with spaces 界"),

@@ -31,20 +31,35 @@ type LocalObserver struct {
 	WorkingDirectory string
 	Git              *machinegit.DiagnosticClient
 	Tools            *toolchain.Diagnostics
+	configuration    *Check
 }
 
 func NewLocalObserver(workingDirectory string) (*LocalObserver, error) {
 	if !filepath.IsAbs(workingDirectory) || filepath.Clean(workingDirectory) != workingDirectory {
 		return nil, errors.New("doctor working directory must be clean and absolute")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, errors.New("resolve doctor home directory")
-	}
+	// An invalid environment is an observable prerequisite, not an internal
+	// failure. Do not construct either tool client until validation succeeds.
+	home, _ := os.UserHomeDir()
 	path := os.Getenv("PATH")
 	tools, err := toolchain.NewDiagnostics(path, home, workingDirectory)
 	if err != nil {
-		return nil, err
+		check := Check{Evidence: EvidenceTested, Status: StatusFail}
+		switch {
+		case errors.Is(err, toolchain.ErrDiagnosticPath):
+			check.Result = "environment.path"
+			check.Observed = "PATH is unset or contains an empty, relative, non-clean, or control-character entry"
+			check.Required = "PATH containing only non-empty, clean absolute directories without control characters"
+			check.Remediation = "set PATH to absolute directories; remove empty or relative entries, trailing slashes (except /), dot segments, and control characters; preserve spaces in directory names, then rerun abox doctor"
+		case errors.Is(err, toolchain.ErrDiagnosticHome):
+			check.Result = "environment.home"
+			check.Observed = "HOME is unset or is not a clean absolute directory without control characters"
+			check.Required = "a non-empty, clean absolute HOME directory without control characters"
+			check.Remediation = "set HOME to your absolute home directory without trailing slashes (except /), dot segments, or control characters, then rerun abox doctor"
+		default:
+			return nil, err
+		}
+		return &LocalObserver{WorkingDirectory: workingDirectory, configuration: &check}, nil
 	}
 	var git *machinegit.DiagnosticClient
 	if explicit := os.Getenv("HERMES_CRUSHER_REAL_GIT"); explicit != "" {
@@ -56,7 +71,7 @@ func NewLocalObserver(workingDirectory string) (*LocalObserver, error) {
 }
 
 func (observer *LocalObserver) Observe(ctx context.Context, request Request) ([]Check, error) {
-	if observer == nil || !filepath.IsAbs(observer.WorkingDirectory) || observer.Tools == nil {
+	if observer == nil || !filepath.IsAbs(observer.WorkingDirectory) || (observer.Tools == nil && observer.configuration == nil) {
 		return nil, errors.New("local doctor observer is incomplete")
 	}
 	if err := ctx.Err(); err != nil {
@@ -64,6 +79,9 @@ func (observer *LocalObserver) Observe(ctx context.Context, request Request) ([]
 	}
 
 	checks := []Check{observer.platform(), observer.ownership()}
+	if observer.configuration != nil {
+		checks = append(checks, *observer.configuration)
+	}
 	paths, err := daemon.DefaultUserPaths()
 	if err != nil {
 		checks = append(checks, unknown("disk.runtime", "user-scoped runtime path unavailable", "canonical user-scoped runtime path", "correct the home and XDG path configuration, then rerun abox doctor"))
@@ -136,6 +154,9 @@ func (observer *LocalObserver) disk(result, target string) Check {
 }
 
 func (observer *LocalObserver) gitVersion(ctx context.Context) Check {
+	if observer.configuration != nil {
+		return observer.skippedTool("tool.git")
+	}
 	const remediation = "install the supported Git version and place it on PATH"
 	if observer.Git == nil {
 		return unavailableTool("tool.git", remediation)
@@ -147,10 +168,17 @@ func (observer *LocalObserver) gitVersion(ctx context.Context) Check {
 }
 
 func (observer *LocalObserver) tool(ctx context.Context, name string, probe toolchain.DiagnosticProbe, prefix, remediation string) Check {
+	if observer.configuration != nil {
+		return observer.skippedTool(name)
+	}
 	probeContext, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	result, err := observer.Tools.Observe(probeContext, probe)
 	return versionCheck(name, result.Stdout, result.Stderr, result.StdoutTruncated || result.StderrTruncated || err != nil, prefix, remediation)
+}
+
+func (observer *LocalObserver) skippedTool(result string) Check {
+	return unknown(result, "probe skipped because the diagnostic environment is invalid", observer.configuration.Required, observer.configuration.Remediation)
 }
 
 func versionCheck(result string, stdout, stderr []byte, failed bool, prefix, remediation string) Check {
@@ -173,6 +201,9 @@ func unavailableTool(result, remediation string) Check {
 }
 
 func (observer *LocalObserver) relativeWorktrees(ctx context.Context, git Check) Check {
+	if observer.configuration != nil {
+		return observer.skippedTool("git.relative-worktrees")
+	}
 	if git.Status != StatusPass || observer.Git == nil {
 		return unknown("git.relative-worktrees", "Git capability was not observable", "worktree.useRelativePaths capability on every Box Git client", "install supported Git or keep invariant absolute worktree paths")
 	}
@@ -191,6 +222,9 @@ func (observer *LocalObserver) port() Check {
 }
 
 func (observer *LocalObserver) runtime(ctx context.Context) Check {
+	if observer.configuration != nil {
+		return observer.skippedTool("runtime.docker")
+	}
 	probeContext, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	result, err := observer.Tools.Observe(probeContext, toolchain.ProbeDockerRuntime)

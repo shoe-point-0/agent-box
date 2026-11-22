@@ -69,6 +69,7 @@ func (e *RuntimeError) ErrorCode() contract.ErrorCode {
 // RuntimeInvoker is the narrow guest-control contract implemented by
 // lima.Adapter. The process result remains available on every exit path.
 type RuntimeInvoker interface {
+	GuestCommandInvoker
 	Invoke(context.Context, lima.Spec, string, []string, io.Writer, io.Writer) (process.Result, error)
 }
 
@@ -237,7 +238,7 @@ func (r *Runtime) Apply(ctx context.Context, spec RuntimeSpec) (RuntimeObservati
 	if err := r.preflight(ctx, spec); err != nil {
 		return RuntimeObservation{}, err
 	}
-	_, runErr := r.runCompose(ctx, spec, "apply", nil, nil, "up", "--detach", "--remove-orphans")
+	_, runErr := r.runCompose(ctx, spec, "apply", nil, nil, "up", "--detach", "--wait", "--remove-orphans")
 	after, observeErr := r.observe(ctx, spec)
 	if runErr != nil || observeErr != nil {
 		return after, errors.Join(runErr, observeErr)
@@ -424,7 +425,7 @@ func cleanRuntimePath(path string) bool {
 }
 
 func (r *Runtime) composeArgv(spec RuntimeSpec, command ...string) []string {
-	argv := []string{spec.DockerPath, "compose", "--project-name", spec.Plan.Compose.ProjectName}
+	argv := []string{spec.DockerPath, "compose", "--project-name", spec.Plan.Compose.ProjectName, "--project-directory", spec.Workdir}
 	for _, profile := range spec.Plan.Compose.Profiles {
 		argv = append(argv, "--profile", profile)
 	}
@@ -441,7 +442,20 @@ func (r *Runtime) runCompose(ctx context.Context, spec RuntimeSpec, operation st
 }
 
 func (r *Runtime) invoke(ctx context.Context, spec RuntimeSpec, operation string, argv []string, stdout, stderr io.Writer) (process.Result, error) {
-	result, err := r.invoker.Invoke(ctx, spec.RuntimeHost, spec.Workdir, argv, stdout, stderr)
+	var result process.Result
+	var err error
+	if len(argv) > 1 && argv[1] == "compose" {
+		var inputs []lima.GuestInputFile
+		inputs, err = guestComposeInputs(argv, spec.Workdir)
+		if err == nil {
+			result, err = r.invoker.InvokeCommand(ctx, spec.RuntimeHost, lima.GuestCommand{
+				Argv: argv, Workdir: spec.Workdir, InputFiles: inputs, Stdout: stdout, Stderr: stderr,
+				Environment: map[string]string{"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root", "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+			})
+		}
+	} else {
+		result, err = r.invoker.Invoke(ctx, spec.RuntimeHost, spec.Workdir, argv, stdout, stderr)
+	}
 	if err == nil {
 		return result, nil
 	}

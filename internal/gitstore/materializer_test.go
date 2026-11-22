@@ -21,6 +21,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestMaterializeRealGitDetachedPrivateStore(t *testing.T) {
@@ -161,7 +162,7 @@ type testFixture struct {
 func newFixture(t *testing.T, detached bool) testFixture {
 	t.Helper()
 	gitPath := requireGit(t)
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source with spaces 界")
 	mustGit(t, gitPath, root, "init", "--initial-branch=main", source)
 	mustWrite(t, filepath.Join(source, "compose.yaml"), "services: {}\n")
@@ -305,7 +306,7 @@ func rawGit(t *testing.T, gitPath, directory string, arguments ...string) (strin
 	command := exec.Command(gitPath, arguments...)
 	command.Dir = directory
 	command.Env = []string{
-		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "LANG=C", "LC_ALL=C",
+		"PATH=/usr/bin:/bin", "HOME=" + testutil.TempDir(t), "LANG=C", "LC_ALL=C",
 		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
 		"GIT_TERMINAL_PROMPT=0", "GIT_NO_REPLACE_OBJECTS=1",
 	}

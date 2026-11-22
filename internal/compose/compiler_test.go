@@ -21,6 +21,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	aboxprocess "github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 const generation int64 = 7
@@ -327,7 +328,7 @@ func (a processAdapter) Run(ctx context.Context, command compose.Command) (compo
 
 func fixturePlan(t *testing.T, composeVersion string) (contract.Plan, string, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source")
 	worktree := filepath.Join(root, "worktree")
 	gitStore := filepath.Join(root, "git", "repo.git")

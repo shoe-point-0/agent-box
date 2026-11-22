@@ -13,6 +13,7 @@ import (
 
 	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/installation"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 )
 
@@ -140,7 +141,7 @@ func TestLoadHonorsCancellationBeforeReadingMetadata(t *testing.T) {
 
 func writeInstallation(t *testing.T) (string, installationDocument) {
 	t.Helper()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	artifact := func(name, version string, executable bool) artifactDocument {
 		mode := os.FileMode(0o600)
 		if executable {

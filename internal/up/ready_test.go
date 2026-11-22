@@ -22,13 +22,14 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/ownership"
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
 
 func TestReconcileReadyMaterializesContextAndPublishesFreshCompleteAuthority(t *testing.T) {
 	fixture := newReadyFixture(t)
-	stateStore, err := state.Open(t.Context(), filepath.Join(t.TempDir(), "state.db"))
+	stateStore, err := state.Open(t.Context(), filepath.Join(testutil.TempDir(t), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +161,7 @@ func TestReconcileReadyKeepsPublicationInsideReadinessAndContextBoundaries(t *te
 
 func TestReconcileReadyRetriesFailedPublicationAfterRestartWithFreshObservation(t *testing.T) {
 	fixture := newReadyFixture(t)
-	path := filepath.Join(t.TempDir(), "state.db")
+	path := filepath.Join(testutil.TempDir(t), "state.db")
 	store, err := state.Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +322,7 @@ func newReadyFixture(t *testing.T) readyFixture {
 		Registered: true, BranchPresent: true, WorktreeIdentity: worktreeIdentity, StoreIdentity: storeIdentity,
 	}
 
-	imagePath := filepath.Join(t.TempDir(), "guest.img")
+	imagePath := filepath.Join(testutil.TempDir(t), "guest.img")
 	if err := os.WriteFile(imagePath, []byte("guest image\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

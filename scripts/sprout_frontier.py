@@ -14,6 +14,18 @@ from typing import Any
 TASK_ID = re.compile(r"\bm\d-[a-z0-9-]+\b")
 DEPENDENCIES = re.compile(r"Dependencies:\s*([^\n.]+)")
 TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+METADATA = re.compile(r"\A<!-- sprout-task\n(.*?)\n-->", re.DOTALL)
+
+
+def feature_task_id(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    match = METADATA.match(text)
+    if match:
+        provenance = json.loads(match.group(1))
+        task_id = provenance.get("id")
+        if isinstance(task_id, str) and task_id:
+            return task_id
+    return path.stem
 
 
 @dataclass(frozen=True)
@@ -46,7 +58,7 @@ def load_frontier(root: Path) -> dict[str, Any]:
     tasks_dir = root / ".sprout" / "tasks"
     features_dir = root / "docs" / "features"
     tasks = {path.stem: parse_task(path) for path in sorted(tasks_dir.glob("*.md"))}
-    implemented = {path.stem for path in features_dir.glob("*.md")}
+    implemented = {feature_task_id(path) for path in features_dir.glob("*.md")}
     known = set(tasks) | implemented
 
     missing_dependencies = sorted(

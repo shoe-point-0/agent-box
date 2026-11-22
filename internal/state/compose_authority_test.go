@@ -80,6 +80,30 @@ func TestPublishReadyRetiresOnlyMatchingComposeAuthority(t *testing.T) {
 		}
 	})
 
+	t.Run("matching without volumes", func(t *testing.T) {
+		store := openTestStore(t)
+		publication := readyGenerationFixture(t)
+		publication.RemovalSnapshot.Compose.Volumes = nil
+		seedReadyBox(t, store, publication.Plan)
+		seedRunningUpOperation(t, store, publication.Plan.BoxID, "operation-compose-no-volumes")
+		authority := composeAuthorityFixture(publication, "operation-compose-no-volumes")
+		records := publication.RemovalSnapshot.Compose
+		authority.Records = &records
+		if err := store.SaveReconciliationComposeAuthority(t.Context(), authority, time.Unix(1, 0)); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.PublishReady(t.Context(), publication); err != nil {
+			t.Fatal(err)
+		}
+		if _, found, err := store.ReconciliationComposeAuthorityFor(t.Context(), authority.BoxID, authority.Generation); err != nil || found {
+			t.Fatalf("partial authority after READY found=%t error=%v", found, err)
+		}
+		snapshot, found, err := store.CurrentRemovalSnapshot(t.Context(), authority.BoxID)
+		if err != nil || !found || snapshot.Compose.Volumes != nil {
+			t.Fatalf("removal snapshot volumes = %#v, found=%t, err=%v; want nil", snapshot.Compose.Volumes, found, err)
+		}
+	})
+
 	t.Run("mismatched resources", func(t *testing.T) {
 		store := openTestStore(t)
 		publication := readyGenerationFixture(t)

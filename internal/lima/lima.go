@@ -311,6 +311,15 @@ func (a *Adapter) Delete(ctx context.Context, spec Spec, recorded ownership.Lima
 	if _, err := ownership.ProveLimaInstance(recorded, before.ownership()); err != nil {
 		return before, err
 	}
+	if before.State == Running {
+		stopped, err := a.Stop(ctx, spec)
+		if err != nil {
+			return stopped, err
+		}
+		if _, err := ownership.ProveLimaInstance(recorded, stopped.ownership()); err != nil {
+			return stopped, err
+		}
+	}
 	_, runErr := a.run(ctx, "delete", "--tty=false", spec.RuntimeHost.InstanceName)
 	return a.afterMutation(ctx, "delete", spec, runErr, true)
 }
@@ -323,7 +332,8 @@ func validateRecordedIdentity(spec Spec, recorded ownership.LimaInstanceRecord) 
 	return nil
 }
 
-// Invoke executes an argv command through Lima's guest control channel.
+// Invoke executes an administrative guest command as root through Lima.
+// Noninteractive sudo fails closed if the image lacks passwordless control access.
 func (a *Adapter) Invoke(ctx context.Context, spec Spec, workdir string, argv []string, stdout, stderr io.Writer) (process.Result, error) {
 	if err := a.checkSpecAndVersion(ctx, spec); err != nil {
 		return process.Result{}, err
@@ -341,7 +351,7 @@ func (a *Adapter) Invoke(ctx context.Context, spec Spec, workdir string, argv []
 	if before.State != Running {
 		return process.Result{}, &Error{Kind: InvalidState, Operation: "invoke", Resource: spec.RuntimeHost.InstanceName, Observed: before.State, Err: errors.New("instance is not running")}
 	}
-	args := []string{"shell", "--tty=false", "--workdir=" + workdir, spec.RuntimeHost.InstanceName, "--"}
+	args := []string{"shell", "--tty=false", "--workdir=" + workdir, spec.RuntimeHost.InstanceName, "--", "/usr/bin/sudo", "-n", "--"}
 	args = append(args, argv...)
 	result, runErr := a.runWithWriters(ctx, stdout, stderr, args...)
 	if runErr != nil {
@@ -374,7 +384,7 @@ func (a *Adapter) InvokeCommand(ctx context.Context, spec Spec, command GuestCom
 	if before.State != Running {
 		return process.Result{}, &Error{Kind: InvalidState, Operation: "invoke", Resource: spec.RuntimeHost.InstanceName, Observed: before.State, Err: errors.New("instance is not running")}
 	}
-	args := []string{"shell", "--tty=false", "--workdir=" + command.Workdir, spec.RuntimeHost.InstanceName, "--"}
+	args := []string{"shell", "--tty=false", "--workdir=" + command.Workdir, spec.RuntimeHost.InstanceName, "--", "/usr/bin/sudo", "-n", "--"}
 	args = append(args, guestArgv...)
 	result, runErr := a.runInvocation(ctx, toolchain.Invocation{
 		Args: args, Dir: a.dir, Env: cloneMap(a.env), Secrets: cloneSecrets(command.Secrets),
@@ -419,7 +429,7 @@ func (a *Adapter) checkVersion(ctx context.Context) error {
 }
 
 func (a *Adapter) inspect(ctx context.Context, name string) (Observation, error) {
-	result, err := a.run(ctx, "list", "--tty=false", "--format=json", "--all-fields")
+	result, err := a.run(ctx, "list", "--tty=false", "--format=json", "--all-fields", "--log-level=error")
 	if err != nil {
 		return Observation{}, classifyRunError("inspect", name, Absent, ctx, err)
 	}

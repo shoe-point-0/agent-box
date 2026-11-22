@@ -41,10 +41,10 @@ Darwin VZ, VirtioFS, mount isolation, resolver/browser behavior, concurrent Lima
 
 ## Evidence
 
-- [`m0-git-path-probe`](../features/m0-git-path-probe.md)
-- [`m0-compose-probe`](../features/m0-compose-probe.md)
-- [`m0-routing-probe`](../features/m0-routing-probe.md)
-- [`m0-failure-matrix`](../features/m0-failure-matrix.md)
+- [Git path invariance spike](../features/spike-git-path.md)
+- [Compose include spike](../features/spike-compose-include.md)
+- [localhost routing spike](../features/spike-localhost-routing.md)
+- [failure-matrix spike](../features/spike-failure-matrix.md)
 - [Aggregate matrix and reproduction commands](../architecture/substrate-spikes.md)
 
 ## Revisit triggers

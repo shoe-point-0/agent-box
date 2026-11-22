@@ -49,10 +49,26 @@ Doctor probes host Git, Lima, Docker and Compose versions and observes available
 
 - Linux is the implementation/test lane. Production `up` preflight currently allows only `darwin/arm64` with accelerator `vz`, so installing Lima or QEMU on Linux does **not** unlock production provisioning.
 - The Lima configuration generator requires driver `lima-vz` and uses VirtioFS. Although the daemon selects the name `lima-qemu` on non-Darwin hosts, that is not a completed Linux backend.
-- Darwin/arm64 is the intended product lane, not an unconditional support claim. Real hardware, filesystem, forwarding, and end-to-end acceptance gates remain necessary. Hosted build/test CI does not establish those results.
+- Darwin/arm64 is the intended product lane. The single-repository Milestone 1 slice (`abox up` cold READY, warm no-op, detached CLI completion, and refusal-first `abox rm`) has passed real Apple M1 VZ validation ([Apple Silicon M1 gate report](architecture/apple-silicon-m1-gate.md)). Broad multi-version macOS release support, two-VM forwarding checks, and full fault recovery remain gated on Milestone 5. Hosted build/test CI does not establish those results.
 - Windows and Intel macOS are not production runtime targets in the current preflight.
 
-These limits are enforced in [`cmd/aboxd/production_up.go`](../cmd/aboxd/production_up.go) and [`internal/lima/config.go`](../internal/lima/config.go). The [substrate evidence](architecture/substrate-spikes.md) and [architecture baseline](../THE_BEGINNING.md) describe the remaining acceptance boundary.
+These limits are enforced in [`cmd/aboxd/production_up.go`](../cmd/aboxd/production_up.go) and [`internal/lima/config.go`](../internal/lima/config.go). The [substrate evidence](architecture/substrate-spikes.md), [Apple Silicon M1 gate report](architecture/apple-silicon-m1-gate.md), and [architecture baseline](../THE_BEGINNING.md) describe the measured and remaining acceptance boundaries.
+
+## Filesystem behavior on Apple Silicon
+
+The current readiness probe allows up to two seconds for changed bytes, modes,
+renames, and deletions to become visible across the Machine/guest boundary.
+Lima's experimental event forwarding is enabled for writable mounts. It
+synthesizes Linux `IN_ATTRIB` events for host creates and modifies without
+changing file contents or modes. A workspace watcher must still receive the
+tested create/modify event within one second. Host deletion events are not
+forwarded; configure your project's watcher to poll if it requires deletion
+events or ignores `IN_ATTRIB`. See [the filesystem decision](decisions/0011-bounded-filesystem-visibility.md)
+for the measured reason and acceptance limits.
+
+Instances generated with the earlier mount or forwarding configuration are
+refused rather than silently changed. Preserve your work and review the removal
+preview before recreating an existing Box.
 
 ## Create a workspace manifest
 
@@ -94,7 +110,9 @@ The default metadata filename is `installation.json` beside the daemon's `state.
 
 The metadata must be a regular non-symlink file, at a clean absolute path, no larger than 1 MiB. Unknown fields and trailing JSON values are rejected. Every configured artifact is verified before loading succeeds. Do not invent version/digest values or substitute your host's native utilities for the guest binaries on a different architecture.
 
-The image must **already contain** the matching Docker/Compose/utilities and a functioning systemd Docker service. The [guest provisioner](../internal/guesttoolchain/provisioner.go) verifies bytes and versions, enables/starts `docker.service`, and requires rootful Docker, cgroup v2, `overlay2`, bridge networking, the pinned Compose plugin discoverable through `docker compose`, and a root-owned socket without world read/write access. It does not install missing packages. The host-side artifact files are verification inputs, not an automatic file-copy installer.
+Install the complete pinned Lima distribution, including its guest agent and support files; the `limactl` executable alone is insufficient.
+
+The image must **already contain** the matching Docker/Compose/utilities and a functioning systemd Docker service. The Lima control user must be able to run `/usr/bin/sudo -n` inside the guest. Administrative guest commands use this noninteractive root access; the host CLI still runs as your normal user. The [guest provisioner](../internal/guesttoolchain/provisioner.go) verifies bytes and versions, enables/starts `docker.service`, and requires rootful Docker, cgroup v2, `overlay2`, bridge networking, the pinned Compose plugin discoverable through `docker compose`, and a root-owned socket without world read/write access. It does not install missing packages. The host-side artifact files are verification inputs, not an automatic file-copy installer.
 
 ## Daemon startup and paths
 
@@ -123,6 +141,19 @@ The complete daemon syntax is:
 ```text
 aboxd serve [--runtime-dir PATH] [--state-db PATH] [--installation PATH]
 ```
+
+Lima also creates Unix sockets beneath the state directory. Long default macOS
+paths can exceed its limit even when the daemon socket itself fits. For a fresh
+validation installation, use a short canonical state path and keep the default
+runtime directory so the CLI can connect:
+
+```sh
+aboxd serve --state-db /absolute/short/path/state.db --installation /absolute/path/to/installation.json
+```
+
+Create a private directory owned by your normal user first. This selects new
+state; it does not migrate existing Boxes. Do not move a live state directory,
+because Plans and Git worktrees contain canonical absolute paths.
 
 Use Ctrl-C/SIGTERM to stop that foreground daemon. There is no `abox daemon start` or `abox daemon stop` command. The CLI has no socket override flag: a manually overridden runtime directory must still match the CLI's resolved per-user location. Prefer the defaults for interactive use. An installation override affects that daemon, not the CLI autostart defaults or doctor's default-path observation. Starting a daemon successfully does not prove that installation metadata exists; runtime requests load it separately.
 

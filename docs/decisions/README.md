@@ -24,7 +24,7 @@ Do not use an ADR to manufacture evidence. Separate verified behavior, design in
 
 ## Decision boundaries
 
-ADR 0001 is authoritative for what the Milestone 0 probes actually demonstrated and for which platform gates remain unaccepted. ADRs 0002 through 0010 define the v0.1 design contracts that product work must implement within that evidence boundary. An `Accepted` design ADR is not a platform support claim: where ADR 0001 records a mechanism as untested or deferred, that limitation wins until the named gate supplies real execution evidence or a later ADR supersedes the design.
+ADR 0001 is authoritative for what the Milestone 0 probes actually demonstrated and for which platform gates remain unaccepted. ADRs 0002 through 0011 define the v0.1 design contracts that product work must implement within that evidence boundary; ADR 0011 amends ADR 0005's filesystem timing and event-delivery assumptions following measured Apple Silicon VZ runs. An `Accepted` design ADR is not a broad platform support claim: where a platform gate remains open, that limitation wins until the named gate supplies real execution evidence or a later ADR supersedes the design.
 
 Each required domain has one owning ADR below. Cross-links describe dependencies between decisions; they do not create a second owner for the same contract.
 
@@ -36,9 +36,10 @@ Each required domain has one owning ADR below. Cross-links describe dependencies
 | [0002](0002-one-lima-vm-per-box.md) | Accepted | Isolate each Box in one Lima virtual machine |
 | [0003](0003-limactl-adapter.md) | Accepted | Integrate Lima through a typed, pinned `limactl` adapter |
 | [0004](0004-private-git-stores.md) | Accepted | Contain Git metadata in one private store per repository and Box |
-| [0005](0005-invariant-paths.md) | Accepted | Preserve canonical absolute paths across Machine, VM, and container |
+| [0005](0005-invariant-paths.md) | Accepted (amended by ADR 0011) | Preserve canonical absolute paths across Machine, VM, and container |
 | [0006](0006-compose-ownership.md) | Accepted | Keep service graphs in Compose and inject Box policy through generated files |
 | [0007](0007-user-daemon-api.md) | Accepted | Expose one versioned daemon API over a user Unix socket |
 | [0008](0008-sqlite-observed-state.md) | Accepted | Persist intent and operations in SQLite, but recover from observed state |
 | [0009](0009-loopback-routing.md) | Accepted | Route declared services through loopback-only Box endpoints |
 | [0010](0010-security-boundaries.md) | Accepted | Bound untrusted workloads with a VM, explicit mounts, and reference-only secrets |
+| [0011](0011-bounded-filesystem-visibility.md) | Accepted (M1 validated) | Bound filesystem visibility to two seconds and forward writable-mount events |

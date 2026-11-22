@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,19 +53,28 @@ func RecordRuntimePaths(spec Spec) (ownership.PathSetRecord, error) {
 }
 
 type limaConfig struct {
-	MinimumLimaVersion string            `yaml:"minimumLimaVersion" json:"minimumLimaVersion"`
-	VMType             string            `yaml:"vmType" json:"vmType"`
-	Images             []imageConfig     `yaml:"images" json:"images"`
-	CPUs               int               `yaml:"cpus" json:"cpus"`
-	Memory             string            `yaml:"memory" json:"memory"`
-	Disk               string            `yaml:"disk" json:"disk"`
-	Mounts             []mountConfig     `yaml:"mounts" json:"mounts"`
-	MountType          string            `yaml:"mountType" json:"mountType"`
-	MountInotify       bool              `yaml:"mountInotify" json:"mountInotify"`
-	SSH                sshConfig         `yaml:"ssh" json:"ssh"`
-	Containerd         containerdConfig  `yaml:"containerd" json:"containerd"`
-	PropagateProxyEnv  bool              `yaml:"propagateProxyEnv" json:"propagateProxyEnv"`
-	Env                map[string]string `yaml:"env" json:"env"`
+	PortForwards       []portForwardConfig `yaml:"portForwards" json:"portForwards"`
+	MinimumLimaVersion string              `yaml:"minimumLimaVersion" json:"minimumLimaVersion"`
+	VMType             string              `yaml:"vmType" json:"vmType"`
+	Images             []imageConfig       `yaml:"images" json:"images"`
+	CPUs               int                 `yaml:"cpus" json:"cpus"`
+	Memory             string              `yaml:"memory" json:"memory"`
+	Disk               string              `yaml:"disk" json:"disk"`
+	Mounts             []mountConfig       `yaml:"mounts" json:"mounts"`
+	MountType          string              `yaml:"mountType" json:"mountType"`
+	MountInotify       bool                `yaml:"mountInotify" json:"mountInotify"`
+	SSH                sshConfig           `yaml:"ssh" json:"ssh"`
+	Containerd         containerdConfig    `yaml:"containerd" json:"containerd"`
+	PropagateProxyEnv  bool                `yaml:"propagateProxyEnv" json:"propagateProxyEnv"`
+	Env                map[string]string   `yaml:"env" json:"env"`
+}
+
+type portForwardConfig struct {
+	GuestIP           string `yaml:"guestIP" json:"guestIP"`
+	GuestIPMustBeZero bool   `yaml:"guestIPMustBeZero" json:"guestIPMustBeZero"`
+	GuestPortRange    [2]int `yaml:"guestPortRange" json:"guestPortRange"`
+	Proto             string `yaml:"proto" json:"proto"`
+	Ignore            bool   `yaml:"ignore" json:"ignore"`
 }
 
 type imageConfig struct {
@@ -175,6 +185,7 @@ func compileConfig(spec Spec) (limaConfig, error) {
 	}
 	return limaConfig{
 		MinimumLimaVersion: SupportedVersion,
+		PortForwards:       []portForwardConfig{{GuestIP: "0.0.0.0", GuestPortRange: [2]int{1, 65535}, Proto: "any", Ignore: true}},
 		VMType:             "vz",
 		Images:             []imageConfig{{Location: imagePath, Digest: spec.GuestImage.Digest}},
 		CPUs:               int(spec.RuntimeHost.CPUMillicores / 1000),
@@ -182,7 +193,7 @@ func compileConfig(spec Spec) (limaConfig, error) {
 		Disk:               strconv.FormatInt(spec.RuntimeHost.DiskBytes, 10) + "B",
 		Mounts:             mounts,
 		MountType:          "virtiofs",
-		MountInotify:       false,
+		MountInotify:       true,
 		SSH:                sshConfig{},
 		Containerd:         containerdConfig{},
 		PropagateProxyEnv:  false,
@@ -262,7 +273,7 @@ func matchesConfig(spec Spec, observed *limaConfig) error {
 		observed.CPUs != expected.CPUs || observed.Memory != expected.Memory || observed.Disk != expected.Disk ||
 		observed.MountType != expected.MountType || observed.MountInotify != expected.MountInotify ||
 		observed.SSH != expected.SSH || observed.Containerd != expected.Containerd ||
-		observed.PropagateProxyEnv != expected.PropagateProxyEnv || !equalImages(observed.Images, expected.Images) ||
+		observed.PropagateProxyEnv != expected.PropagateProxyEnv || !slices.Equal(observed.PortForwards, expected.PortForwards) || !equalImages(observed.Images, expected.Images) ||
 		!equalMounts(observed.Mounts, expected.Mounts) || !equalMetadata(observed.Env, expected.Env) {
 		return &Error{Kind: ConfigMismatch, Operation: "inspect", Resource: spec.RuntimeHost.InstanceName, Err: errors.New("observed immutable Lima config differs from Plan")}
 	}

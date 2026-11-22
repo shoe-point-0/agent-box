@@ -16,6 +16,7 @@ import (
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestPrepareAttemptSelectsColdGenerationFromPersistedIntent(t *testing.T) {
@@ -108,7 +109,7 @@ func newPreparationFixture(t *testing.T) *preparationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	provider, err := paths.New(filepath.Join(root, "state"), filepath.Join(root, "cache"), filepath.Join(root, "logs"))
 	if err != nil {
 		t.Fatal(err)

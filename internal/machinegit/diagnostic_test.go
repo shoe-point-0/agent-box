@@ -23,6 +23,10 @@ func TestDiagnosticClientUsesFixedReadOnlyProfile(t *testing.T) {
 	if _, err := client.Observe(t.Context(), ProbeVersion); err != nil {
 		t.Fatal(err)
 	}
+	gitPath, err = filepath.EvalSymlinks(gitPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	command := executor.last
 	if command.Argv[0] != gitPath || command.Argv[len(command.Argv)-1] != "--version" {
 		t.Fatalf("version argv = %#v", command.Argv)

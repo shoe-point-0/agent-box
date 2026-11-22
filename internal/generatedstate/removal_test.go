@@ -15,6 +15,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/plan"
 	"github.com/shoe-point-0/agent-box/internal/repository"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestManagerRemovesOnlySelectedTransientStateAndRetainsRecoveryEvidence(t *testing.T) {
@@ -165,7 +166,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source")
 	mustWrite(t, filepath.Join(source, "compose.yaml"), []byte("services: {}\n"))
 	manifestPath := filepath.Join(root, "workspace", ".abox", "box.yaml")

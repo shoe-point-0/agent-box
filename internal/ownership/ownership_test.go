@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/ownership"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestPathProofConsumerRemovesOnlyOwnedTarget(t *testing.T) {
@@ -389,7 +390,7 @@ func removeTree(proof ownership.PathProof) error { return os.RemoveAll(proof.Pat
 
 func canonicalTempRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(testutil.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}

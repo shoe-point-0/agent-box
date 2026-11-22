@@ -42,6 +42,10 @@ func TestRuntimePullBuildAndPolicyPreflightCommandContract(t *testing.T) {
 	}{
 		{"pull", func(runtime *compose.Runtime) (aboxprocess.Result, error) { return runtime.Pull(t.Context(), spec) }, []string{"pull", "--ignore-buildable"}},
 		{"build", func(runtime *compose.Runtime) (aboxprocess.Result, error) { return runtime.Build(t.Context(), spec) }, []string{"build"}},
+		{"apply", func(runtime *compose.Runtime) (aboxprocess.Result, error) {
+			_, err := runtime.Apply(t.Context(), spec)
+			return aboxprocess.Result{}, err
+		}, []string{"up", "--detach", "--wait", "--remove-orphans"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			invoker := &contractRuntimeInvoker{normalized: generated.ResolvedModel}
@@ -49,10 +53,14 @@ func TestRuntimePullBuildAndPolicyPreflightCommandContract(t *testing.T) {
 			if runtimeErr != nil {
 				t.Fatal(runtimeErr)
 			}
-			if _, runErr := test.run(runtime); runErr != nil {
+			_, runErr := test.run(runtime)
+			if test.name != "apply" && runErr != nil {
 				t.Fatal(runErr)
 			}
-			if len(invoker.calls) != 2 {
+			if len(invoker.calls) < 2 {
+				t.Fatalf("calls = %d, want preflight plus %s", len(invoker.calls), test.name)
+			}
+			if test.name != "apply" && len(invoker.calls) != 2 {
 				t.Fatalf("calls = %d, want preflight plus %s", len(invoker.calls), test.name)
 			}
 			assertRuntimePrefix(t, invoker.calls[0], spec)
@@ -109,7 +117,7 @@ func (i *contractRuntimeInvoker) Invoke(_ context.Context, _ lima.Spec, _ string
 
 func assertRuntimePrefix(t *testing.T, argv []string, spec compose.RuntimeSpec) {
 	t.Helper()
-	want := []string{spec.DockerPath, "compose", "--project-name", spec.Plan.Compose.ProjectName}
+	want := []string{spec.DockerPath, "compose", "--project-name", spec.Plan.Compose.ProjectName, "--project-directory", spec.Workdir}
 	for _, profile := range spec.Plan.Compose.Profiles {
 		want = append(want, "--profile", profile)
 	}
@@ -117,4 +125,11 @@ func assertRuntimePrefix(t *testing.T, argv []string, spec compose.RuntimeSpec) 
 	if len(argv) < len(want) || !slices.Equal(argv[:len(want)], want) {
 		t.Fatalf("runtime argv prefix = %q, want %q", argv, want)
 	}
+}
+
+func (i *contractRuntimeInvoker) InvokeCommand(ctx context.Context, spec lima.Spec, command lima.GuestCommand) (aboxprocess.Result, error) {
+	if len(command.InputFiles) != 2 {
+		return aboxprocess.Result{}, errors.New("generated inputs were not transported")
+	}
+	return i.Invoke(ctx, spec, command.Workdir, command.Argv, command.Stdout, command.Stderr)
 }

@@ -19,11 +19,12 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/manifest"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/process"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestResolverReturnsTrustedFactsWithoutMaterialization(t *testing.T) {
 	gitPath := requireGit(t)
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source with spaces 界")
 	mustGit(t, gitPath, root, "init", "--initial-branch=main", source)
 	mustMkdir(t, filepath.Join(source, "nested"))
@@ -87,7 +88,7 @@ func TestResolverReturnsTrustedFactsWithoutMaterialization(t *testing.T) {
 
 func TestResolverRefusesDirtySourceWithExactPathsAndNoFacts(t *testing.T) {
 	gitPath := requireGit(t)
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source")
 	mustGit(t, gitPath, root, "init", "--initial-branch=main", source)
 	mustWrite(t, filepath.Join(source, "old name.txt"), "content\n", 0o600)
@@ -130,8 +131,8 @@ func TestResolverRefusesDirtySourceWithExactPathsAndNoFacts(t *testing.T) {
 }
 
 func TestResolverRejectsBranchExpansionAndMalformedObservations(t *testing.T) {
-	root := t.TempDir()
-	untrustedTop := t.TempDir()
+	root := testutil.TempDir(t)
+	untrustedTop := testutil.TempDir(t)
 	provider, boxID := testPathsAndBox(t, root)
 	sha := strings.Repeat("a", 40)
 	tests := []struct {
@@ -156,7 +157,7 @@ func TestResolverRejectsBranchExpansionAndMalformedObservations(t *testing.T) {
 }
 
 func TestResolverPropagatesContextCancellation(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	provider, boxID := testPathsAndBox(t, root)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -290,7 +291,7 @@ func mustGit(t *testing.T, gitPath, directory string, arguments ...string) strin
 	command := exec.Command(gitPath, arguments...)
 	command.Dir = directory
 	command.Env = []string{
-		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "LANG=C", "LC_ALL=C",
+		"PATH=/usr/bin:/bin", "HOME=" + testutil.TempDir(t), "LANG=C", "LC_ALL=C",
 		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
 		"GIT_TERMINAL_PROMPT=0", "GIT_NO_REPLACE_OBJECTS=1",
 	}

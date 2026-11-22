@@ -22,6 +22,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
 
@@ -207,7 +208,7 @@ func newGitReconcileFixtureWithDriver(t *testing.T, driver string) gitReconcileF
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source with spaces")
 	runFixtureGit(t, gitPath, root, "init", "--initial-branch=main", source)
 	writeFixtureFile(t, filepath.Join(source, "compose.yaml"), "services: {}\n")
@@ -302,7 +303,7 @@ func runFixtureGit(t *testing.T, gitPath, directory string, arguments ...string)
 	t.Helper()
 	command := exec.Command(gitPath, arguments...)
 	command.Dir = directory
-	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "LANG=C", "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_TERMINAL_PROMPT=0"}
+	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + testutil.TempDir(t), "LANG=C", "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_TERMINAL_PROMPT=0"}
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %q failed: %v\n%s", arguments, err, output)

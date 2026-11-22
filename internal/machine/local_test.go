@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/machine"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestLocalObserverCollectsLivePathsPlatformAndRouterAvailability(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	missing := filepath.Join(root, "not-created", "state")
 	address := availableAddress(t)
 	configured := []machine.PathRequirement{
@@ -54,7 +55,7 @@ func TestLocalObserverReportsOccupiedRouterWithoutRetainingAProbe(t *testing.T) 
 	}
 	address := listener.Addr().String()
 	observer, err := machine.NewLocalObserver(machine.LocalObserverConfig{
-		Paths: []machine.PathRequirement{{Name: "state", Path: t.TempDir(), MinFreeBytes: 1}}, RouterAddress: address,
+		Paths: []machine.PathRequirement{{Name: "state", Path: testutil.TempDir(t), MinFreeBytes: 1}}, RouterAddress: address,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +78,7 @@ func TestLocalObserverReportsOccupiedRouterWithoutRetainingAProbe(t *testing.T) 
 }
 
 func TestLocalObserverRejectsSymlinkedPathAncestry(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	target := filepath.Join(root, "target")
 	if err := os.Mkdir(target, 0o700); err != nil {
 		t.Fatal(err)

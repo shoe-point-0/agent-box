@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	workspaceShellPath = "/bin/sh"
-	maxProbeDataBytes  = 256
+	workspaceShellPath    = "/bin/sh"
+	maxProbeDataBytes     = 256
+	observeProbeReadLimit = "257"
 
 	observeProbeScript = `if [ ! -e "$1" ]; then
 	printf 'A\n'
@@ -25,8 +26,25 @@ if [ ! -f "$1" ] || [ -L "$1" ]; then
 	printf 'N\n'
 	exit 0
 fi
-printf 'F %s\n' "$(stat -c '%a' -- "$1")"
-cat -- "$1"`
+rc=0
+mode=$(stat -c '%a' -- "$1" 2>/dev/null) || rc=$?
+if [ "$rc" -eq 126 ] || [ "$rc" -eq 127 ]; then
+	exit "$rc"
+fi
+if [ "$rc" -ne 0 ]; then
+	printf 'N\n'
+	exit 0
+fi
+printf 'F %s\n' "$mode"
+rc=0
+head -c ` + observeProbeReadLimit + ` -- "$1" 2>/dev/null || rc=$?
+if [ "$rc" -eq 0 ]; then
+	printf '\nOK\n'
+elif [ "$rc" -eq 126 ] || [ "$rc" -eq 127 ]; then
+	exit "$rc"
+else
+	printf '\nERR\n'
+fi`
 	writeProbeScript = `umask 077
 set -C
 printf '%s' "$2" > "$1"
@@ -41,35 +59,67 @@ handshake=watch-handshake
 fifo=/tmp/abox-watch-$$
 watcher=
 producer=
+watchdog=
+stop_child() {
+	if [ -n "$1" ]; then
+		kill "$1" 2>/dev/null || :
+		wait "$1" 2>/dev/null || :
+	fi
+}
+start_watchdog() {
+	stop_child "$watchdog"
+	watchdog=
+	(
+		sleep_pid=
+		trap 'if [ -n "$sleep_pid" ]; then kill "$sleep_pid" 2>/dev/null || :; wait "$sleep_pid" 2>/dev/null || :; fi; exit 0' HUP INT TERM
+		sleep "$1" &
+		sleep_pid=$!
+		wait "$sleep_pid" 2>/dev/null || exit 0
+		kill -TERM "$$" 2>/dev/null || :
+	) >/dev/null 2>&1 &
+	watchdog=$!
+}
 cleanup() {
-	if [ -n "$producer" ]; then kill "$producer" 2>/dev/null || :; fi
-	if [ -n "$watcher" ]; then kill "$watcher" 2>/dev/null || :; fi
+	trap '' HUP INT TERM
+	stop_child "$watchdog"
+	watchdog=
+	stop_child "$producer"
+	producer=
+	stop_child "$watcher"
+	watcher=
 	rm -f -- "$fifo" "$directory/$handshake" "$ready"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 143' HUP INT TERM
+start_watchdog 3
 mkfifo -m 600 "$fifo"
 exec 3<>"$fifo"
-inotifyd - "$directory":ncw >"$fifo" &
+inotifyd - "$directory":ncwe >"$fifo" &
 watcher=$!
 (
+	sleep_pid=
+	trap 'if [ -n "$sleep_pid" ]; then kill "$sleep_pid" 2>/dev/null || :; wait "$sleep_pid" 2>/dev/null || :; fi; exit 0' HUP INT TERM
 	while :; do
 		: >"$directory/$handshake"
-		sleep 0.01
+		sleep 0.01 &
+		sleep_pid=$!
+		wait "$sleep_pid" 2>/dev/null || exit 0
+		sleep_pid=
 	done
-) &
+) >/dev/null 2>&1 &
 producer=$!
 tab=$(printf '	')
 while IFS="$tab" read -r events watched subfile <&3; do
 	if [ "$subfile" = "$handshake" ]; then break; fi
 done
-kill "$producer" 2>/dev/null || :
-wait "$producer" 2>/dev/null || :
+stop_child "$producer"
 producer=
 rm -f -- "$directory/$handshake"
+start_watchdog 1.5
 : >"$ready"
 while IFS="$tab" read -r events watched subfile <&3; do
 	if [ "$subfile" != "$target" ]; then continue; fi
-	case "$events" in *n*|*c*|*w*) exit 0 ;; esac
+	case "$events" in *n*|*c*|*w*|*e*) exit 0 ;; esac
 done
 exit 1`
 )
@@ -130,9 +180,11 @@ func (a *WorkspaceAdapter) Remove(ctx context.Context, containerID, path string)
 	return a.mutate(ctx, containerID, "remove", removeProbeScript, path)
 }
 
-// Watch blocks until the workspace container's native inotify watcher receives
-// a create, modify, or close-write event for target. The ready file is created
-// only after an in-container handshake proves the watch is active.
+// Watch blocks until the workspace container's inotify watcher receives a
+// create, modify, close-write, or metadata event for target. Lima's
+// mountInotify bridge synthesizes IN_ATTRIB (e) for host creates and modifies.
+// The ready file is created only after an in-container handshake proves the
+// watch is active.
 func (a *WorkspaceAdapter) Watch(ctx context.Context, containerID, target, ready string) error {
 	if !safeContainerID(containerID) || !validProbePath(target) || !validProbePath(ready) ||
 		filepath.Dir(target) != filepath.Dir(ready) || filepath.Base(target) != watchTargetName || filepath.Base(ready) != watchReadyName {
@@ -172,12 +224,19 @@ func decodeProbeFile(data []byte) (ProbeFile, error) {
 	if bytes.Equal(data, []byte("N\n")) {
 		return ProbeFile{Exists: true}, nil
 	}
-	header, content, found := bytes.Cut(data, []byte{'\n'})
-	if !found || !bytes.HasPrefix(header, []byte("F ")) || len(content) > maxProbeDataBytes {
+	header, rest, found := bytes.Cut(data, []byte{'\n'})
+	if !found || !bytes.HasPrefix(header, []byte("F ")) {
 		return ProbeFile{}, failure(ProbeFailed, "workspace-observe", "workspace probe output is malformed")
 	}
 	mode, err := strconv.ParseUint(string(bytes.TrimPrefix(header, []byte("F "))), 8, 12)
 	if err != nil || mode > 0o777 {
+		return ProbeFile{}, failure(ProbeFailed, "workspace-observe", "workspace probe output is malformed")
+	}
+	if bytes.HasSuffix(rest, []byte("\nERR\n")) {
+		return ProbeFile{Exists: true}, nil
+	}
+	content, ok := bytes.CutSuffix(rest, []byte("\nOK\n"))
+	if !ok || len(content) > maxProbeDataBytes {
 		return ProbeFile{}, failure(ProbeFailed, "workspace-observe", "workspace probe output is malformed")
 	}
 	return ProbeFile{Exists: true, Regular: true, Mode: fs.FileMode(mode), Data: append([]byte(nil), content...)}, nil

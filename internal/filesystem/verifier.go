@@ -212,7 +212,6 @@ func parseMountInfo(layer string, data []byte) ([]expectedMount, error) {
 		return nil, failure(MalformedMountInfo, layer, "mountinfo contains too many records")
 	}
 	mounts := make([]expectedMount, 0, len(lines))
-	seen := make(map[string]struct{}, len(lines))
 	for _, line := range lines {
 		fields := strings.Fields(string(line))
 		separator := slices.Index(fields, "-")
@@ -227,10 +226,9 @@ func parseMountInfo(layer string, data []byte) ([]expectedMount, error) {
 		if !ok {
 			return nil, failure(MalformedMountInfo, layer, "mountinfo mode is invalid")
 		}
-		if _, duplicate := seen[path]; duplicate {
-			return nil, failure(MalformedMountInfo, layer, "mountinfo contains duplicate mount points")
-		}
-		seen[path] = struct{}{}
+		// Linux permits stacked mounts (for example autofs plus binfmt_misc).
+		// Preserve every record: compareProjected still rejects ambiguous
+		// membership inside the declared workspace mount boundary.
 		mounts = append(mounts, expectedMount{path: path, writable: writable})
 	}
 	return mounts, nil

@@ -27,7 +27,7 @@ Use `make clean` to remove `bin/` and `.tools/`.
 
 Work in progress belongs in `.sprout/tasks/`, including partial implementations and tasks waiting on hardware. Validate active packets with `sprout check <id>`. Only after all acceptance criteria pass and concrete evidence is recorded should you run `sprout check --complete <id>` followed by `sprout close <id>`.
 
-Closing promotes the packet to `docs/features/<id>.md`. Rewrite the promoted record for readers: describe the delivered behavior, scope, constraints, implementation, and verification evidence; remove execution instructions and administrative checklists. Preserve the hidden Sprout provenance and historical evidence, and link the result from the [feature index](docs/features.md). Run `make automation-check` to validate the documentation contract. No task should be closed merely to tidy the backlog.
+Closing promotes the packet to `docs/features/<id>.md`. Rename the promoted file to a descriptive, reader-facing kebab-case filename (without the `mN-` milestone prefix) and rewrite it for readers: describe the delivered behavior, scope, constraints, implementation, and verification evidence; remove execution instructions and administrative checklists. Preserve the hidden `<!-- sprout-task ... -->` provenance metadata and historical evidence, and link the result from the [feature index](docs/features.md). Run `make automation-check` to validate the documentation contract. No task should be closed merely to tidy the backlog.
 
 ## Go conventions
 

@@ -14,6 +14,8 @@ import (
 
 const defaultLeaseTTL = 30 * time.Second
 
+var errLeaseReleased = errors.New("removal lease released")
+
 // LeaseJournal is the durable fenced-lease projection required by removal.
 // The concrete operation journal remains the owner of lease transactions.
 type LeaseJournal interface {
@@ -124,7 +126,7 @@ func (g *JournalLeaseGuard) Release(ctx context.Context, lease Lease) error {
 	g.active = nil
 	g.mu.Unlock()
 
-	lifecycle.cancel(nil)
+	lifecycle.cancel(errLeaseReleased)
 	<-lifecycle.done
 	persisted, renewalErr := lifecycle.snapshot()
 	releaseErr := g.journal.ReleaseLease(ctx, persisted, g.now().UTC())
@@ -147,6 +149,11 @@ func (g *JournalLeaseGuard) renew(lifecycle *leaseLifecycle) {
 			current, _ := lifecycle.snapshot()
 			renewed, err := g.journal.RenewLease(lifecycle.ctx, current, g.now().UTC(), g.ttl)
 			if err != nil {
+				// Release deliberately cancels an in-flight renewal. Only that
+				// cancellation is benign; genuine lease loss still fails closed.
+				if errors.Is(err, context.Canceled) && errors.Is(context.Cause(lifecycle.ctx), errLeaseReleased) {
+					return
+				}
 				lifecycle.fail(fmt.Errorf("renew removal lease: %w", err))
 				return
 			}

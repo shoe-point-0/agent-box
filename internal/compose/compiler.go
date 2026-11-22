@@ -310,7 +310,7 @@ func renderOverride(compiled contract.Plan, generation int64, services, volumes 
 
 func normalize(ctx context.Context, input Input, files ...string) ([]byte, error) {
 	argv := append([]string{}, input.ComposeCommand...)
-	argv = append(argv, "--project-name", input.Plan.Compose.ProjectName)
+	argv = append(argv, "--project-name", input.Plan.Compose.ProjectName, "--project-directory", input.Directory)
 	for _, profile := range input.Plan.Compose.Profiles {
 		argv = append(argv, "--profile", profile)
 	}

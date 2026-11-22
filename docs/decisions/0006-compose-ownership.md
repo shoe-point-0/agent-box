@@ -39,7 +39,7 @@ Agent Box does not silently translate arbitrary Dev Container metadata or discov
 
 ## Evidence
 
-- [`m0-compose-probe`](../features/m0-compose-probe.md) passed two-repository `include`, repository-relative build contexts, identity-specific images, generated override application, `!reset []` port removal, ownership checks, and cleanup on Docker Compose 5.3.0.
+- [Compose include spike](../features/spike-compose-include.md) passed two-repository `include`, repository-relative build contexts, identity-specific images, generated override application, `!reset []` port removal, ownership checks, and cleanup on Docker Compose 5.3.0.
 - [The substrate report](../architecture/substrate-spikes.md) limits that result to Compose 5.3.0 and the local Linux daemon.
 - Docker documents separate path bases and conflict detection for [`include`](https://docs.docker.com/reference/compose-file/include) and clearing model values with [`!reset`](https://docs.docker.com/reference/compose-file/merge/#reset-value).
 - [ADR 0001](0001-milestone-0-substrate-gate.md) requires capability checks before mutation.

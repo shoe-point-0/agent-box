@@ -38,7 +38,7 @@ Preflight verifies exact-host resolver behavior and proxy bypass for `.abox.loca
 
 ## Evidence
 
-- [`m0-routing-probe`](../features/m0-routing-probe.md) passed exact-host fail-closed routing, authority preservation, trusted-header reconstruction, curl, Chromium, WebSocket, SSE, and bidirectional streaming on one unprivileged IPv4 Linux listener.
+- [localhost routing spike](../features/spike-localhost-routing.md) passed exact-host fail-closed routing, authority preservation, trusted-header reconstruction, curl, Chromium, WebSocket, SSE, and bidirectional streaming on one unprivileged IPv4 Linux listener.
 - [The substrate report](../architecture/substrate-spikes.md) records IPv4-only resolution and proves that `.localhost` bypasses a controlled proxy only when no-proxy behavior applies.
 - [ADR 0001](0001-milestone-0-substrate-gate.md) keeps Lima forwarding, Darwin resolution, ambient proxies, and IPv6 outside the accepted evidence boundary.
 - Two-VM forwarding collision and leak behavior belong to [`m0-lima-isolation-probe`](../../.sprout/tasks/m0-lima-isolation-probe.md) and the real-hardware gate.

@@ -18,7 +18,7 @@ Linux-exercisable Git, Compose, routing, and failure probes are recorded in [`do
 
 ### Milestone 1: one-repository Box
 
-Build the user daemon, versioned API and CLI, one private Git worktree, one Lima runtime host, Compose reconciliation, context output, and safe removal. The complete `abox up` runtime slice remains hardware-gated; completed foundation components are recorded under [implemented feature documentation](docs/features.md).
+Build the user daemon, versioned API and CLI, one private Git worktree, one Lima runtime host, Compose reconciliation, context output, and safe removal. The single-repository `abox up` vertical slice has passed its Apple M1 hardware gate ([`docs/architecture/apple-silicon-m1-gate.md`](docs/architecture/apple-silicon-m1-gate.md)); completed components are recorded under [implemented feature documentation](docs/features.md), while `status`/`down`, `exec`/`logs`/`shell`, `context`, and the Milestone 1 end-to-end gate remain open in [`.sprout/tasks/`](.sprout/tasks/).
 
 ### Milestones 2 and 3: multi-repository workspaces and routing
 

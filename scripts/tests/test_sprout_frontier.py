@@ -80,6 +80,19 @@ class FrontierTests(unittest.TestCase):
         self.assertTrue(frontier["cycles"])
         self.assertEqual(frontier["cycles"][0][0], frontier["cycles"][0][-1])
 
+    def test_reads_implemented_task_id_from_sprout_metadata(self) -> None:
+        (self.root / "docs" / "features" / "abox-up.md").write_text(
+            '<!-- sprout-task\n{"schema_version":1,"id":"m1-single-repo-up","status":"implemented"}\n-->\n\n# abox up\n',
+            encoding="utf-8",
+        )
+        self.write_task("m1-core-commands", ("m1-single-repo-up",))
+
+        frontier = sprout_frontier.load_frontier(self.root)
+
+        self.assertEqual(frontier["implemented"], ["m1-single-repo-up"])
+        self.assertEqual([row["id"] for row in frontier["ready"]], ["m1-core-commands"])
+        self.assertEqual(frontier["missingDependencies"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,10 @@ func TestRunnerUsesLiteralArgumentsExplicitEnvironmentAndDirectory(t *testing.T)
 	if err != nil {
 		t.Fatalf("Run(inspect) error = %v", err)
 	}
+	dir, err = filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	lines := strings.Split(strings.TrimSpace(string(result.Stdout)), "\n")
 	if len(lines) != 4 || lines[0] != literal || lines[1] != "visible" || lines[2] != "" || lines[3] != dir {
 		t.Fatalf("Run(inspect) lines = %#v, want literal, allowlisted value, empty ambient value, and %q", lines, dir)

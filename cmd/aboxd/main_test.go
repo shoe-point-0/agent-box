@@ -23,6 +23,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/machinegit"
 	"github.com/shoe-point-0/agent-box/internal/paths"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestRunReportsVersion(t *testing.T) {
@@ -48,7 +49,7 @@ func TestRunReportsVersion(t *testing.T) {
 }
 
 func TestRunServesHandshakeAndShutsDown(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	if err := os.Chmod(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +130,9 @@ func TestRunServesHandshakeAndShutsDown(t *testing.T) {
 		t.Fatalf("production up failure = %#v, want prerequisite failure", failure)
 	}
 
+	// Release both test clients before measuring server shutdown.
+	daemonClient.Close()
+	transport.CloseIdleConnections()
 	cancel()
 	select {
 	case code := <-exit:
@@ -144,7 +148,7 @@ func TestRunServesHandshakeAndShutsDown(t *testing.T) {
 }
 
 func TestProductionRemovalDispatchFailsClosedWithoutOwnershipAuthority(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	store, err := state.Open(t.Context(), filepath.Join(root, "state.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +179,7 @@ func TestProductionUpRunsLiveMachinePreflightBeforeBoxMutation(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("Linux engineering-lane refusal test")
 	}
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	runtimeRoot := filepath.Join(root, "runtime")
 	if err := os.Mkdir(runtimeRoot, 0o700); err != nil {
 		t.Fatal(err)

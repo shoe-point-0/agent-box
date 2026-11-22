@@ -16,6 +16,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 )
 
@@ -108,7 +109,7 @@ type limaReconcileFixture struct {
 
 func newLimaReconcileFixture(t *testing.T) limaReconcileFixture {
 	t.Helper()
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	boxesRoot := filepath.Join(root, "application", "boxes")
 	boxRoot := filepath.Join(boxesRoot, "task-a1b2c3d4")
 	mount := filepath.Join(boxRoot, "workspace", "repo")

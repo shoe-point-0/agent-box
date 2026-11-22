@@ -1,0 +1,950 @@
+{
+  "schemaVersion": "abox.m1-hardware-evidence/v1",
+  "capturedAt": "2026-11-22T05:26:21Z",
+  "platform": {
+    "architecture": "arm64",
+    "macosProductVersion": "27.0.1",
+    "macosBuildVersion": "26A434",
+    "cpuBrand": "Apple M1",
+    "gitRevision": "6e15b41-dirty",
+    "limaVersion": "2.0.0",
+    "vmType": "vz",
+    "guestImageDigest": "sha256:a1e5ce9fb88624feaf6dc08268f2999afe58075df62ed248028d62818d17424c",
+    "guestDockerVersion": "29.1.3",
+    "guestComposeVersion": "2.40.3+ds1-0ubuntu1~24.04.1"
+  },
+  "watcherDiagnostics": {
+    "bridgedEventKind": "IN_ATTRIB (BusyBox inotifyd event e)",
+    "trials": 5,
+    "setupLatencyMsRange": [
+      71.9,
+      83.8
+    ],
+    "deliveryLatencyMsRange": [
+      11.6,
+      14.3
+    ],
+    "deliveryDeadlineMs": 1000,
+    "modePreserved": "0o600",
+    "bytesPreserved": true,
+    "cancellationPipeEofMs": 510.1,
+    "shutdownTimeoutMs": 2000,
+    "leakedProcessesOrZombies": 0,
+    "leakedFifos": 0
+  },
+  "coldWarmRemoval": {
+    "coldDurationSeconds": 40.79,
+    "coldExitCode": 0,
+    "coldEvents": [
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_737958D5AAC955D877DFE933B9A18FD7",
+        "sequence": 1,
+        "kind": "up.started",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:22:37.410159Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_737958D5AAC955D877DFE933B9A18FD7",
+        "sequence": 2,
+        "kind": "up.ready",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:23:18.142129Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_737958D5AAC955D877DFE933B9A18FD7",
+        "sequence": 3,
+        "kind": "operation.finished",
+        "details": {
+          "apiVersion": "abox.api/v1alpha1",
+          "state": "succeeded"
+        },
+        "occurredAt": "2026-11-22T05:23:18.142374Z"
+      }
+    ],
+    "coldSnapshot": {
+      "planDigest": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b",
+      "contextState": "READY",
+      "worktree": {
+        "dev": 16777232,
+        "ino": 276649614,
+        "mode": "0o700",
+        "branch": "abox/demo/services",
+        "head": "6b2411eab76d844394eccaa684b212eabb545e61",
+        "probeDirPresent": false
+      },
+      "gitStore": {
+        "dev": 16777232,
+        "ino": 276649542,
+        "mode": "0o700"
+      },
+      "generatedFileInodes": {
+        "plan.json": {
+          "dev": 16777232,
+          "ino": 276649540,
+          "mode": "0o400",
+          "size": 1713
+        },
+        "context.json": {
+          "dev": 16777232,
+          "ino": 276649806,
+          "mode": "0o600",
+          "size": 1336
+        },
+        "lima.yaml": {
+          "dev": 16777232,
+          "ino": 276649631,
+          "mode": "0o600",
+          "size": 1209
+        },
+        "compose.root.yaml": {
+          "dev": 16777232,
+          "ino": 276649750,
+          "mode": "0o600",
+          "size": 203
+        },
+        "compose.abox.yaml": {
+          "dev": 16777232,
+          "ino": 276649751,
+          "mode": "0o600",
+          "size": 2630
+        },
+        "compose.resolved.redacted.json": {
+          "dev": 16777232,
+          "ino": 276649752,
+          "mode": "0o600",
+          "size": 6964
+        }
+      },
+      "vm": {
+        "name": "abox-demo-izmygscy",
+        "status": "Running",
+        "vmType": "vz",
+        "arch": "aarch64",
+        "hostAgentPID": 27811,
+        "mountType": "virtiofs",
+        "mountInotify": true,
+        "portForwards": [
+          {
+            "guestIPMustBeZero": false,
+            "guestIP": "0.0.0.0",
+            "guestPortRange": [
+              1,
+              65535
+            ],
+            "hostIP": "127.0.0.1",
+            "hostPortRange": [
+              1,
+              65535
+            ],
+            "proto": "any",
+            "ignore": true
+          }
+        ],
+        "mountCount": 2,
+        "mountModes": [
+          {
+            "writable": false,
+            "identityMapped": true
+          },
+          {
+            "writable": true,
+            "identityMapped": true
+          }
+        ],
+        "env": {
+          "ABOX_BOX_ID": "demo-izmygscy",
+          "ABOX_GENERATION": "1",
+          "ABOX_MANAGED": "true",
+          "ABOX_PLAN_DIGEST": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b"
+        }
+      },
+      "containers": {
+        "alpha": {
+          "id": "32b7d38d690b20861b6e5b3d51df0ef6202a964208259ade4f6cde3f5be15456",
+          "name": "/abox-demo-izmygscy-alpha-1",
+          "created": "2026-11-22T05:23:08.786649048Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "beta": {
+          "id": "6a3f05863df2723cdecee537d95d8663111f00191240788d1d871aaa1e423933",
+          "name": "/abox-demo-izmygscy-beta-1",
+          "created": "2026-11-22T05:23:08.774818798Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "gamma": {
+          "id": "e8546b86e6cba5283384ce5c6cb4c9ff553ed8fae01834bad2e2cff85d062031",
+          "name": "/abox-demo-izmygscy-gamma-1",
+          "created": "2026-11-22T05:23:08.774287215Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        }
+      },
+      "networks": [
+        "5ac086ed5503a1f351a56a5cc78ada06bd4ac4849935373c150a8b07ccbb4568"
+      ],
+      "volumes": [],
+      "alphaProcessCount": 2,
+      "alphaProcesses": [
+        "PID   PPID  STAT COMMAND",
+        "    1     0 S    python",
+        "  138     0 R    ps"
+      ],
+      "alphaWatchFifos": "",
+      "guestTempInputs": "",
+      "peerChecks": {
+        "/": {
+          "exitCode": 0,
+          "body": {
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=beta": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "beta",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=gamma": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "gamma",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        }
+      },
+      "dbBoxes": [
+        {
+          "id": "demo-izmygscy",
+          "workspace_id": "ws_zkro4b6i",
+          "task_key": "demo",
+          "recorded_state": "ready",
+          "current_generation": 1
+        }
+      ],
+      "dbGenerations": [
+        {
+          "box_id": "demo-izmygscy",
+          "generation": 1,
+          "plan_digest": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b",
+          "context_digest": "sha256:8915451cbfa18d36ff7b05a3e05b38822e34f799deda4ab681f10c7d11241f88",
+          "recorded_state": "ready"
+        }
+      ],
+      "dbOperations": [
+        {
+          "id": "op_737958D5AAC955D877DFE933B9A18FD7",
+          "kind": "up",
+          "recorded_state": "succeeded",
+          "error_code": null
+        }
+      ],
+      "partialAuthorityCounts": {
+        "reconciliation_git_authority": 0,
+        "reconciliation_generated_authority": 0,
+        "reconciliation_lima_authority": 0,
+        "reconciliation_compose_authority": 0
+      }
+    },
+    "warmDurationSeconds": 15.36,
+    "warmExitCode": 0,
+    "warmEvents": [
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_EFBDBE47197CDCB8A821D73730086024",
+        "sequence": 1,
+        "kind": "up.started",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:23:19.333996Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_EFBDBE47197CDCB8A821D73730086024",
+        "sequence": 2,
+        "kind": "up.ready",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:23:34.670782Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_EFBDBE47197CDCB8A821D73730086024",
+        "sequence": 3,
+        "kind": "operation.finished",
+        "details": {
+          "apiVersion": "abox.api/v1alpha1",
+          "state": "succeeded"
+        },
+        "occurredAt": "2026-11-22T05:23:34.670959Z"
+      }
+    ],
+    "warmSnapshot": {
+      "planDigest": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b",
+      "contextState": "READY",
+      "worktree": {
+        "dev": 16777232,
+        "ino": 276649614,
+        "mode": "0o700",
+        "branch": "abox/demo/services",
+        "head": "6b2411eab76d844394eccaa684b212eabb545e61",
+        "probeDirPresent": false
+      },
+      "gitStore": {
+        "dev": 16777232,
+        "ino": 276649542,
+        "mode": "0o700"
+      },
+      "generatedFileInodes": {
+        "plan.json": {
+          "dev": 16777232,
+          "ino": 276649540,
+          "mode": "0o400",
+          "size": 1713
+        },
+        "context.json": {
+          "dev": 16777232,
+          "ino": 276649806,
+          "mode": "0o600",
+          "size": 1336
+        },
+        "lima.yaml": {
+          "dev": 16777232,
+          "ino": 276649631,
+          "mode": "0o600",
+          "size": 1209
+        },
+        "compose.root.yaml": {
+          "dev": 16777232,
+          "ino": 276649750,
+          "mode": "0o600",
+          "size": 203
+        },
+        "compose.abox.yaml": {
+          "dev": 16777232,
+          "ino": 276649751,
+          "mode": "0o600",
+          "size": 2630
+        },
+        "compose.resolved.redacted.json": {
+          "dev": 16777232,
+          "ino": 276649752,
+          "mode": "0o600",
+          "size": 6964
+        }
+      },
+      "vm": {
+        "name": "abox-demo-izmygscy",
+        "status": "Running",
+        "vmType": "vz",
+        "arch": "aarch64",
+        "hostAgentPID": 27811,
+        "mountType": "virtiofs",
+        "mountInotify": true,
+        "portForwards": [
+          {
+            "guestIPMustBeZero": false,
+            "guestIP": "0.0.0.0",
+            "guestPortRange": [
+              1,
+              65535
+            ],
+            "hostIP": "127.0.0.1",
+            "hostPortRange": [
+              1,
+              65535
+            ],
+            "proto": "any",
+            "ignore": true
+          }
+        ],
+        "mountCount": 2,
+        "mountModes": [
+          {
+            "writable": false,
+            "identityMapped": true
+          },
+          {
+            "writable": true,
+            "identityMapped": true
+          }
+        ],
+        "env": {
+          "ABOX_BOX_ID": "demo-izmygscy",
+          "ABOX_GENERATION": "1",
+          "ABOX_MANAGED": "true",
+          "ABOX_PLAN_DIGEST": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b"
+        }
+      },
+      "containers": {
+        "alpha": {
+          "id": "32b7d38d690b20861b6e5b3d51df0ef6202a964208259ade4f6cde3f5be15456",
+          "name": "/abox-demo-izmygscy-alpha-1",
+          "created": "2026-11-22T05:23:08.786649048Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "beta": {
+          "id": "6a3f05863df2723cdecee537d95d8663111f00191240788d1d871aaa1e423933",
+          "name": "/abox-demo-izmygscy-beta-1",
+          "created": "2026-11-22T05:23:08.774818798Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "gamma": {
+          "id": "e8546b86e6cba5283384ce5c6cb4c9ff553ed8fae01834bad2e2cff85d062031",
+          "name": "/abox-demo-izmygscy-gamma-1",
+          "created": "2026-11-22T05:23:08.774287215Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        }
+      },
+      "networks": [
+        "5ac086ed5503a1f351a56a5cc78ada06bd4ac4849935373c150a8b07ccbb4568"
+      ],
+      "volumes": [],
+      "alphaProcessCount": 2,
+      "alphaProcesses": [
+        "PID   PPID  STAT COMMAND",
+        "    1     0 S    python",
+        "  333     0 R    ps"
+      ],
+      "alphaWatchFifos": "",
+      "guestTempInputs": "",
+      "peerChecks": {
+        "/": {
+          "exitCode": 0,
+          "body": {
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=beta": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "beta",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=gamma": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "gamma",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        }
+      },
+      "dbBoxes": [
+        {
+          "id": "demo-izmygscy",
+          "workspace_id": "ws_zkro4b6i",
+          "task_key": "demo",
+          "recorded_state": "ready",
+          "current_generation": 1
+        }
+      ],
+      "dbGenerations": [
+        {
+          "box_id": "demo-izmygscy",
+          "generation": 1,
+          "plan_digest": "sha256:8e619ecf2330fcab9a9dd9a9b1d4b77b4dfd5adfb74ca548ae1110db0dba8e0b",
+          "context_digest": "sha256:8915451cbfa18d36ff7b05a3e05b38822e34f799deda4ab681f10c7d11241f88",
+          "recorded_state": "ready"
+        }
+      ],
+      "dbOperations": [
+        {
+          "id": "op_737958D5AAC955D877DFE933B9A18FD7",
+          "kind": "up",
+          "recorded_state": "succeeded",
+          "error_code": null
+        },
+        {
+          "id": "op_EFBDBE47197CDCB8A821D73730086024",
+          "kind": "up",
+          "recorded_state": "succeeded",
+          "error_code": null
+        }
+      ],
+      "partialAuthorityCounts": {
+        "reconciliation_git_authority": 0,
+        "reconciliation_generated_authority": 0,
+        "reconciliation_lima_authority": 0,
+        "reconciliation_compose_authority": 0
+      }
+    },
+    "identityChecks": {
+      "worktree": true,
+      "gitStore": true,
+      "generatedFiles": true,
+      "planDigest": true,
+      "vmName": true,
+      "vmHostAgentPID": true,
+      "containers": true,
+      "networks": true,
+      "volumes": true,
+      "generationUnchanged": true,
+      "partialAuthoritiesZero": true
+    },
+    "refusalWithoutYes": {
+      "exitCode": 7,
+      "errorCode": "ABOX_CLEANUP_REFUSED",
+      "resourcesUnchanged": true
+    },
+    "ownershipAwareRemoval": {
+      "durationSeconds": 24.52,
+      "exitCode": 0,
+      "limaInventoryEmpty": true,
+      "remainingBoxEntries": [
+        "plan.json"
+      ]
+    }
+  },
+  "detachedCLI": {
+    "operationId": "op_7E4A86B8A2E3F072ABFE0C06571A2FE1",
+    "cliExitCode": -9,
+    "eventsBeforeKill": [
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_7E4A86B8A2E3F072ABFE0C06571A2FE1",
+        "sequence": 1,
+        "kind": "up.started",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:24:47.204186Z"
+      }
+    ],
+    "operationsRightAfterKill": [
+      {
+        "id": "op_7E4A86B8A2E3F072ABFE0C06571A2FE1",
+        "kind": "up",
+        "recorded_state": "running",
+        "error_code": null
+      }
+    ],
+    "operationsAfterCompletion": [
+      {
+        "id": "op_7E4A86B8A2E3F072ABFE0C06571A2FE1",
+        "kind": "up",
+        "recorded_state": "succeeded",
+        "error_code": null
+      }
+    ],
+    "detachedSnapshot": {
+      "planDigest": "sha256:b44a80a2ce1203110e10dfbe1310a221f7c8bd987085cd20cd8d14230efe3ca7",
+      "contextState": "READY",
+      "worktree": {
+        "dev": 16777232,
+        "ino": 276650191,
+        "mode": "0o700",
+        "branch": "abox/demo/services",
+        "head": "6b2411eab76d844394eccaa684b212eabb545e61",
+        "probeDirPresent": false
+      },
+      "gitStore": {
+        "dev": 16777232,
+        "ino": 276650118,
+        "mode": "0o700"
+      },
+      "generatedFileInodes": {
+        "plan.json": {
+          "dev": 16777232,
+          "ino": 276650116,
+          "mode": "0o400",
+          "size": 1713
+        },
+        "context.json": {
+          "dev": 16777232,
+          "ino": 276650339,
+          "mode": "0o600",
+          "size": 1336
+        },
+        "lima.yaml": {
+          "dev": 16777232,
+          "ino": 276650208,
+          "mode": "0o600",
+          "size": 1209
+        },
+        "compose.root.yaml": {
+          "dev": 16777232,
+          "ino": 276650322,
+          "mode": "0o600",
+          "size": 203
+        },
+        "compose.abox.yaml": {
+          "dev": 16777232,
+          "ino": 276650323,
+          "mode": "0o600",
+          "size": 2630
+        },
+        "compose.resolved.redacted.json": {
+          "dev": 16777232,
+          "ino": 276650324,
+          "mode": "0o600",
+          "size": 6964
+        }
+      },
+      "vm": {
+        "name": "abox-demo-izmygscy",
+        "status": "Running",
+        "vmType": "vz",
+        "arch": "aarch64",
+        "hostAgentPID": 31520,
+        "mountType": "virtiofs",
+        "mountInotify": true,
+        "portForwards": [
+          {
+            "guestIPMustBeZero": false,
+            "guestIP": "0.0.0.0",
+            "guestPortRange": [
+              1,
+              65535
+            ],
+            "hostIP": "127.0.0.1",
+            "hostPortRange": [
+              1,
+              65535
+            ],
+            "proto": "any",
+            "ignore": true
+          }
+        ],
+        "mountCount": 2,
+        "mountModes": [
+          {
+            "writable": false,
+            "identityMapped": true
+          },
+          {
+            "writable": true,
+            "identityMapped": true
+          }
+        ],
+        "env": {
+          "ABOX_BOX_ID": "demo-izmygscy",
+          "ABOX_GENERATION": "1",
+          "ABOX_MANAGED": "true",
+          "ABOX_PLAN_DIGEST": "sha256:b44a80a2ce1203110e10dfbe1310a221f7c8bd987085cd20cd8d14230efe3ca7"
+        }
+      },
+      "containers": {
+        "alpha": {
+          "id": "14c06975e3a922a47cbbd79a316224e2c94a502e2b43e4431af60b54cb2be180",
+          "name": "/abox-demo-izmygscy-alpha-1",
+          "created": "2026-11-22T05:25:29.393092635Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "beta": {
+          "id": "2530945e5ef5d0a4a0f36ab634d4c97ad4750d6c05541412059500f17b7a2383",
+          "name": "/abox-demo-izmygscy-beta-1",
+          "created": "2026-11-22T05:25:29.413513552Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        },
+        "gamma": {
+          "id": "7a10f6322842bc34d5c3e53591b08f62331c770373226518fd03c5df1984e0d7",
+          "name": "/abox-demo-izmygscy-gamma-1",
+          "created": "2026-11-22T05:25:29.39283776Z",
+          "state": "running",
+          "health": "healthy",
+          "image": "python:3.12-alpine",
+          "mountCount": 2,
+          "mountModes": [
+            {
+              "type": "bind",
+              "rw": false,
+              "identityMapped": true
+            },
+            {
+              "type": "bind",
+              "rw": true,
+              "identityMapped": true
+            }
+          ]
+        }
+      },
+      "networks": [
+        "49843f1b520fc3e8d5578213eb364664a93a22a0c0c483e943566bb8be066488"
+      ],
+      "volumes": [],
+      "alphaProcessCount": 2,
+      "alphaProcesses": [
+        "PID   PPID  STAT COMMAND",
+        "    1     0 S    python",
+        "  140     0 R    ps"
+      ],
+      "alphaWatchFifos": "",
+      "guestTempInputs": "",
+      "peerChecks": {
+        "/": {
+          "exitCode": 0,
+          "body": {
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=beta": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "beta",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        },
+        "?peer=gamma": {
+          "exitCode": 0,
+          "body": {
+            "peer": {
+              "service": "gamma",
+              "status": "ok"
+            },
+            "peer_status": 200,
+            "service": "alpha",
+            "status": "ok"
+          }
+        }
+      },
+      "dbBoxes": [
+        {
+          "id": "demo-izmygscy",
+          "workspace_id": "ws_zkro4b6i",
+          "task_key": "demo",
+          "recorded_state": "ready",
+          "current_generation": 1
+        }
+      ],
+      "dbGenerations": [
+        {
+          "box_id": "demo-izmygscy",
+          "generation": 1,
+          "plan_digest": "sha256:b44a80a2ce1203110e10dfbe1310a221f7c8bd987085cd20cd8d14230efe3ca7",
+          "context_digest": "sha256:bcefc390accbe0b0026a337b1ebf2d02b44b8470679f9608d916b881c9caf937",
+          "recorded_state": "ready"
+        }
+      ],
+      "dbOperations": [
+        {
+          "id": "op_7E4A86B8A2E3F072ABFE0C06571A2FE1",
+          "kind": "up",
+          "recorded_state": "succeeded",
+          "error_code": null
+        }
+      ],
+      "partialAuthorityCounts": {
+        "reconciliation_git_authority": 0,
+        "reconciliation_generated_authority": 0,
+        "reconciliation_lima_authority": 0,
+        "reconciliation_compose_authority": 0
+      }
+    },
+    "postDetachWarmEvents": [
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_5CC026B0BC3626A3935AF451FBCEDFAC",
+        "sequence": 1,
+        "kind": "up.started",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:25:40.701524Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_5CC026B0BC3626A3935AF451FBCEDFAC",
+        "sequence": 2,
+        "kind": "up.ready",
+        "details": {
+          "boxId": "demo-izmygscy"
+        },
+        "occurredAt": "2026-11-22T05:25:55.052998Z"
+      },
+      {
+        "schemaVersion": "abox.event/v1alpha1",
+        "operationId": "op_5CC026B0BC3626A3935AF451FBCEDFAC",
+        "sequence": 3,
+        "kind": "operation.finished",
+        "details": {
+          "apiVersion": "abox.api/v1alpha1",
+          "state": "succeeded"
+        },
+        "occurredAt": "2026-11-22T05:25:55.05321Z"
+      }
+    ],
+    "postDetachIdentityChecks": {
+      "worktree": true,
+      "gitStore": true,
+      "generatedFiles": true,
+      "planDigest": true,
+      "vmName": true,
+      "vmHostAgentPID": true,
+      "containers": true,
+      "networks": true,
+      "volumes": true,
+      "generationUnchanged": true,
+      "partialAuthoritiesZero": true
+    },
+    "removalExitCode": 0,
+    "afterRemoval": {
+      "limaInventoryEmpty": true,
+      "remainingBoxEntries": [
+        "plan.json"
+      ]
+    }
+  },
+  "knownLimitsAndFollowUps": [
+    "Short explicit --state-db path was used to stay under Darwin 104-byte Unix socket path limit for Lima control sockets; default macOS Application Support path migration remains open.",
+    "Lima experimental mountInotify synthesizes IN_ATTRIB (e) for host creates/modifies; host deletion events are not forwarded and watchers ignoring IN_ATTRIB must use polling.",
+    "abox rm removes all five external/transient resource stages and retains plan.json, while boxes.recorded_state in SQLite still reports ready in abox list (separate state-lifecycle follow-up).",
+    "Full M5 Darwin/arm64 release matrix (minimum + current macOS, two-VM forwarding collision, full fault matrix) remains tracked under m5-darwin-arm64-hardware-gate."
+  ]
+}

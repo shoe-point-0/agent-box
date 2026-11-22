@@ -20,6 +20,13 @@ const (
 
 type DiagnosticResult = process.Result
 
+// Environment validation errors contain no supplied values and let doctor
+// distinguish unmet prerequisites from internal observation failures.
+var (
+	ErrDiagnosticPath = errors.New("configure tool diagnostics: PATH must contain only non-empty, clean absolute directories without control characters")
+	ErrDiagnosticHome = errors.New("configure tool diagnostics: HOME must be a non-empty, clean absolute directory without control characters")
+)
+
 // Diagnostics executes only fixed, bounded tool and runtime observations. It
 // cannot download, install, provision, apply, or repair an artifact.
 type Diagnostics struct {
@@ -29,13 +36,18 @@ type Diagnostics struct {
 }
 
 func NewDiagnostics(path, home, directory string) (*Diagnostics, error) {
-	if path == "" || home == "" || directory == "" || !filepath.IsAbs(home) || !filepath.IsAbs(directory) ||
-		filepath.Clean(home) != home || filepath.Clean(directory) != directory || strings.ContainsAny(path+home+directory, "\x00\r\n") {
-		return nil, errors.New("configure tool diagnostics: paths are invalid")
+	if directory == "" || !filepath.IsAbs(directory) || filepath.Clean(directory) != directory || strings.ContainsAny(directory, "\x00\r\n") {
+		return nil, errors.New("configure tool diagnostics: working directory is invalid")
+	}
+	if home == "" || !filepath.IsAbs(home) || filepath.Clean(home) != home || strings.ContainsAny(home, "\x00\r\n") {
+		return nil, ErrDiagnosticHome
+	}
+	if path == "" || strings.ContainsAny(path, "\x00\r\n") {
+		return nil, ErrDiagnosticPath
 	}
 	for _, entry := range filepath.SplitList(path) {
 		if !filepath.IsAbs(entry) || filepath.Clean(entry) != entry {
-			return nil, errors.New("configure tool diagnostics: PATH is invalid")
+			return nil, ErrDiagnosticPath
 		}
 	}
 	return &Diagnostics{

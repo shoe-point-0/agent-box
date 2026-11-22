@@ -38,7 +38,7 @@ The daemon owns Git, Lima, Compose, state, ports, routing, redaction, and reconc
 
 ## Evidence
 
-- [The failure-matrix probe](../features/m0-failure-matrix.md) passed stable operation IDs, independently observed residue, idempotent adoption, refusal, and reverse-order cleanup for Linux substrate operations. It did not implement the daemon API.
+- [The failure-matrix probe](../features/spike-failure-matrix.md) passed stable operation IDs, independently observed residue, idempotent adoption, refusal, and reverse-order cleanup for Linux substrate operations. It did not implement the daemon API.
 - [ADR 0001](0001-milestone-0-substrate-gate.md) requires observed-state reconciliation after interrupted clients and processes.
 - Go's [`net`](https://pkg.go.dev/net#ListenUnix) and [`net/http`](https://pkg.go.dev/net/http#Server) packages provide Unix listeners and HTTP serving. Peer-credential enforcement remains platform-specific implementation work.
 - API behavior will be exercised by `m1-daemon-api`, `m1-core-commands`, and Milestone 4 daemon/routing fault tasks; no current runtime-support claim is made.

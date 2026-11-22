@@ -18,6 +18,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/ownership"
 	plancompiler "github.com/shoe-point-0/agent-box/internal/plan"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
@@ -37,7 +38,7 @@ func TestReconcileFoundationRecoversOrderedConcreteStagesWithoutDuplicateMutatio
 	}
 	prepareGeneratedApplicationRoot(t, attempt)
 
-	imagePath := filepath.Join(t.TempDir(), "guest.img")
+	imagePath := filepath.Join(testutil.TempDir(t), "guest.img")
 	if err := os.WriteFile(imagePath, []byte("guest image\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

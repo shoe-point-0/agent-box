@@ -848,7 +848,7 @@ Default guidance:
 
 | Data | Location | Reason |
 | --- | --- | --- |
-| Source, tests, config | Machine worktree via VirtioFS | Immediate human/agent visibility and persistence. |
+| Source, tests, config | Machine worktree via VirtioFS | Bounded visibility and Machine-side persistence; see ADR 0011. |
 | `node_modules` | Box-scoped named volume | Metadata-heavy workload and platform-specific binaries. |
 | PNPM/Yarn/npm download store | Box-scoped named volume | Reusable within Box without polluting source. |
 | Python virtualenv | Box-scoped named volume | Linux executables must not be shared with macOS. |
@@ -883,13 +883,15 @@ Before a Box becomes ready, the daemon creates a random probe directory inside e
 
 1. Machine write → workspace-service read with exact bytes and mode.
 2. Workspace-service write → Machine read with exact bytes and mode.
-3. Atomic rename visibility in both directions.
+3. Rename visibility in both directions: the old name is absent and the new name has exact bytes and mode.
 4. File deletion visibility in both directions.
-5. A watcher in the workspace service receives a create/modify event within the configured deadline.
+5. A watcher in the workspace service receives a create/modify event within one second after its activation handshake.
+
+Each bytes/mode, rename, and deletion observation must converge within two seconds. Retry observations only, never the mutation. This explicitly revises the immediate cross-machine visibility assumption following the measured Darwin run; see [ADR 0011](docs/decisions/0011-bounded-filesystem-visibility.md).
 
 Probe files are created only under `.abox-probe/<nonce>` and removed after success. `.abox-probe/` is added to an Agent Box-managed global excludes file, not to the repository's `.gitignore`.
 
-Lima's mount-inotify support is currently experimental and has documented deletion caveats. v0.1 must test native VirtioFS event behavior first. If a project's watcher cannot work reliably, `abox doctor fs` reports the failure and the project must use a polling watcher. Agent Box will not claim perfect event semantics it cannot deliver.
+Native VirtioFS event delivery was tested first and failed on the measured Apple M1 stack. The revised design enables Lima's experimental `mountInotify` bridge for writable mounts and retains a one-second create/modify event deadline after an in-container handshake. Lima's bridge synthesizes Linux `IN_ATTRIB` events for host creates and modifies without changing file contents or modes; host deletion events remain unsupported, so projects requiring deletion events or using watchers that ignore `IN_ATTRIB` must use a polling watcher. `abox doctor fs` is observation-only and may report unknown evidence. Agent Box does not claim perfect event semantics.
 
 ### 11.5 Ownership
 
@@ -1622,7 +1624,7 @@ Golden updates require an explicit command and code review.
 1. **Cold two-repository Box:** create two clean repositories, two worktrees, one VM, three services, one HTTP route, and one TCP route.
 2. **Idempotent second `up`:** no new worktree, VM, volume, or setup stamp; no source reset.
 3. **Machine-to-container write:** exact content visible and watcher fires.
-4. **Container-to-Machine write:** exact content visible immediately.
+4. **Container-to-Machine write:** exact content visible within the two-second bound in ADR 0011.
 5. **Git from workspace service:** status, add, commit, and log work in default read-write mode.
 6. **Hardened Git mode:** status works and commit fails without corrupting metadata.
 7. **Parallel Boxes:** two task keys for one Workspace run simultaneously with no service, network, volume, route, or port collision.

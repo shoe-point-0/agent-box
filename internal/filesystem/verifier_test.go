@@ -170,3 +170,25 @@ func assertError(t *testing.T, err error, kind filesystem.ErrorKind, layer strin
 		t.Fatalf("error = %v, want kind %q layer %q", err, kind, layer)
 	}
 }
+
+func TestVerifyAllowsStackedSystemMountsButRejectsStackedWorkspaceMounts(t *testing.T) {
+	for _, layer := range []string{"guest-mountinfo", "container-mountinfo"} {
+		t.Run(layer, func(t *testing.T) {
+			plan, observed := exactFixture()
+			stacked := []byte("40 27 0:34 / /proc/sys/fs/binfmt_misc rw,relatime - autofs systemd-1 rw\n217 40 0:42 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec - binfmt_misc binfmt_misc rw\n")
+			appendRecords := func(data []byte) {
+				if layer == "guest-mountinfo" {
+					observed.GuestMountInfo = append(observed.GuestMountInfo, data...)
+				} else {
+					observed.ContainerMountInfo["container-1"] = append(observed.ContainerMountInfo["container-1"], data...)
+				}
+			}
+			appendRecords(stacked)
+			if err := filesystem.Verify(plan, observed); err != nil {
+				t.Fatalf("ordinary stacked system mounts rejected: %v", err)
+			}
+			appendRecords(mountInfoLine("/boxes/worktree", true))
+			assertError(t, filesystem.Verify(plan, observed), filesystem.MountSetMismatch, layer)
+		})
+	}
+}

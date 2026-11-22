@@ -19,7 +19,7 @@ func TestWorkspaceAdapterUsesFixedArgvAndDecodesObservations(t *testing.T) {
 	host := &workspaceHost{captures: []lima.Capture{
 		{Stdout: []byte("A\n")},
 		{Stdout: []byte("N\n")},
-		{Stdout: []byte("F 640\nprobe-bytes")},
+		{Stdout: []byte("F 640\nprobe-bytes\nOK\n")},
 		{}, {}, {}, {},
 	}}
 	adapter, err := filesystem.NewWorkspaceAdapter(host, workspaceRuntime(root))
@@ -121,7 +121,8 @@ func TestWorkspaceAdapterBoundsAndRedactsCommandFailures(t *testing.T) {
 		{name: "command", err: errors.New(secret)},
 		{name: "stderr", capture: lima.Capture{Stderr: []byte(secret)}},
 		{name: "truncated", capture: lima.Capture{StdoutTruncated: true}},
-		{name: "malformed", capture: lima.Capture{Stdout: []byte("F nope\n" + secret)}},
+		{name: "malformed", capture: lima.Capture{Stdout: []byte("F nope\n" + secret + "\nOK\n")}},
+		{name: "missing-trailer", capture: lima.Capture{Stdout: []byte("F 600\n" + secret)}},
 		{name: "canceled", err: context.Canceled, cancel: true},
 	}
 	for _, test := range tests {

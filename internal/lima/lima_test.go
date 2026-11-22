@@ -20,6 +20,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/lima"
 	"github.com/shoe-point-0/agent-box/internal/ownership"
 	"github.com/shoe-point-0/agent-box/internal/process"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"go.yaml.in/yaml/v3"
 )
@@ -43,7 +44,10 @@ func TestGenerateConfigIsMinimalDeterministicAndExact(t *testing.T) {
 	if err := yaml.Unmarshal(first, &document); err != nil {
 		t.Fatal(err)
 	}
-	wantKeys := []string{"containerd", "cpus", "disk", "env", "images", "memory", "minimumLimaVersion", "mountInotify", "mountType", "mounts", "propagateProxyEnv", "ssh", "vmType"}
+	if document["mountInotify"] != true {
+		t.Fatal("writable mounts require Lima event forwarding")
+	}
+	wantKeys := []string{"containerd", "cpus", "disk", "env", "images", "memory", "minimumLimaVersion", "mountInotify", "mountType", "mounts", "portForwards", "propagateProxyEnv", "ssh", "vmType"}
 	gotKeys := make([]string, 0, len(document))
 	for key := range document {
 		gotKeys = append(gotKeys, key)
@@ -68,6 +72,14 @@ func TestGenerateConfigIsMinimalDeterministicAndExact(t *testing.T) {
 			t.Fatalf("mount[%d] = %#v", index, mount)
 		}
 	}
+	forwards := document["portForwards"].([]any)
+	if len(forwards) != 1 {
+		t.Fatal("port forwarding policy is not exact")
+	}
+	rule := forwards[0].(map[string]any)
+	if rule["guestIP"] != "0.0.0.0" || rule["guestIPMustBeZero"] != false || rule["proto"] != "any" || rule["ignore"] != true || !reflect.DeepEqual(rule["guestPortRange"], []any{1, 65535}) {
+		t.Fatalf("automatic forwards are not disabled: %#v", rule)
+	}
 	images := document["images"].([]any)
 	image := images[0].(map[string]any)
 	if image["location"] != "file:///opt/agent-box/images/guest%20image.img" || image["digest"] != string(spec.GuestImage.Digest) {
@@ -78,7 +90,7 @@ func TestGenerateConfigIsMinimalDeterministicAndExact(t *testing.T) {
 		t.Fatalf("ownership env = %#v", env)
 	}
 
-	path := filepath.Join(t.TempDir(), "lima.yaml")
+	path := filepath.Join(testutil.TempDir(t), "lima.yaml")
 	if err := lima.WriteConfig(path, spec); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +100,18 @@ func TestGenerateConfigIsMinimalDeterministicAndExact(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("config mode = %04o, want 0600", info.Mode().Perm())
+	}
+}
+
+// Lima 2.0.0 warns on stderr when the inventory is empty. Cold creation must
+// accept that ordinary state while keeping malformed or error output fatal.
+func TestInspectEmptyInventorySuppressesInformationalLogging(t *testing.T) {
+	t.Parallel()
+	adapter, runner, spec := testAdapter(t)
+	runner.warnWhenEmpty = true
+	observation, err := adapter.Inspect(t.Context(), spec)
+	if err != nil || observation.State != lima.Absent {
+		t.Fatalf("Inspect() = %#v, %v; want absent", observation, err)
 	}
 }
 
@@ -117,7 +141,7 @@ func TestGenerateConfigRejectsUnsafeOrUnrepresentableInputs(t *testing.T) {
 func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 	t.Parallel()
 	adapter, runner, spec := testAdapter(t)
-	configPath := filepath.Join(t.TempDir(), "lima.yaml")
+	configPath := filepath.Join(testutil.TempDir(t), "lima.yaml")
 	if err := lima.WriteConfig(configPath, spec); err != nil {
 		t.Fatal(err)
 	}
@@ -189,11 +213,11 @@ func TestLifecycleIsObservedIdempotentAndUsesExactArgv(t *testing.T) {
 	if got := runner.call("create"); !slices.Equal(got, []string{"create", "--name=" + spec.RuntimeHost.InstanceName, "--tty=false", configPath}) {
 		t.Fatalf("create argv = %q", got)
 	}
-	if got := runner.call("shell"); !slices.Equal(got, []string{"shell", "--tty=false", "--workdir=" + spec.Mounts[0].Path, spec.RuntimeHost.InstanceName, "--", "printf", "%s", "safe value"}) {
+	if got := runner.call("shell"); !slices.Equal(got, []string{"shell", "--tty=false", "--workdir=" + spec.Mounts[0].Path, spec.RuntimeHost.InstanceName, "--", "/usr/bin/sudo", "-n", "--", "printf", "%s", "safe value"}) {
 		t.Fatalf("shell argv = %q", got)
 	}
 	for _, call := range runner.callsCopy() {
-		if len(call) > 0 && call[0] == "list" && !slices.Equal(call, []string{"list", "--tty=false", "--format=json", "--all-fields"}) {
+		if len(call) > 0 && call[0] == "list" && !slices.Equal(call, []string{"list", "--tty=false", "--format=json", "--all-fields", "--log-level=error"}) {
 			t.Fatalf("list argv = %q", call)
 		}
 	}
@@ -213,6 +237,9 @@ func TestInvokeCommandTransportsEnvironmentAndSecretsOutsideArgv(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := runner.call("shell")
+	if len(call) < 8 || !slices.Equal(call[5:8], []string{"/usr/bin/sudo", "-n", "--"}) {
+		t.Fatalf("guest control must use noninteractive root execution: %q", call)
+	}
 	for _, argument := range call {
 		if strings.Contains(argument, secret) || strings.Contains(argument, "/runtime/home") {
 			t.Fatalf("shell argv contains transported environment value: %q", call)
@@ -268,6 +295,21 @@ func TestObserveRemovalRequiresPlanConfigAndRecordedLiveOwnership(t *testing.T) 
 	}
 }
 
+func TestDeleteStopsRunningInstanceBeforeDeleting(t *testing.T) {
+	t.Parallel()
+	adapter, runner, spec := testAdapter(t)
+	runner.config = configDocument(t, spec)
+	runner.status = "Running"
+
+	observed, err := adapter.Delete(t.Context(), spec, recordFor(spec))
+	if err != nil || observed.State != lima.Absent {
+		t.Fatalf("Delete(running) = %#v, %v; want absent", observed, err)
+	}
+	if runner.count("stop") != 1 || runner.count("delete") != 1 {
+		t.Fatalf("Delete(running) stop=%d delete=%d, want 1/1", runner.count("stop"), runner.count("delete"))
+	}
+}
+
 func TestDeleteInterruptedAfterAbsenceConvergesWithoutReplay(t *testing.T) {
 	t.Parallel()
 	adapter, runner, spec := testAdapter(t)
@@ -305,7 +347,7 @@ func TestDeleteRejectsForgedRecordEvenWhenInstanceIsAbsent(t *testing.T) {
 func TestCreateRejectsTamperedGeneratedConfigBeforeLimactl(t *testing.T) {
 	t.Parallel()
 	adapter, runner, spec := testAdapter(t)
-	configPath := filepath.Join(t.TempDir(), "lima.yaml")
+	configPath := filepath.Join(testutil.TempDir(t), "lima.yaml")
 	if err := lima.WriteConfig(configPath, spec); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +397,7 @@ func TestCreateClassifiesPartialCreationAndCancellationAfterReobservation(t *tes
 			runner.config = configDocument(t, spec)
 			runner.fail["create"] = test.runErr
 			runner.transition["create"] = test.afterState
-			configPath := filepath.Join(t.TempDir(), "lima.yaml")
+			configPath := filepath.Join(testutil.TempDir(t), "lima.yaml")
 			if err := lima.WriteConfig(configPath, spec); err != nil {
 				t.Fatal(err)
 			}
@@ -397,7 +439,7 @@ func TestContractRejectsUnsupportedVersionMalformedInventoryAndPostconditionFail
 		adapter, runner, spec := testAdapter(t)
 		runner.config = configDocument(t, spec)
 		runner.suppressTransition["create"] = true
-		configPath := filepath.Join(t.TempDir(), "lima.yaml")
+		configPath := filepath.Join(testutil.TempDir(t), "lima.yaml")
 		if err := lima.WriteConfig(configPath, spec); err != nil {
 			t.Fatal(err)
 		}
@@ -411,7 +453,7 @@ func TestCreateAndStartRefusePathSubstitutionBeforeMutation(t *testing.T) {
 
 	t.Run("generated-config", func(t *testing.T) {
 		adapter, runner, spec := testAdapter(t)
-		configPath := filepath.Join(t.TempDir(), "lima.yaml")
+		configPath := filepath.Join(testutil.TempDir(t), "lima.yaml")
 		if err := lima.WriteConfig(configPath, spec); err != nil {
 			t.Fatal(err)
 		}
@@ -516,12 +558,12 @@ func testAdapter(t *testing.T) (*lima.Adapter, *fakeRunner, lima.Spec) {
 		version: "limactl version " + lima.SupportedVersion + "\n", instanceVersion: lima.SupportedVersion,
 		fail: make(map[string]error), transition: make(map[string]string), suppressTransition: make(map[string]bool),
 	}
-	adapter, err := lima.NewAdapter(artifact, runner, t.TempDir(), map[string]string{"PATH": "/usr/bin:/bin", "HOME": t.TempDir(), "LANG": "C", "LC_ALL": "C", "TZ": "UTC"})
+	adapter, err := lima.NewAdapter(artifact, runner, testutil.TempDir(t), map[string]string{"PATH": "/usr/bin:/bin", "HOME": testutil.TempDir(t), "LANG": "C", "LC_ALL": "C", "TZ": "UTC"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	spec := testSpec(t)
-	runtimeRoot := t.TempDir()
+	runtimeRoot := testutil.TempDir(t)
 	spec.Mounts[0].Path = filepath.Join(runtimeRoot, "git", "repository.git")
 	spec.Mounts[1].Path = filepath.Join(runtimeRoot, "workspace", "repository")
 	for _, mount := range spec.Mounts {
@@ -554,7 +596,7 @@ func recordPathSet(t *testing.T, paths []string) ownership.PathSetRecord {
 
 func verifiedLima(t *testing.T) toolchain.Artifact {
 	t.Helper()
-	directory := t.TempDir()
+	directory := testutil.TempDir(t)
 	type fixture struct {
 		component toolchain.Component
 		version   string
@@ -598,6 +640,7 @@ func digest(content []byte) contract.Digest {
 }
 
 type fakeRunner struct {
+	warnWhenEmpty      bool
 	mu                 sync.Mutex
 	calls              [][]string
 	version            string
@@ -627,6 +670,9 @@ func (r *fakeRunner) Run(_ context.Context, command process.Command) (process.Re
 	case "--version":
 		result.Stdout = []byte(r.version)
 	case "list":
+		if r.warnWhenEmpty && r.status == "" && !slices.Contains(args, "--log-level=error") {
+			result.Stderr = []byte("level=warning msg=\"No instance found. Run `limactl create` to create an instance.\"\n")
+		}
 		if r.malformed != nil {
 			result.Stdout = append([]byte(nil), r.malformed...)
 			break
@@ -642,6 +688,10 @@ func (r *fakeRunner) Run(_ context.Context, command process.Command) (process.Re
 			}
 		}
 	case "create", "start", "stop", "delete":
+		if operation == "delete" && r.status == "Running" {
+			result.ExitCode = 1
+			return result, &process.ExitError{Code: 1}
+		}
 		if !r.suppressTransition[operation] {
 			next := r.transition[operation]
 			if next == "" {
@@ -719,3 +769,15 @@ func cloneDocument(input map[string]any) map[string]any {
 }
 
 var _ toolchain.Runner = (*fakeRunner)(nil)
+
+func TestStartRejectsChangedPortForwardPolicy(t *testing.T) {
+	adapter, runner, spec := testAdapter(t)
+	runner.config = configDocument(t, spec)
+	runner.status = "Stopped"
+	delete(runner.config, "portForwards")
+	_, err := adapter.Start(t.Context(), spec)
+	assertKind(t, err, lima.ConfigMismatch)
+	if runner.count("start") != 0 {
+		t.Fatal("started a VM with unowned forwarding policy")
+	}
+}

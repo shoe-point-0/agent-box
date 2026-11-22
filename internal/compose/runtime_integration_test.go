@@ -248,3 +248,7 @@ func (b *notifyingBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buffer.String()
 }
+
+func (i hostRuntimeInvoker) InvokeCommand(ctx context.Context, spec lima.Spec, command lima.GuestCommand) (aboxprocess.Result, error) {
+	return i.Invoke(ctx, spec, command.Workdir, command.Argv, command.Stdout, command.Stderr)
+}

@@ -31,6 +31,7 @@ import (
 	"github.com/shoe-point-0/agent-box/internal/process"
 	"github.com/shoe-point-0/agent-box/internal/repository"
 	"github.com/shoe-point-0/agent-box/internal/state"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 	"github.com/shoe-point-0/agent-box/internal/toolchain"
 	"github.com/shoe-point-0/agent-box/internal/worktree"
 )
@@ -202,7 +203,7 @@ func newFullRemovalFixture(t *testing.T) *fullRemovalFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := &fullRemovalFixture{t: t, root: t.TempDir(), siblingContents: "sibling must survive\n", sourceMarkerContents: "source must survive\n"}
+	fixture := &fullRemovalFixture{t: t, root: testutil.TempDir(t), siblingContents: "sibling must survive\n", sourceMarkerContents: "source must survive\n"}
 	fixture.provider, err = paths.New(filepath.Join(fixture.root, "application"), filepath.Join(fixture.root, "cache"), filepath.Join(fixture.root, "logs"))
 	if err != nil {
 		t.Fatal(err)
