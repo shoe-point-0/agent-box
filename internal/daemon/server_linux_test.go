@@ -210,7 +210,7 @@ func TestMutationStartsOnceReattachesAndResumesNDJSON(t *testing.T) {
 	if firstFinished.Kind != "operation.finished" || attachedFinished.Sequence != firstFinished.Sequence {
 		t.Fatalf("terminal events = %+v / %+v", firstFinished, attachedFinished)
 	}
-	var result operationResult
+	var result contract.OperationResult
 	if err := json.Unmarshal(firstFinished.Details, &result); err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestRemoveRouteCreatesRemovalOperation(t *testing.T) {
 	if observedKind != "remove" || preview.Kind != "removal.preview" || finished.Kind != "operation.finished" {
 		t.Fatalf("remove kind/events = %q/%q/%q", observedKind, preview.Kind, finished.Kind)
 	}
-	var result operationResult
+	var result contract.OperationResult
 	if err := json.Unmarshal(finished.Details, &result); err != nil {
 		t.Fatal(err)
 	}

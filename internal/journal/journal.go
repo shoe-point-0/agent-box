@@ -16,14 +16,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/state"
 )
 
 const (
 	StateRunning   = "running"
-	StateSucceeded = "succeeded"
-	StateFailed    = "failed"
+	StateSucceeded = contract.OperationSucceeded
+	StateFailed    = contract.OperationFailed
 
 	defaultPollInterval = 25 * time.Millisecond
 	streamBuffer        = 16
@@ -159,26 +160,40 @@ func (j *Journal) Begin(ctx context.Context, request BeginRequest) (operation Op
 	return operation, created, nil
 }
 
-// Finish records a terminal state before completion is reported to a caller.
-func (j *Journal) Finish(ctx context.Context, operationID, finalState, errorCode string, finishedAt time.Time) error {
+// Complete commits the running operation's terminal state and last event together.
+// Failure leaves both unpublished; an already completed operation cannot be finished again.
+func (j *Journal) Complete(ctx context.Context, operationID string, result contract.OperationResult, finishedAt time.Time) error {
 	if err := validateOpaque("operation ID", operationID); err != nil {
-		return fmt.Errorf("finish operation: %w", err)
+		return fmt.Errorf("complete operation: %w", err)
 	}
-	if finalState != StateSucceeded && finalState != StateFailed {
-		return errors.New("finish operation: final state must be succeeded or failed")
+	if err := result.Validate(); err != nil {
+		return fmt.Errorf("complete operation: %w", err)
 	}
-	if finalState == StateSucceeded && errorCode != "" {
-		return errors.New("finish operation: successful operation has an error code")
-	}
-	result, err := j.execUpdate(ctx, `UPDATE operations
-		SET recorded_state = ?, finished_at = ?, error_code = NULLIF(?, '')
-		WHERE id = ? AND recorded_state = 'running'`,
-		finalState, finishedAt.UnixNano(), errorCode, operationID)
+	encoded, err := json.Marshal(result)
 	if err != nil {
-		return fmt.Errorf("finish operation: %w", err)
+		return fmt.Errorf("encode operation result: %w", err)
 	}
-	if result == 0 {
-		return fmt.Errorf("finish operation: %w", ErrNotFound)
+	details, err := validateDetails(encoded)
+	if err != nil {
+		return fmt.Errorf("complete operation: %w", err)
+	}
+	err = j.store.Update(ctx, func(tx *sql.Tx) error {
+		var boxID string
+		err := tx.QueryRowContext(ctx, `UPDATE operations
+			SET recorded_state = ?, finished_at = ?, error_code = NULLIF(?, '')
+			WHERE id = ? AND recorded_state = 'running' RETURNING box_id`,
+			result.State, finishedAt.UnixNano(), result.ErrorCode, operationID).Scan(&boxID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		_, err = appendEventTx(ctx, tx, boxID, operationID, contract.OperationFinished, details, finishedAt)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("complete operation: %w", err)
 	}
 	return nil
 }
@@ -193,7 +208,7 @@ type Event struct {
 	OccurredAt  time.Time
 }
 
-// AppendEvent adds one event at the next sequence in the operation transaction.
+// AppendEvent adds a nonterminal event to a running operation. Only Complete can finish it.
 func (j *Journal) AppendEvent(ctx context.Context, operationID, kind string, details json.RawMessage, occurredAt time.Time) (event Event, err error) {
 	if err := validateOpaque("operation ID", operationID); err != nil {
 		return Event{}, fmt.Errorf("append operation event: %w", err)
@@ -201,39 +216,43 @@ func (j *Journal) AppendEvent(ctx context.Context, operationID, kind string, det
 	if err := validateOpaque("event kind", kind); err != nil {
 		return Event{}, fmt.Errorf("append operation event: %w", err)
 	}
+	if kind == contract.OperationFinished {
+		return Event{}, errors.New("append operation event: terminal event requires completion")
+	}
 	details, err = validateDetails(details)
 	if err != nil {
 		return Event{}, fmt.Errorf("append operation event: %w", err)
 	}
 
 	err = j.store.Update(ctx, func(tx *sql.Tx) error {
-		if err := tx.QueryRowContext(ctx, `SELECT box_id FROM operations WHERE id = ?`, operationID).
-			Scan(&event.BoxID); err != nil {
+		var boxID string
+		if err := tx.QueryRowContext(ctx, `SELECT box_id FROM operations WHERE id = ? AND recorded_state = 'running'`, operationID).
+			Scan(&boxID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound
 			}
 			return fmt.Errorf("read event operation: %w", err)
 		}
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence), 0) + 1
-			FROM operation_events WHERE operation_id = ?`, operationID).Scan(&event.Sequence); err != nil {
-			return fmt.Errorf("allocate event sequence: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO operation_events
-			(box_id, operation_id, sequence, kind, details_json, occurred_at)
-			VALUES (?, ?, ?, ?, ?, ?)`, event.BoxID, operationID, event.Sequence,
-			kind, string(details), occurredAt.UnixNano()); err != nil {
-			return fmt.Errorf("persist operation event: %w", err)
-		}
-		event.OperationID = operationID
-		event.Kind = kind
-		event.Details = append(json.RawMessage(nil), details...)
-		event.OccurredAt = occurredAt
-		return nil
+		var appendErr error
+		event, appendErr = appendEventTx(ctx, tx, boxID, operationID, kind, details, occurredAt)
+		return appendErr
 	})
 	if err != nil {
 		return Event{}, fmt.Errorf("append operation event: %w", err)
 	}
 	return event, nil
+}
+
+func appendEventTx(ctx context.Context, tx *sql.Tx, boxID, operationID, kind string, details json.RawMessage, occurredAt time.Time) (Event, error) {
+	var sequence int64
+	err := tx.QueryRowContext(ctx, `INSERT INTO operation_events
+		(box_id, operation_id, sequence, kind, details_json, occurred_at)
+		SELECT ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?, ? FROM operation_events WHERE operation_id = ?
+		RETURNING sequence`, boxID, operationID, kind, string(details), occurredAt.UnixNano(), operationID).Scan(&sequence)
+	if err != nil {
+		return Event{}, fmt.Errorf("persist operation event: %w", err)
+	}
+	return Event{BoxID: boxID, OperationID: operationID, Sequence: sequence, Kind: kind, Details: details, OccurredAt: occurredAt}, nil
 }
 
 // Events returns durable events after a sequence in stable ascending order.

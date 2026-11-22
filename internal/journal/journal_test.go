@@ -9,13 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/shoe-point-0/agent-box/internal/contract"
 	"github.com/shoe-point-0/agent-box/internal/identity"
 	"github.com/shoe-point-0/agent-box/internal/state"
 )
@@ -318,15 +318,15 @@ func TestSubscriberDetachDoesNotCancelOperation(t *testing.T) {
 	if _, err := journal.AppendEvent(t.Context(), operation.ID, "continued", nil, time.Unix(2, 0).UTC()); err != nil {
 		t.Fatalf("append after subscriber detach: %v", err)
 	}
-	if err := journal.Finish(t.Context(), operation.ID, StateSucceeded, "", time.Unix(3, 0).UTC()); err != nil {
+	if err := journal.Complete(t.Context(), operation.ID, contract.NewOperationResult(nil), time.Unix(3, 0).UTC()); err != nil {
 		t.Fatalf("finish after subscriber detach: %v", err)
 	}
 	events, err := journal.Events(t.Context(), operation.ID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := []int64{events[0].Sequence, events[1].Sequence}; !slices.Equal(got, []int64{1, 2}) {
-		t.Fatalf("event sequence after detach = %v, want [1 2]", got)
+	if len(events) != 3 || events[0].Sequence != 1 || events[1].Sequence != 2 || events[2].Sequence != 3 || events[2].Kind != contract.OperationFinished {
+		t.Fatalf("events after detach = %+v, want started, continued, finished in sequence", events)
 	}
 }
 
