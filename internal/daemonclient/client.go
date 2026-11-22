@@ -248,7 +248,8 @@ func decodeEvents(reader io.Reader, operationID string, sequence *int64, consume
 		}
 		*sequence = event.Sequence
 		var terminal *contract.Failure
-		if event.Kind == "operation.finished" {
+		finished := event.Kind == contract.OperationFinished
+		if finished {
 			failure, err := terminalFailure(event.Details)
 			if err != nil {
 				return false, nil, err
@@ -258,7 +259,7 @@ func decodeEvents(reader io.Reader, operationID string, sequence *int64, consume
 		if err := consume(event); err != nil {
 			return false, nil, err
 		}
-		if event.Kind == "operation.finished" {
+		if finished {
 			return true, terminal, nil
 		}
 	}
@@ -272,31 +273,20 @@ func decodeEvents(reader io.Reader, operationID string, sequence *int64, consume
 }
 
 func terminalFailure(details json.RawMessage) (*contract.Failure, error) {
-	var terminal struct {
-		APIVersion string             `json:"apiVersion"`
-		State      string             `json:"state"`
-		ErrorCode  contract.ErrorCode `json:"errorCode,omitempty"`
-	}
-	if err := decodeStrict(details, &terminal); err != nil || terminal.APIVersion != contract.DaemonAPIVersion {
+	var result contract.OperationResult
+	if err := decodeStrict(details, &result); err != nil {
 		return nil, fmt.Errorf("%w: invalid terminal event", ErrProtocol)
 	}
-	switch terminal.State {
-	case "succeeded":
-		if terminal.ErrorCode != "" {
-			return nil, fmt.Errorf("%w: successful terminal event contains an error", ErrProtocol)
-		}
-		return nil, nil
-	case "failed":
-		if !terminal.ErrorCode.Valid() {
-			return nil, fmt.Errorf("%w: terminal event contains an unknown error", ErrProtocol)
-		}
-		return &contract.Failure{
-			SchemaVersion: contract.ErrorSchemaVersion, Code: terminal.ErrorCode,
-			Message: "operation failed", Retryable: false,
-		}, nil
-	default:
-		return nil, fmt.Errorf("%w: terminal event has invalid state", ErrProtocol)
+	if err := result.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrProtocol, err)
 	}
+	if result.State == contract.OperationSucceeded {
+		return nil, nil
+	}
+	return &contract.Failure{
+		SchemaVersion: contract.ErrorSchemaVersion, Code: result.ErrorCode,
+		Message: "operation failed", Retryable: false,
+	}, nil
 }
 
 func decodeFailure(response *http.Response) (*contract.Failure, error) {

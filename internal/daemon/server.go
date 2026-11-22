@@ -448,27 +448,14 @@ func (s *Server) execute(operation journal.Operation, input json.RawMessage) {
 			release()
 		}
 	}
-	state := journal.StateSucceeded
-	errorCode := ""
-	terminalDetails := operationResult{APIVersion: contract.DaemonAPIVersion, State: state}
-	if failure != nil {
-		state = journal.StateFailed
-		failureCode := failure.Code
-		if !failureCode.Valid() {
-			failureCode = contract.CodeInternalInvariant
-		}
-		errorCode = string(failureCode)
-		terminalDetails.State = state
-		terminalDetails.ErrorCode = failureCode
-	}
+	result := contract.NewOperationResult(failure)
 
 	persistContext, cancel := context.WithTimeout(context.Background(), persistTimeout)
 	defer cancel()
-	if _, err := s.journal.AppendEvent(persistContext, operation.ID, "operation.finished", mustJSON(terminalDetails), time.Now().UTC()); err != nil {
-		state = journal.StateFailed
-		errorCode = string(contract.CodeInternalInvariant)
+	if _, err := s.journal.AppendEvent(persistContext, operation.ID, contract.OperationFinished, mustJSON(result), time.Now().UTC()); err != nil {
+		result = contract.NewOperationResult(&contract.Failure{Code: contract.CodeInternalInvariant})
 	}
-	_ = s.journal.Finish(persistContext, operation.ID, state, errorCode, time.Now().UTC())
+	_ = s.journal.Finish(persistContext, operation.ID, result.State, string(result.ErrorCode), time.Now().UTC())
 }
 
 func (s *Server) ownsOperation(operationID string) bool {
@@ -545,12 +532,6 @@ func streamEventFrom(event journal.Event) streamEvent {
 		OperationID: event.OperationID, Sequence: event.Sequence, Kind: event.Kind,
 		Details: event.Details, OccurredAt: event.OccurredAt,
 	}
-}
-
-type operationResult struct {
-	APIVersion string             `json:"apiVersion"`
-	State      string             `json:"state"`
-	ErrorCode  contract.ErrorCode `json:"errorCode,omitempty"`
 }
 
 func mutationDigest(request MutationRequest) (string, error) {
