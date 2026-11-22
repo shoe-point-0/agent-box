@@ -40,13 +40,17 @@ func NewLocalObserver(config LocalObserverConfig) (*LocalObserver, error) {
 }
 
 func (observer *LocalObserver) Observe(ctx context.Context) (Observation, error) {
+	return observer.observe(ctx, observeAccelerator)
+}
+
+func (observer *LocalObserver) observe(ctx context.Context, probeAccelerator func() (string, error)) (Observation, error) {
 	if observer == nil || len(observer.paths) == 0 || observer.routerAddress == "" {
 		return Observation{}, errors.New("local Machine observer is incomplete")
 	}
 	if err := ctx.Err(); err != nil {
 		return Observation{}, err
 	}
-	accelerator, err := observeAccelerator()
+	accelerator, err := probeAccelerator()
 	if err != nil {
 		return Observation{}, fmt.Errorf("observe Machine accelerator: %w", err)
 	}
