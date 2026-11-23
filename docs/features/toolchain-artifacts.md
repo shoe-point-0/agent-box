@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-toolchain-contract","status":"implemented","created_at":"2026-08-29T06:55:50.411239326Z","implemented_at":"2026-08-30T00:24:53.573766531Z"}
--->
-
 # Verified runtime artifact inputs
 
 Status: implemented.
@@ -22,7 +18,7 @@ binary immediately before invoking the owned process runner. The reusable
 `internal/toolchain/toolchaintest` conformance suite governs preinstalled,
 fixture, and future production providers alike, while explicit consent,
 downloads, signature verification, atomic installation, and partial-download
-cleanup remain owned by `m5-toolchain-bootstrap`.
+cleanup remain [Milestone 5 bootstrap work](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 ## Scope and dependencies
 
@@ -48,7 +44,7 @@ cleanup remain owned by `m5-toolchain-bootstrap`.
 
 ## Implementation details
 
-- `internal/toolchain` separates artifact verification from artifact acquisition: the `Provider` interface contains no download method so future `m5-toolchain-bootstrap` implementations must obtain explicit user consent and install files before presenting local candidates.
+- `internal/toolchain` separates artifact verification from acquisition: the `Provider` interface contains no download method. A bootstrapper must obtain explicit user consent and install files before presenting local candidates.
 - `internal/toolchain/toolchaintest` provides the reusable conformance test harness run against both the preinstalled provider and injected fixture providers.
 
 ## Verification

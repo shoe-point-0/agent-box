@@ -22,7 +22,7 @@ We accept these mechanism-level decisions for the Linux implementation lane:
 
 A red probe blocks affected product implementation. Changing or waiving a critical gate requires a superseding ADR and updated support boundary; test failure may not be relabeled as support.
 
-Darwin VZ, VirtioFS, mount isolation, resolver/browser behavior, concurrent Lima forwarding, and their crash/cleanup boundaries remain unaccepted. They are mandatory obligations of `m0-virtiofs-probe`, `m0-lima-isolation-probe`, and `m5-darwin-arm64-hardware-gate` on real Darwin/arm64 hardware. A Darwin cross-build does not satisfy them.
+The Milestone 0 Linux probes could not establish Darwin VZ, VirtioFS, mount isolation, resolver/browser behavior, concurrent Lima forwarding, or their crash/cleanup boundaries. The later [single-repository Apple M1 report](../architecture/apple-silicon-m1-gate.md) records exactly which of these were exercised. Release support still requires the [Milestone 5 hardware gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate). A Darwin cross-build does not satisfy it.
 
 ## Alternatives considered
 
@@ -37,7 +37,7 @@ Darwin VZ, VirtioFS, mount isolation, resolver/browser behavior, concurrent Lima
 - Tool versions and capability checks become Plan/preflight inputs rather than ambient assumptions.
 - Product code must expose gate failures before mutation and retain enough evidence to diagnose them.
 - Darwin support remains blocked until the final unchanged fixtures pass on the minimum and current supported macOS releases with leak-free cleanup.
-- The broader v0.1 architecture ADR set remains the responsibility of `m1-architecture-decisions`; this ADR records only the substrate gate that those decisions must cite.
+- The broader [v0.1 architecture decisions](../features/architecture-decisions.md) cite this substrate gate.
 
 ## Evidence
 

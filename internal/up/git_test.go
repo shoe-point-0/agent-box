@@ -196,18 +196,7 @@ func newGitReconcileFixture(t *testing.T) gitReconcileFixture {
 
 func newGitReconcileFixtureWithDriver(t *testing.T, driver string) gitReconcileFixture {
 	t.Helper()
-	gitPath := os.Getenv("HERMES_CRUSHER_REAL_GIT")
-	if gitPath == "" {
-		var err error
-		gitPath, err = exec.LookPath("git")
-		if err != nil {
-			t.Skip("real Git is unavailable")
-		}
-	}
-	gitPath, err := filepath.Abs(gitPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	gitPath := testutil.RequireGit(t)
 	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source with spaces")
 	runFixtureGit(t, gitPath, root, "init", "--initial-branch=main", source)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/shoe-point-0/agent-box/internal/process"
 )
@@ -36,17 +37,17 @@ type Diagnostics struct {
 }
 
 func NewDiagnostics(path, home, directory string) (*Diagnostics, error) {
-	if directory == "" || !filepath.IsAbs(directory) || filepath.Clean(directory) != directory || strings.ContainsAny(directory, "\x00\r\n") {
+	if !cleanDiagnosticPath(directory) {
 		return nil, errors.New("configure tool diagnostics: working directory is invalid")
 	}
-	if home == "" || !filepath.IsAbs(home) || filepath.Clean(home) != home || strings.ContainsAny(home, "\x00\r\n") {
+	if !cleanDiagnosticPath(home) {
 		return nil, ErrDiagnosticHome
 	}
-	if path == "" || strings.ContainsAny(path, "\x00\r\n") {
+	if path == "" {
 		return nil, ErrDiagnosticPath
 	}
 	for _, entry := range filepath.SplitList(path) {
-		if !filepath.IsAbs(entry) || filepath.Clean(entry) != entry {
+		if !cleanDiagnosticPath(entry) {
 			return nil, ErrDiagnosticPath
 		}
 	}
@@ -55,6 +56,10 @@ func NewDiagnostics(path, home, directory string) (*Diagnostics, error) {
 		environment: map[string]string{"PATH": path, "HOME": home, "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
 		runner:      process.Runner{CaptureLimit: 16 * 1024},
 	}, nil
+}
+
+func cleanDiagnosticPath(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path && strings.IndexFunc(path, unicode.IsControl) == -1
 }
 
 func (diagnostics *Diagnostics) Observe(ctx context.Context, probe DiagnosticProbe) (DiagnosticResult, error) {

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-plan-command","status":"implemented","created_at":"2026-08-29T06:55:50.479423731Z","implemented_at":"2026-08-30T00:17:33.61517398Z"}
--->
-
 # Read-only reconciliation plans with abox plan
 
 Status: implemented.

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-plan-compiler","status":"implemented","created_at":"2026-08-29T06:48:36.064104371Z","implemented_at":"2026-08-29T20:25:05.756754299Z"}
--->
-
 # Canonical immutable Plans
 
 Status: implemented.

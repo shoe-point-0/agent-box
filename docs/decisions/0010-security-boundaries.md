@@ -43,7 +43,7 @@ This boundary protects unrelated Machine assets from ordinary workload compromis
 
 - [ADR 0001](0001-milestone-0-substrate-gate.md) accepts ownership/refusal mechanisms on Linux but explicitly leaves Lima mount isolation unaccepted.
 - [The substrate matrix](../architecture/substrate-spikes.md) records ownership-aware Docker cleanup and source/Git containment; it created no VM and exercised no secret-delivery implementation.
-- [`m0-lima-isolation-probe`](../../.sprout/tasks/m0-lima-isolation-probe.md), `m5-compose-security`, `m5-secret-delivery`, and [`m5-darwin-arm64-hardware-gate`](../../.sprout/tasks/m5-darwin-arm64-hardware-gate.md) own the negative boundary tests.
+- Single-repository Apple M1 mount allowlisting and undeclared-canary denial passed in [apple-silicon-m1-gate.md](../architecture/apple-silicon-m1-gate.md); broader Compose hardening, secret delivery, and multi-version macOS boundary tests remain required in [Milestone 5](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 - The current [security policy](../../SECURITY.md) states that pre-alpha Agent Box is not yet a supported security boundary.
 
 ## Revisit triggers

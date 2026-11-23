@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-list-command","status":"implemented","created_at":"2026-08-29T06:55:50.494935974Z","implemented_at":"2026-08-29T23:55:30.836118413Z"}
--->
-
 # Box inventory with abox list
 
 Status: implemented.

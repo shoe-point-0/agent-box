@@ -161,7 +161,7 @@ type testFixture struct {
 
 func newFixture(t *testing.T, detached bool) testFixture {
 	t.Helper()
-	gitPath := requireGit(t)
+	gitPath := testutil.RequireGit(t)
 	root := testutil.TempDir(t)
 	source := filepath.Join(root, "source with spaces 界")
 	mustGit(t, gitPath, root, "init", "--initial-branch=main", source)
@@ -273,23 +273,6 @@ func (g *countingGit) SetPrivateBase(context.Context, string, string) (machinegi
 func (g *countingGit) ConfigurePrivateStore(context.Context, string) error {
 	_, err := g.called()
 	return err
-}
-
-func requireGit(t *testing.T) string {
-	t.Helper()
-	path := os.Getenv("HERMES_CRUSHER_REAL_GIT")
-	if path == "" {
-		var err error
-		path, err = exec.LookPath("git")
-		if err != nil {
-			t.Skip("real Git is unavailable")
-		}
-	}
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Clean(absolute)
 }
 
 func mustGit(t *testing.T, gitPath, directory string, arguments ...string) string {

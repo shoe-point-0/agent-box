@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-manifest-loader","status":"implemented","created_at":"2026-08-29T06:48:35.969030304Z","implemented_at":"2026-08-29T19:23:44.030893289Z"}
--->
-
 # Strict v1alpha1 Workspace loader
 
 Status: implemented.

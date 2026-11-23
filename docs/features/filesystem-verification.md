@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-filesystem-verifier","status":"implemented","created_at":"2026-08-29T06:48:36.123097622Z","implemented_at":"2026-08-30T02:51:15.293256001Z"}
--->
-
 # Mounted filesystem verification
 
 Status: implemented.

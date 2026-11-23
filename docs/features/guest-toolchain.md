@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-guest-toolchain","status":"implemented","created_at":"2026-08-29T06:48:36.107508706Z","implemented_at":"2026-08-30T00:49:04.893818046Z"}
--->
-
 # Guest toolchain provisioning and verification
 
 Status: implemented.
@@ -22,7 +18,7 @@ The package is registered in the audited process-boundary allowlist as a typed
 adapter over `lima.Adapter`. Real Apple Silicon Lima VZ execution of this
 provisioner was subsequently verified end to end in
 [`abox up`](abox-up.md); the full multi-version Darwin
-release matrix remains tracked in `m5-darwin-arm64-hardware-gate`.
+release matrix remains [open](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 ## Scope and dependencies
 

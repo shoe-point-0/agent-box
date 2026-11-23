@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-compose-policy-core","status":"implemented","created_at":"2026-08-29T06:55:50.434296344Z","implemented_at":"2026-08-29T20:50:43.83028602Z"}
--->
-
 # Pre-apply Compose security policy
 
 Status: implemented.
@@ -19,7 +15,7 @@ JSON field path, and reason so [Compose runtime adapter](compose-runtime.md) and
 higher control-plane layers classify refusals without parsing prose. The core
 gate is deny-by-default for capability additions and permits only
 `no-new-privileges=true` in normalized `security_opt`; broader hardening rules
-remain tracked in `m5-compose-security`.
+remain part of [Milestone 5](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 ## Scope and dependencies
 

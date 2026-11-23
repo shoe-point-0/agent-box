@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-compose-compiler","status":"implemented","created_at":"2026-08-29T06:48:36.138968013Z","implemented_at":"2026-08-29T20:36:42.900677707Z"}
--->
-
 # Generated Compose inputs
 
 Status: implemented.
@@ -18,9 +14,8 @@ This slice also added immutable policy projection to the versioned Plan
 contract so compilation never reaches back into mutable manifest files.
 Pre-apply security policy enforcement and runtime lifecycle execution build
 directly on this compiler in [Compose security policy](compose-security-policy.md)
-and [Compose runtime adapter](compose-runtime.md). Cache volumes remain deferred
-to `m2-cache-volumes` and multi-repository include expansion remains deferred
-to `m2-multi-repo-compose`.
+and [Compose runtime adapter](compose-runtime.md). Cache volumes and multi-repository
+include expansion remain [Milestone 2 work](../../ROADMAP.md#milestones-2-and-3-multi-repository-workspaces-and-routing).
 
 ## Scope and dependencies
 

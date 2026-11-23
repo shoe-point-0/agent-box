@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-git-worktrees","status":"implemented","created_at":"2026-08-29T06:48:36.047741734Z","implemented_at":"2026-08-29T21:22:59.63032857Z"}
--->
-
 # Linked worktree lifecycle and observation
 
 Status: implemented.

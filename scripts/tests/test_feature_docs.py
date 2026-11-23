@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import unittest
 from pathlib import Path
@@ -8,35 +7,21 @@ from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 FEATURES = ROOT / "docs" / "features"
-TASKS = ROOT / ".sprout" / "tasks"
-METADATA = re.compile(r"\A<!-- sprout-task\n(.*?)\n-->", re.DOTALL)
 LOCAL_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-MILESTONE_PREFIX = re.compile(r"^m\d+-")
-TASK_ID = re.compile(r"^m\d+-[a-z0-9-]+$")
 
 
 class FeatureDocumentationTests(unittest.TestCase):
     def test_completed_documents_are_reader_facing(self) -> None:
         documents = sorted(FEATURES.glob("*.md"))
         self.assertTrue(documents)
-        seen_ids: set[str] = set()
         for document in documents:
             with self.subTest(document=document.name):
-                self.assertIsNone(
-                    MILESTONE_PREFIX.match(document.stem),
-                    f"{document.name} should use a reader-facing filename without a milestone prefix",
-                )
+                self.assertRegex(document.stem, r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+                self.assertNotRegex(document.stem, r"^m\d+-")
                 text = document.read_text(encoding="utf-8")
-                metadata = METADATA.match(text)
-                self.assertIsNotNone(metadata)
-                assert metadata is not None
-                provenance = json.loads(metadata.group(1))
-                task_id = provenance["id"]
-                self.assertRegex(task_id, TASK_ID)
-                self.assertNotIn(task_id, seen_ids)
-                seen_ids.add(task_id)
-                self.assertEqual(provenance["status"], "implemented")
+                self.assertRegex(text, r"\A# \S")
                 for forbidden in (
+                    "<!-- sprout-task",
                     "Execute this task end to end.",
                     "## Execution checklist",
                     "## Original request",
@@ -50,7 +35,6 @@ class FeatureDocumentationTests(unittest.TestCase):
                     "Verification", "Validation evidence",
                 ):
                     self.assertRegex(text, rf"(?m)^## {re.escape(heading)}\n\n\S")
-                self.assertFalse((TASKS / f"{task_id}.md").exists())
 
     def test_feature_index_covers_every_document_exactly_once(self) -> None:
         index = (ROOT / "docs" / "features.md").read_text(encoding="utf-8")
@@ -60,15 +44,15 @@ class FeatureDocumentationTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("docs/features.md", LOCAL_LINK.findall(readme))
 
-    def test_feature_document_links_resolve(self) -> None:
-        documents = [ROOT / "docs" / "features.md", *FEATURES.glob("*.md")]
+    def test_local_document_links_resolve(self) -> None:
+        documents = [*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md")]
         for document in documents:
             for target in LOCAL_LINK.findall(document.read_text(encoding="utf-8")):
                 parsed = urlparse(target)
                 if parsed.scheme or parsed.netloc or not parsed.path:
                     continue
                 resolved = (document.parent / unquote(parsed.path)).resolve()
-                with self.subTest(document=document.name, target=target):
+                with self.subTest(document=document.relative_to(ROOT), target=target):
                     self.assertTrue(resolved.is_relative_to(ROOT.resolve()))
                     self.assertTrue(resolved.exists())
 

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-substrate-report","status":"implemented","created_at":"2026-08-29T06:48:35.907245415Z","implemented_at":"2026-08-29T09:39:25.423012873Z"}
--->
-
 # Substrate evidence and architecture gates
 
 Status: implemented.
@@ -16,8 +12,8 @@ Later Milestone 1 work validated the single-repository Apple Silicon VZ slice
 under [ADR 0011](../decisions/0011-bounded-filesystem-visibility.md) (recorded
 in [`abox up`](abox-up.md) and
 [apple-silicon-m1-gate.md](../architecture/apple-silicon-m1-gate.md)); the
-broader multi-version Darwin/arm64 release matrix remains open in
-`m5-darwin-arm64-hardware-gate`.
+broader multi-version Darwin/arm64 release matrix remains
+[open](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 ## Scope and dependencies
 
@@ -48,7 +44,7 @@ broader multi-version Darwin/arm64 release matrix remains open in
 
 ## Verification
 
-- [x] `sprout check --all`
+- [x] `make automation-check`
 - [x] Verify every command and artifact link in `docs/architecture/substrate-spikes.md`
 
 ## Validation evidence

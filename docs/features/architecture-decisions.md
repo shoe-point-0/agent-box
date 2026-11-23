@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-architecture-decisions","status":"implemented","created_at":"2026-08-29T06:48:35.940488707Z","implemented_at":"2026-08-29T15:20:27.059020152Z"}
--->
-
 # v0.1 architecture decisions
 
 Status: implemented.
@@ -47,7 +43,7 @@ filesystem timing and event assumptions following Apple M1 VZ runs.
 ## Verification
 
 - [x] Verify ADR index links and decision status
-- [x] `sprout check --all`
+- [x] `make automation-check`
 
 ## Validation evidence
 

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-ownership-core","status":"implemented","created_at":"2026-08-29T06:55:50.42129706Z","implemented_at":"2026-08-29T19:32:25.880876316Z"}
--->
-
 # Destructive-operation ownership proofs
 
 Status: implemented.
@@ -19,8 +15,8 @@ raw paths, names, or IDs.
 
 Prefix-shaped names and generic Compose labels are never accepted as ownership
 evidence. `internal/ownership` performs no mutations itself; descriptor-relative
-deletion and TOCTOU revalidation after proof construction remain tracked in
-`m4-ownership-proofs`.
+deletion and revalidation between proof and use remain
+[Milestone 4 work](../../ROADMAP.md#milestone-4-recovery-and-fault-containment).
 
 ## Scope and dependencies
 

@@ -16,10 +16,11 @@ import (
 	"testing"
 
 	"github.com/shoe-point-0/agent-box/internal/process"
+	"github.com/shoe-point-0/agent-box/internal/testutil"
 )
 
 func TestRealGitAdversarialExecutionProfile(t *testing.T) {
-	gitPath := realGitPath(t)
+	gitPath := testutil.RequireGit(t)
 	root := t.TempDir()
 	repository := filepath.Join(root, "source with spaces 界")
 	mustRawGit(t, gitPath, root, "init", "--initial-branch=main", repository)
@@ -105,7 +106,7 @@ func TestRealGitAdversarialExecutionProfile(t *testing.T) {
 }
 
 func TestManagedExcludesIgnoreOnlyProbeArtifacts(t *testing.T) {
-	gitPath := realGitPath(t)
+	gitPath := testutil.RequireGit(t)
 	root := t.TempDir()
 	repository := filepath.Join(root, "repository")
 	mustRawGit(t, gitPath, root, "init", "--initial-branch=main", repository)
@@ -238,7 +239,7 @@ func TestProfileRejectsLinkedWorktreeAlternatesBeforeGitStarts(t *testing.T) {
 }
 
 func TestProfileRejectsRepositoryFiltersBeforeStatus(t *testing.T) {
-	gitPath := realGitPath(t)
+	gitPath := testutil.RequireGit(t)
 	root := t.TempDir()
 	repository := filepath.Join(root, "repo")
 	mustRawGit(t, gitPath, root, "init", repository)
@@ -372,7 +373,7 @@ func TestCommandUsesOnlyControlledEnvironmentAndExplicitCredentials(t *testing.T
 }
 
 func TestExplicitSSHCredentialPathWinsOverAmbientCommand(t *testing.T) {
-	gitPath := realGitPath(t)
+	gitPath := testutil.RequireGit(t)
 	root := t.TempDir()
 	ambientMarker := filepath.Join(root, "ambient")
 	explicitMarker := filepath.Join(root, "explicit")
@@ -406,11 +407,11 @@ func TestProductionMachineGitCallsCannotBypassProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || allowed[entry.Name()] {
+		if !entry.IsDir() || entry.Name() == "testutil" {
 			continue
 		}
 		packageRoot := filepath.Join(internalRoot, entry.Name())
-		_ = filepath.WalkDir(packageRoot, func(path string, item os.DirEntry, walkErr error) error {
+		err := filepath.WalkDir(packageRoot, func(path string, item os.DirEntry, walkErr error) error {
 			if walkErr != nil || item.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return walkErr
 			}
@@ -420,12 +421,16 @@ func TestProductionMachineGitCallsCannotBypassProfile(t *testing.T) {
 			}
 			for _, imported := range file.Imports {
 				name := strings.Trim(imported.Path.Value, "\"")
-				if name == "os/exec" || strings.HasSuffix(name, "/internal/process") {
+				commandBoundary := name == "os/exec" || strings.HasSuffix(name, "/internal/process")
+				if strings.HasSuffix(name, "/internal/testutil") || (commandBoundary && !allowed[entry.Name()]) {
 					violations = append(violations, path+": "+name)
 				}
 			}
 			return nil
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	slices.Sort(violations)
 	if len(violations) != 0 {
@@ -473,23 +478,6 @@ func realClient(t *testing.T, gitPath, home string, credentials Credentials) Cli
 		t.Fatal(err)
 	}
 	return client
-}
-
-func realGitPath(t *testing.T) string {
-	t.Helper()
-	path := os.Getenv("HERMES_CRUSHER_REAL_GIT")
-	if path == "" {
-		var err error
-		path, err = exec.LookPath("git")
-		if err != nil {
-			t.Skip("real Git is unavailable")
-		}
-	}
-	path, err := filepath.Abs(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Clean(path)
 }
 
 func mustRawGit(t *testing.T, gitPath, directory string, arguments ...string) string {

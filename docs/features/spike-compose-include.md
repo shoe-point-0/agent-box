@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-compose-probe","status":"implemented","created_at":"2026-08-29T06:48:35.861247609Z","implemented_at":"2026-08-29T08:00:19.561956518Z"}
--->
-
 # Multi-repository Compose include semantics
 
 Status: implemented.

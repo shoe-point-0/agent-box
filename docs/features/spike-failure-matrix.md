@@ -1,20 +1,16 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-failure-matrix","status":"implemented","created_at":"2026-08-29T06:48:35.892187635Z","implemented_at":"2026-08-29T09:29:29.670197467Z"}
--->
-
 # Crash residue at substrate boundaries
 
 Status: implemented.
 
 Delivers the executable `failure-matrix` Linux scenario, a private `SIGKILL` worker boundary, a typed `abox.spike.failure-matrix/v1` retained report, eight stable logical operation IDs, independent residue observers, idempotent adoption, reverse-order cleanup, and refusal-first ownership checks.
 
-Unexpected harness cleanup preflights every case before mutation, refuses dirty or unregistered Git state and mismatched Docker ownership, and removes only exact owner-marked resources. Lima creation/teardown, VirtioFS mounts, and Darwin forwarding kill points remain deferred to `m5-darwin-arm64-hardware-gate`; this record makes Linux Git, Compose, and process-local routing/cleanup claims only.
+Unexpected harness cleanup preflights every case before mutation, refuses dirty or unregistered Git state and mismatched Docker ownership, and removes only exact owner-marked resources. This record covers Linux Git, Compose, and process-local routing and cleanup.
 
 ## Scope and dependencies
 
 - **Milestone**: Milestone 0 Linux implementation gate.
 - **Dependencies**: [Git path invariance spike](spike-git-path.md), [Compose include spike](spike-compose-include.md), [localhost routing spike](spike-localhost-routing.md).
-- **Platform boundary**: Darwin VZ and VirtioFS kill points move to `m5-darwin-arm64-hardware-gate` under the same stable operation IDs.
+- **Platform boundary**: Fault injection during Lima creation/teardown, VirtioFS mounts, and Darwin forwarding remains part of the [Milestone 5 hardware gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate), under the same stable operation IDs.
 - **Design reference**: [THE_BEGINNING.md](../../THE_BEGINNING.md), Sections 9, 17, and 19.2.
 
 ## Behavior

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-spike-harness","status":"implemented","created_at":"2026-08-29T06:44:38.361259313Z","implemented_at":"2026-08-29T07:23:33.712761465Z"}
--->
-
 # Substrate spike harness
 
 Status: implemented.

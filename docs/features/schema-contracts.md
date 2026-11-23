@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-schema-contract","status":"implemented","created_at":"2026-08-29T06:55:50.368726934Z","implemented_at":"2026-08-29T20:17:00.246351204Z"}
--->
-
 # Versioned Plan, context, output, and error contracts
 
 Status: implemented.

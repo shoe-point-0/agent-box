@@ -2,7 +2,7 @@
 
 These documents explain implemented Agent Box components, their boundaries, and the verification evidence recorded for each. They document delivered components rather than claiming full release support for every future milestone; see the [roadmap](../ROADMAP.md), [Apple Silicon M1 hardware gate](architecture/apple-silicon-m1-gate.md), and [product baseline](../THE_BEGINNING.md) for overall delivery and support boundaries.
 
-Work in progress stays in `.sprout/tasks/`. A task becomes a feature document only after all acceptance criteria and verification items pass, concrete evidence is recorded, and `sprout close <id>` succeeds. Partial implementations and hardware-blocked tasks remain open; cross-compilation is not Darwin runtime evidence.
+A capability is documented here only after its acceptance criteria and verification checks pass with concrete recorded evidence. Cross-compilation is not Darwin runtime evidence.
 
 ## Find a component
 
@@ -72,12 +72,10 @@ Work in progress stays in `.sprout/tasks/`. A task becomes a feature document on
 - [v0.1 architecture decisions](features/architecture-decisions.md)
 - [Project governance and maintenance](features/project-governance.md)
 
-## Task-to-document workflow
+## Maintaining feature documentation
 
-1. Keep active requirements, dependencies, checklists, and partial evidence in `.sprout/tasks/<id>.md`.
-2. Run `sprout check <id>` while working. Record the actual commands and observed results, including remaining limitations.
-3. Run `sprout check --complete <id>` only when every criterion is true, then `sprout close <id>`. Do not close a task to tidy the backlog.
-4. Rename the promoted `docs/features/<id>.md` to a descriptive, reader-facing kebab-case filename (without the `mN-` milestone prefix) and rewrite it for readers: a clear title, delivered behavior, scope, constraints, implementation details, verified acceptance criteria, and retained verification evidence. Remove the execution checklist, original agent request, and instructions to execute the task. Preserve the hidden `<!-- sprout-task ... -->` metadata header verbatim for provenance and frontier tracking.
-5. Add its link to this index and update any affected public guides. Run `sprout check --all`, `python3 scripts/sprout_frontier.py --json`, and `make automation-check` before review.
+1. Document each delivered component under `docs/features/` using a descriptive kebab-case filename.
+2. Include the component's scope and dependencies, behavior, constraints, verified acceptance criteria, implementation details, verification checklist, and concrete validation evidence.
+3. Index the document from this page, update any affected top-level guides or ADRs, and run `make automation-check` to verify link integrity and document structure before review.
 
-Historical Sprout checks in validation evidence describe commands that actually ran; they are not requirements for readers to install Sprout to understand a feature. Sprout is contributor tooling, not an Agent Box runtime dependency.
+Commands in “Validation evidence” are historical records. Use `make check` for the current contributor workflow.

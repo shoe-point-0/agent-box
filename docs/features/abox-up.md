@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-single-repo-up","status":"implemented","created_at":"2026-08-29T06:48:36.203491553Z","implemented_at":"2026-11-22T05:29:34.140202Z"}
--->
-
 # Single-repository up vertical slice
 
 Status: implemented.
@@ -25,8 +21,8 @@ and the bounded filesystem visibility contract in
 
 Tracked follow-ups outside this single-repository vertical slice:
 - The full multi-version Darwin/arm64 release matrix (minimum and current macOS,
-  two-VM forwarding collision, and full kill/recovery matrix) remains tracked in
-  `m5-darwin-arm64-hardware-gate`.
+  two-VM forwarding collision, and full kill/recovery matrix) remains part of the
+  [Milestone 5 release gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 - The explicit short `--state-db` path workaround for Darwin's 104-byte Unix
   socket path limit on Lima control sockets remains open for default macOS
   Application Support paths.

@@ -31,33 +31,22 @@ func NewDefaultDiagnosticClient(path, home, directory string) (*DiagnosticClient
 	return NewDiagnosticClient(path, home, directory, process.Runner{CaptureLimit: 16 * 1024})
 }
 
-func NewDefaultDiagnosticClientAt(gitPath, path, home, directory string) (*DiagnosticClient, error) {
-	return newDiagnosticClient(gitPath, path, home, directory, process.Runner{CaptureLimit: 16 * 1024})
-}
-
 func NewDiagnosticClient(path, home, directory string, executor Executor) (*DiagnosticClient, error) {
-	gitPath, err := diagnosticExecutable(path, "git")
-	if err != nil {
-		return nil, err
-	}
-	return newDiagnosticClient(gitPath, path, home, directory, executor)
-}
-
-func newDiagnosticClient(gitPath, path, home, directory string, executor Executor) (*DiagnosticClient, error) {
 	if err := validatePathList(path); err != nil {
 		return nil, err
 	}
-	for field, value := range map[string]string{"Git executable": gitPath, "home": home, "working directory": directory} {
-		if err := validateCanonicalPath(field, value); err != nil {
-			return nil, err
-		}
+	if err := validateCanonicalPath("home", home); err != nil {
+		return nil, err
+	}
+	if err := validateCanonicalPath("working directory", directory); err != nil {
+		return nil, err
 	}
 	if executor == nil {
 		return nil, refuse("executor", "is required")
 	}
-	info, err := os.Stat(gitPath)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
-		return nil, refuse("Git executable", "must be an executable regular file")
+	gitPath, err := diagnosticGitExecutable(path)
+	if err != nil {
+		return nil, err
 	}
 	return &DiagnosticClient{gitPath: gitPath, home: home, path: path, directory: directory, executor: executor}, nil
 }
@@ -107,9 +96,9 @@ func (client *DiagnosticClient) Observe(ctx context.Context, probe DiagnosticPro
 	})
 }
 
-func diagnosticExecutable(pathValue, name string) (string, error) {
+func diagnosticGitExecutable(pathValue string) (string, error) {
 	for _, directory := range filepath.SplitList(pathValue) {
-		candidate := filepath.Join(directory, name)
+		candidate := filepath.Join(directory, "git")
 		info, err := os.Stat(candidate)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 			continue

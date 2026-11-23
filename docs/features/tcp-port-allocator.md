@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m3-tcp-allocator","status":"implemented","created_at":"2026-08-29T06:48:36.42631655Z","implemented_at":"2026-08-30T08:50:16.462766373Z"}
--->
-
 # Stable raw TCP endpoints
 
 Status: implemented.

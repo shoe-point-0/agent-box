@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-operation-journal","status":"implemented","created_at":"2026-08-29T06:48:36.016072514Z","implemented_at":"2026-08-29T22:19:43.062882161Z"}
--->
-
 # Operation events and Box leases
 
 Status: implemented.

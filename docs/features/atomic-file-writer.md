@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-atomic-writer","status":"implemented","created_at":"2026-08-29T06:55:50.358054833Z","implemented_at":"2026-08-29T15:27:27.582737378Z"}
--->
-
 # Crash-consistent atomic file writes
 
 Status: implemented.

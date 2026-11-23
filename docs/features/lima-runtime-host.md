@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-lima-adapter","status":"implemented","created_at":"2026-08-29T06:48:36.094129071Z","implemented_at":"2026-08-30T00:39:19.680714239Z"}
--->
-
 # Lima runtime-host adapter
 
 Status: implemented.
@@ -21,7 +17,7 @@ TCP/UDP port-forwarding suppression, `mountInotify: true` for writable mounts,
 noninteractive `/usr/bin/sudo -n --` administrative guest execution, stdin
 transport for bounded guest inputs, and graceful stop-plus-ownership-reproof
 before `limactl delete` on running VMs. The full multi-version Darwin release
-matrix remains tracked in `m5-darwin-arm64-hardware-gate`.
+matrix remains [open](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 ## Scope and dependencies
 
@@ -57,7 +53,7 @@ matrix remains tracked in `m5-darwin-arm64-hardware-gate`.
 - [x] `go test -race ./...`
 - [x] `go vet ./...`
 - [x] Run Lima adapter contract tests
-- [x] Run the adapter smoke path on Linux with a real supported Lima configuration where available; retain Darwin/arm64 execution for `m5-darwin-arm64-hardware-gate`
+- [x] Exercise the adapter contract on Linux and record any skip of the optional live Lima smoke test. See the [Apple M1 report](../architecture/apple-silicon-m1-gate.md) for later real VM execution.
 
 ## Validation evidence
 

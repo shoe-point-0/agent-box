@@ -44,7 +44,7 @@ The adapter may use Lima's control/SSH channel for pinned guest tools. v0.1 adds
 - [ADR 0001](0001-milestone-0-substrate-gate.md) requires preflight and observed-state recovery while recording that no Lima runtime was exercised.
 - Lima's [`limactl create`](https://lima-vm.io/docs/reference/limactl_create) and [`limactl start`](https://lima-vm.io/docs/reference/limactl_start) references expose explicit VM type, mount type, mount list, static forward, resource, and instance-name controls.
 - [Lima mount documentation](https://lima-vm.io/docs/config/mount) distinguishes VZ VirtioFS from QEMU and documents mount-specific caveats.
-- No product adapter exists yet; its executable behavior belongs to `m1-process-runner`, `m1-lima-adapter`, and the real Darwin gate. These upstream references prove interface availability, not Agent Box support.
+- The [Lima runtime adapter](../features/lima-runtime-host.md) uses the [bounded process runner](../features/process-runner.md). Its [Apple M1 results](../architecture/apple-silicon-m1-gate.md) apply only to the measured stack; upstream interface availability does not establish Agent Box support.
 
 ## Revisit triggers
 

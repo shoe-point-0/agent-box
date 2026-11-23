@@ -1,6 +1,6 @@
 # ADR 0011: Bound filesystem visibility and forward writable-mount events
 
-- Status: Accepted; validated on Apple M1 single-repository M1 gate (`m5-darwin-arm64-hardware-gate` release matrix remains separate)
+- Status: Accepted; validated on the single-repository Apple M1 gate. The [Milestone 5 release matrix](../../ROADMAP.md#milestone-5-releasable-v01-candidate) remains open.
 - Date: 2026-11-21
 - Scope: Darwin/arm64 filesystem readiness; amends the coherency assumption in ADR 0005
 

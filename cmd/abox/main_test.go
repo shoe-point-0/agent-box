@@ -477,7 +477,6 @@ func TestDoctorEnvironmentPrerequisitesInHumanAndJSONOutput(t *testing.T) {
 	t.Setenv("HOME", root)
 	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(root, "runtime"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
-	t.Setenv("HERMES_CRUSHER_REAL_GIT", "")
 	bin := filepath.Join(root, "private-tools with spaces")
 	if err := os.Mkdir(bin, 0o700); err != nil {
 		t.Fatal(err)

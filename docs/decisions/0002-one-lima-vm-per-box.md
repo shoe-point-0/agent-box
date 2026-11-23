@@ -16,7 +16,7 @@ The Machine-side worktrees and Box-private Git stores remain canonical; replacin
 
 Rootful Docker is confined to the disposable VM. The Docker socket is not mounted into workspace or support containers. A container escape reaches the Box runtime host and explicitly mounted Box data; this decision does not claim protection from hypervisor exploits or Machine-user compromise.
 
-Darwin VZ isolation, mount allowlisting, VirtioFS, forwarding, and cleanup are design obligations, not accepted runtime facts, until the real-hardware gate passes.
+Darwin VZ isolation, mount allowlisting, VirtioFS, forwarding, and cleanup require separate hardware evidence; a single-Box run cannot establish sibling isolation or concurrent forwarding.
 
 ## Alternatives considered
 
@@ -37,7 +37,7 @@ Darwin VZ isolation, mount allowlisting, VirtioFS, forwarding, and cleanup are d
 
 - [ADR 0001](0001-milestone-0-substrate-gate.md) defines the evidence boundary and leaves Lima isolation unaccepted.
 - [Milestone 0 substrate matrix](../architecture/substrate-spikes.md) records that Lima and a guest image were unavailable on the executed Linux matrix.
-- [`m0-lima-isolation-probe`](../../.sprout/tasks/m0-lima-isolation-probe.md) and [`m5-darwin-arm64-hardware-gate`](../../.sprout/tasks/m5-darwin-arm64-hardware-gate.md) own the unchanged mount, forwarding, concurrency, and leak checks.
+- The [Apple M1 gate](../architecture/apple-silicon-m1-gate.md) verified one Box's mount allowlist and VM lifecycle; multi-VM forwarding, concurrency, and multi-version macOS leak checks remain required at the [Milestone 5 Darwin/arm64 hardware gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 - Lima documents VZ, VirtioFS, explicit mounts, and static port-forward configuration in its [mount](https://lima-vm.io/docs/config/mount) and [`limactl create`](https://lima-vm.io/docs/reference/limactl_create) contracts. Those upstream capabilities are not Agent Box runtime evidence.
 
 ## Revisit triggers

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-context-document","status":"implemented","created_at":"2026-08-29T06:48:36.233617336Z","implemented_at":"2026-08-29T22:07:43.102383548Z"}
--->
-
 # Versioned agent context and output schemas
 
 Status: implemented.

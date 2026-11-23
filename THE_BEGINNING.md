@@ -212,7 +212,7 @@ The Linux probes narrowed three assumptions:
 - repository port suppression depends on a pinned Compose version that demonstrably normalizes the generated `!reset []` override before apply; and
 - wildcard `.localhost` routing is proven on an unprivileged IPv4 listener only when resolver and proxy-bypass behavior pass preflight.
 
-Lima VZ, VirtioFS coherency and watcher behavior, the mount allowlist, concurrent Lima forwarding, Darwin resolver/browser behavior, and their crash cleanup paths remain explicit non-claims until `m5-darwin-arm64-hardware-gate` passes unchanged fixtures on real Apple Silicon hardware. Cross-compilation is not runtime evidence.
+The later [Apple M1 gate](docs/architecture/apple-silicon-m1-gate.md) verified the single-repository VZ lifecycle, mount allowlist, and bounded VirtioFS visibility and bridged watcher behavior on its recorded stack. Concurrent Lima forwarding, Darwin resolver/browser behavior, crash recovery, and multi-version release support still require the [Milestone 5 hardware gate](ROADMAP.md#milestone-5-releasable-v01-candidate). Cross-compilation is not runtime evidence.
 
 ---
 

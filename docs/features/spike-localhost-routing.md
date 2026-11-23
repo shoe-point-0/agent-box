@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-routing-probe","status":"implemented","created_at":"2026-08-29T06:48:35.876421469Z","implemented_at":"2026-08-29T08:59:07.330570647Z"}
--->
-
 # Wildcard localhost routing through one listener
 
 Status: implemented.
@@ -15,7 +11,7 @@ evidence.
 
 This Linux probe proves local host routing only. IPv6 wildcard resolution,
 ambient enterprise proxies, Lima forwarding, and Darwin resolver/browser
-behavior remain explicit non-claims deferred to `m5-darwin-arm64-hardware-gate`.
+behavior remain unverified by this probe. The [Milestone 5 hardware gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate) covers Darwin forwarding and routing.
 
 ## Scope and dependencies
 

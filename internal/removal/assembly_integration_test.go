@@ -191,19 +191,9 @@ type fullRemovalFixture struct {
 
 func newFullRemovalFixture(t *testing.T) *fullRemovalFixture {
 	t.Helper()
-	gitPath := os.Getenv("HERMES_CRUSHER_REAL_GIT")
-	if gitPath == "" {
-		var err error
-		gitPath, err = exec.LookPath("git")
-		if err != nil {
-			t.Skip("real Git is unavailable")
-		}
-	}
-	gitPath, err := filepath.Abs(gitPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	gitPath := testutil.RequireGit(t)
 	fixture := &fullRemovalFixture{t: t, root: testutil.TempDir(t), siblingContents: "sibling must survive\n", sourceMarkerContents: "source must survive\n"}
+	var err error
 	fixture.provider, err = paths.New(filepath.Join(fixture.root, "application"), filepath.Join(fixture.root, "cache"), filepath.Join(fixture.root, "logs"))
 	if err != nil {
 		t.Fatal(err)

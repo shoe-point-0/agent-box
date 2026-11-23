@@ -14,7 +14,7 @@ The first run downloads a pinned `golangci-lint` release into `.tools/bin`; it d
 
 Before proposing a change:
 
-1. Read `AGENTS.md` and the relevant architecture or Sprout packet.
+1. Read `AGENTS.md` and the relevant architecture or feature documentation.
 2. Keep the change focused and preserve explicit platform, ownership, cleanup, and security boundaries.
 3. Add tests for observable behavior and failure paths.
 4. Run `make check` from the repository root.
@@ -23,11 +23,9 @@ Before proposing a change:
 
 Use `make clean` to remove `bin/` and `.tools/`.
 
-## Tasks and feature documentation
+## Feature documentation
 
-Work in progress belongs in `.sprout/tasks/`, including partial implementations and tasks waiting on hardware. Validate active packets with `sprout check <id>`. Only after all acceptance criteria pass and concrete evidence is recorded should you run `sprout check --complete <id>` followed by `sprout close <id>`.
-
-Closing promotes the packet to `docs/features/<id>.md`. Rename the promoted file to a descriptive, reader-facing kebab-case filename (without the `mN-` milestone prefix) and rewrite it for readers: describe the delivered behavior, scope, constraints, implementation, and verification evidence; remove execution instructions and administrative checklists. Preserve the hidden `<!-- sprout-task ... -->` provenance metadata and historical evidence, and link the result from the [feature index](docs/features.md). Run `make automation-check` to validate the documentation contract. No task should be closed merely to tidy the backlog.
+Implemented components are documented as reader-facing references under `docs/features/` using descriptive kebab-case filenames and indexed from [docs/features.md](docs/features.md). When adding or changing a delivered capability, document its behavior, scope, constraints, implementation details, verified acceptance criteria, and recorded verification evidence, then run `make automation-check` to validate links and documentation structure. Never document unimplemented or unverified capabilities as shipped behavior.
 
 ## Go conventions
 

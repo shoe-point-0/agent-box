@@ -61,12 +61,7 @@ func NewLocalObserver(workingDirectory string) (*LocalObserver, error) {
 		}
 		return &LocalObserver{WorkingDirectory: workingDirectory, configuration: &check}, nil
 	}
-	var git *machinegit.DiagnosticClient
-	if explicit := os.Getenv("HERMES_CRUSHER_REAL_GIT"); explicit != "" {
-		git, _ = machinegit.NewDefaultDiagnosticClientAt(explicit, path, home, workingDirectory)
-	} else {
-		git, _ = machinegit.NewDefaultDiagnosticClient(path, home, workingDirectory)
-	}
+	git, _ := machinegit.NewDefaultDiagnosticClient(path, home, workingDirectory)
 	return &LocalObserver{WorkingDirectory: workingDirectory, Git: git, Tools: tools}, nil
 }
 

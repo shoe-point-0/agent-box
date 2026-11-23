@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m4-fault-state","status":"implemented","created_at":"2026-08-29T06:55:50.649128882Z","implemented_at":"2026-08-30T08:57:16.578054754Z"}
--->
-
 # SQLite and generated-file durability failures
 
 Status: implemented.
@@ -16,8 +12,8 @@ Restart recovery is verified to observe either complete old or complete new
 generated artifacts, rolled-back `SQLITE_FULL` transactions with intact
 `quick_check(1)` integrity, and mandatory fresh external observation before a
 retried generation can commit as `READY`. Migration-specific fault injection
-and any future database backup implementation remain owned by
-`m5-state-compatibility`; Agent Box currently has no database backup feature
+and any future database backup implementation remain
+[Milestone 5 compatibility work](../../ROADMAP.md#milestone-5-releasable-v01-candidate); Agent Box currently has no database backup feature
 and explicitly does not treat SQLite WAL files as backups.
 
 ## Scope and dependencies

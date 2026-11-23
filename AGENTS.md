@@ -1,12 +1,11 @@
 # Repository agent instructions
 
-Follow the repository's established conventions and keep changes focused.
+Follow the repository's established conventions in [CONTRIBUTING.md](CONTRIBUTING.md) and keep changes focused.
 
-When executing a task from .sprout/tasks/:
+When implementing a feature or bug fix:
 
-- Read the entire task packet before editing.
-- Lay of the Land: Inspect relevant code, tests, and repository instructions.
+- Lay of the Land: Inspect relevant code, tests, architecture decisions, and repository instructions before editing.
 - Tracer Bullet: First prove feasibility via the shortest possible end-to-end path.
 - Hot Path Exploration: Build out the primary execution path and core logic.
-- Safe Passage: Harden the implementation, execute all verification items, and resolve any regressions.
-- Closing Review: Document final technical approach, record validation evidence, and prepare the packet for sprout close.
+- Safe Passage: Harden the implementation, run `make check`, and resolve any regressions.
+- Closing Review: Update reader-facing documentation under `docs/features/` (indexed in `docs/features.md`) and record real verification evidence without widening platform support claims beyond observed execution.

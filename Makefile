@@ -81,12 +81,6 @@ smoke:
 	$(GO) run ./cmd/abox-spike list --json
 
 automation-check:
-	bash -n scripts/alph-snowball-agent scripts/crush-sprout automation/sprout-crusher/bin/git
-	real_git="$${HERMES_CRUSHER_REAL_GIT:-$$(command -v git)}"; HERMES_CRUSHER_REAL_GIT="$$real_git" automation/sprout-crusher/bin/git --version >/dev/null
-	@if real_git="$${HERMES_CRUSHER_REAL_GIT:-$$(command -v git)}"; HERMES_CRUSHER_REAL_GIT="$$real_git" automation/sprout-crusher/bin/git push >/dev/null 2>&1; then \
-		echo "Git push guard failed" >&2; \
-		exit 1; \
-	fi
 	python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
 check: fmt-check lint deps test test-race vet build smoke automation-check

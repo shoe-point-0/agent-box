@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m5-governance-readiness","status":"implemented","created_at":"2026-08-29T06:48:36.686316691Z","implemented_at":"2026-08-30T09:14:55.299751018Z"}
--->
-
 # Project governance and maintenance
 
 Status: implemented.

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-project-bootstrap","status":"implemented","created_at":"2026-08-29T06:55:50.347590606Z","implemented_at":"2026-08-29T07:10:14.628492871Z"}
--->
-
 # Disposable Go spike workspace
 
 Status: implemented.

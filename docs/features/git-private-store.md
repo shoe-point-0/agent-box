@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-git-private-store","status":"implemented","created_at":"2026-08-29T06:48:36.031491662Z","implemented_at":"2026-08-29T21:04:38.679510154Z"}
--->
-
 # Self-contained Box-private Git stores
 
 Status: implemented.

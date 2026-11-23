@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-compose-adapter","status":"implemented","created_at":"2026-08-29T06:48:36.151865633Z","implemented_at":"2026-08-30T01:14:02.342658598Z"}
--->
-
 # Compose lifecycle, exec, logs, and observation
 
 Status: implemented.

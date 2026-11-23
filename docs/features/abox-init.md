@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-init-command","status":"implemented","created_at":"2026-08-29T06:55:50.464348415Z","implemented_at":"2026-08-29T23:41:16.216104363Z"}
--->
-
 # Starter workspace manifests with abox init
 
 Status: implemented.

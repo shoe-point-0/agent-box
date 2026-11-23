@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-machine-git-profile","status":"implemented","created_at":"2026-08-29T06:55:50.379176125Z","implemented_at":"2026-08-29T20:00:27.54247821Z"}
--->
-
 # Hardened Machine-side Git execution
 
 Status: implemented.

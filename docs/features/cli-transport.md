@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-cli-foundation","status":"implemented","created_at":"2026-08-29T06:48:36.18714109Z","implemented_at":"2026-08-29T23:31:56.219620274Z"}
--->
-
 # CLI transport and output contracts
 
 Status: implemented.
@@ -14,8 +10,8 @@ stable symbolic exit-code mapping. Shared user-path resolution prevents `abox`
 and `aboxd` from drifting on state or runtime paths.
 
 The CLI never unlinks or repairs a stale socket after daemon death; stale
-endpoint adoption and crash reconstruction remain owned by
-`m4-recovery-reconstruction`. When the CLI transport first landed, `abox up`
+endpoint adoption and crash reconstruction remain
+[Milestone 4 work](../../ROADMAP.md#milestone-4-recovery-and-fault-containment). When the CLI transport first landed, `abox up`
 targeted a stubbed backend returning `ABOX_FEATURE_NOT_SUPPORTED`; end-to-end
 single-repository `abox up` execution was subsequently wired in
 [`abox up`](abox-up.md), and additional Milestone 1 commands

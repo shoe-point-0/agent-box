@@ -2,12 +2,27 @@ package machinegit
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestDiagnosticClientRejectsInvalidEnvironmentBeforeGitLookup(t *testing.T) {
+	root := t.TempDir() // No git binary: lookup must not mask invalid configuration.
+	for _, tc := range []struct{ path, home, field string }{
+		{root + ":.", root, "PATH"},
+		{root, "relative", "home"},
+	} {
+		_, err := NewDiagnosticClient(tc.path, tc.home, root, &recordingExecutor{})
+		var policy *PolicyError
+		if !errors.As(err, &policy) || policy.Field != tc.field {
+			t.Errorf("want %s policy error, got %v", tc.field, err)
+		}
+	}
+}
 
 func TestDiagnosticClientUsesFixedReadOnlyProfile(t *testing.T) {
 	root := t.TempDir()

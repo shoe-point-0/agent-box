@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-reconcile-engine","status":"implemented","created_at":"2026-08-29T06:48:36.162350553Z","implemented_at":"2026-08-29T22:27:29.168605862Z"}
--->
-
 # Operation dependency graph engine
 
 Status: implemented.

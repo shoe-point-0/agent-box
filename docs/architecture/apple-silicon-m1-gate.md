@@ -1,6 +1,6 @@
 # Apple Silicon Milestone 1 hardware gate
 
-Status: **GREEN** for the Milestone 1 single-repository vertical slice on the tested Apple M1 stack (2026-11-22). Full multi-version macOS release support remains gated on [`m5-darwin-arm64-hardware-gate`](../../.sprout/tasks/m5-darwin-arm64-hardware-gate.md).
+Status: **GREEN** for the Milestone 1 single-repository vertical slice on the tested Apple M1 stack (2026-11-22). Full multi-version macOS release support remains gated on the [Milestone 5 Darwin/arm64 hardware gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 
 This report summarizes the real-hardware verification of [`abox up`](../features/abox-up.md) and refusal-first [`abox rm`](../features/abox-rm.md) on Darwin/arm64 with Lima VZ and VirtioFS. The sanitized machine-readable evidence bundle is stored in [apple-silicon-m1-evidence.json](apple-silicon-m1-evidence.json).
 
@@ -48,7 +48,7 @@ In addition to the filesystem visibility and watcher changes in [ADR 0011](../de
 
 ## Known limits and remaining gates
 
-- **Multi-version macOS release matrix**: This gate establishes single-repository Milestone 1 behavior on one Apple M1 macOS version. Minimum and current supported macOS versions, two-VM forwarding collision checks, and full fault-injection recovery remain open in [`m5-darwin-arm64-hardware-gate`](../../.sprout/tasks/m5-darwin-arm64-hardware-gate.md).
+- **Multi-version macOS release matrix**: This gate establishes single-repository Milestone 1 behavior on one Apple M1 macOS version. Minimum and current supported macOS versions, two-VM forwarding collision checks, and full fault-injection recovery remain open for the [Milestone 5 Darwin/arm64 release gate](../../ROADMAP.md#milestone-5-releasable-v01-candidate).
 - **Default macOS socket path length**: Validation used a short explicit `--state-db` path because Lima control sockets under `$HOME/Library/Application Support/Agent Box` can exceed Darwin's 104-byte Unix socket limit. See [getting started](../getting-started.md#daemon-startup-and-paths).
 - **Event-bridge limits**: Lima's experimental `mountInotify` does not forward host deletion events and synthesizes `IN_ATTRIB`. Projects whose watchers require deletion events or ignore `IN_ATTRIB` must configure polling.
 - **Post-removal Box state in `abox list`**: `abox rm --yes` removes all external and transient Box resources and retains `plan.json`, while SQLite `boxes.recorded_state` still renders `ready` in `abox list` afterward; transitioning the Box state row on completed removal remains a separate follow-up.

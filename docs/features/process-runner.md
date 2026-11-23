@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-process-runner","status":"implemented","created_at":"2026-08-29T06:48:35.952766065Z","implemented_at":"2026-08-29T19:48:47.509667038Z"}
--->
-
 # Safe subprocess execution
 
 Status: implemented.

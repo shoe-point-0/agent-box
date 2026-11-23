@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-doctor-command","status":"implemented","created_at":"2026-08-29T06:55:50.510725152Z","implemented_at":"2026-08-30T03:26:04.589717043Z"}
--->
-
 # Machine and Box prerequisite diagnostics
 
 Status: implemented.
@@ -27,6 +23,7 @@ inferring runtime truth from desired configuration.
 ## Behavior
 
 - Exposes Machine (`abox doctor`), Box (`abox doctor TASK`), and filesystem (`abox doctor fs TASK`) diagnostic modes backed solely by read-only observers.
+- Resolves Git from `PATH`. If `HOME` or a `PATH` entry is relative, unclean, empty, or contains a control character, doctor reports the environment failure and skips tool execution. Spaces in absolute paths are valid.
 - Reports Machine platform and identity, state and runtime filesystem capacity, hardened tool versions (`git`, `limactl`, `docker`, `docker compose`), Git relative-worktree safety, Docker runtime status, router-port and artifact-integrity state, and Box mount/port/runtime/ownership/watcher evidence with polling guidance when applicable.
 - Returns the prerequisite exit category when any check fails or is unsupported while returning success when only `tested`, `warning`, or `unknown` results occur so partially installed Machines remain diagnosable.
 
@@ -55,6 +52,7 @@ inferring runtime truth from desired configuration.
 
 ## Validation evidence
 
+- On Darwin/arm64 (Go 1.27.0), regression tests reproduced tool clients being enabled with an escape character in `PATH` or a tab in `HOME`. After the fix both cases reported the environment failure, skipped all tool probes, and retained the independent platform and disk checks. `make check` passed, including the race suite.
 - `go test -race -count=10 ./internal/doctor/... ./internal/machinegit/... ./internal/toolchain/... ./cmd/abox/...` passed across all three modes, schema-valid JSON output, argument handling, cancellation, fixed tool probes, and hardened Git diagnostics; `go vet` and `golangci-lint` reported `0` issues.
 - `TestProductionMachineGitCallsCannotBypassProfile` enforced that `internal/doctor` routes Git inspection exclusively through `machinegit.DiagnosticClient` and never through the generic process runner.
 - Live Linux CLI smoke runs of `abox doctor --json`, `abox doctor TASK-47 --json`, and `abox doctor fs TASK-47 --json` produced `12`, `16`, and `18` sorted checks covering all four evidence classes (`tested`, `warning`, `unsupported`, `unknown`), observing Git `2.43.0`, Docker `29.6.1/29.6.1`, Compose `5.3.0`, missing Lima (`tool.lima` with remediation), and unsupported relative worktrees with invariant absolute-path guidance.

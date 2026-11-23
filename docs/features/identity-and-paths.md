@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-identity-paths","status":"implemented","created_at":"2026-08-29T06:48:35.984103316Z","implemented_at":"2026-08-29T15:35:02.570944634Z"}
--->
-
 # Deterministic identity and platform paths
 
 Status: implemented.

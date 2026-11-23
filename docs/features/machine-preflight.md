@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-machine-preflight","status":"implemented","created_at":"2026-08-29T06:55:50.40048004Z","implemented_at":"2026-08-30T03:03:26.448450428Z"}
--->
-
 # Machine preflight checks
 
 Status: implemented.

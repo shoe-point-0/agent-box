@@ -155,19 +155,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	gitPath := os.Getenv("HERMES_CRUSHER_REAL_GIT")
-	if gitPath == "" {
-		var err error
-		gitPath, err = exec.LookPath("git")
-		if err != nil {
-			t.Skip("real Git is unavailable")
-		}
-	}
-	var err error
-	gitPath, err = filepath.Abs(gitPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	gitPath := testutil.RequireGit(t)
 	root := testutil.TempDir(t)
 	f := &fixture{
 		gitPath: gitPath, home: filepath.Join(root, "controlled-home"),

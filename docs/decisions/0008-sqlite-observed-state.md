@@ -40,8 +40,7 @@ If the database is corrupt, stop mutation, preserve external resources, and requ
 
 - [failure-matrix spike](../features/spike-failure-matrix.md) killed the harness before and after eight Linux side effects, then converged from observed residue without duplicates and refused foreign or dirty resources. It validates the recovery model, not SQLite.
 - [ADR 0001](0001-milestone-0-substrate-gate.md) makes stable operation IDs, independent observation, exact ownership, and reverse cleanup normative for product work.
-- SQLite documents [write-ahead logging](https://sqlite.org/wal.html), [foreign-key enforcement](https://sqlite.org/foreignkeys.html), and its [atomic commit model](https://sqlite.org/atomiccommit.html). The eventual driver and durability pragmas must be verified by `m1-state-store`.
-- State corruption and migration behavior remain acceptance work in Milestones 1, 4, and 5.
+- SQLite documents [write-ahead logging](https://sqlite.org/wal.html), [foreign-key enforcement](https://sqlite.org/foreignkeys.html), and its [atomic commit model](https://sqlite.org/atomiccommit.html). See the [state store](../features/sqlite-state-store.md) for the driver and pragma checks and [durability fault tests](../features/durability-fault-testing.md) for exercised failures and remaining migration and backup work.
 
 ## Revisit triggers
 

@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-state-store","status":"implemented","created_at":"2026-08-29T06:48:36.000249511Z","implemented_at":"2026-08-29T21:59:55.924768503Z"}
--->
-
 # SQLite state and migrations
 
 Status: implemented.

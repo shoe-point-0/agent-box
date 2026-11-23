@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-git-publication-status","status":"implemented","created_at":"2026-08-29T06:55:50.449897416Z","implemented_at":"2026-08-29T21:32:48.83871901Z"}
--->
-
 # Box commit publication status
 
 Status: implemented.

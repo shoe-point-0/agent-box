@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-daemon-api","status":"implemented","created_at":"2026-08-29T06:48:36.172957524Z","implemented_at":"2026-08-29T23:08:25.272276755Z"}
--->
-
 # Versioned daemon API over a Unix socket
 
 Status: implemented.
@@ -20,10 +16,9 @@ runners were subsequently wired in [`abox up`](abox-up.md)
 and [`abox rm`](abox-rm.md), and Apple Silicon (`darwin/arm64`)
 `LOCAL_PEERCRED` socket lifecycle and detached execution were exercised on real
 hardware in [`abox up`](abox-up.md) (full multi-version
-Darwin release matrix remains in `m5-darwin-arm64-hardware-gate`). A running
+Darwin release matrix remains [open](../../ROADMAP.md#milestone-5-releasable-v01-candidate)). A running
 operation left behind by a dead daemon fails closed with a retryable operation
-conflict until `m4-recovery-reconstruction` implements adoption and
-reconstruction.
+conflict; adoption and reconstruction remain [Milestone 4 work](../../ROADMAP.md#milestone-4-recovery-and-fault-containment).
 
 ## Scope and dependencies
 

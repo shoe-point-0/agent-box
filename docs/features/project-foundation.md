@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-project-foundation","status":"implemented","created_at":"2026-08-29T06:48:35.92485512Z","implemented_at":"2026-08-29T15:13:59.387316546Z"}
--->
-
 # Go project and contributor foundation
 
 Status: implemented.

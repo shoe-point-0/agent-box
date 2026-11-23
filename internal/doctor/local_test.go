@@ -48,14 +48,15 @@ func TestLocalObserverReportsInvalidEnvironmentWithoutExecutingTools(t *testing.
 		{"trailing slash", root + "/", root, "environment.path"},
 		{"unclean entry", root + "/../bin", root, "environment.path"},
 		{"control character", root + "\nprivate-path-value", root, "environment.path"},
+		{"escape in absolute PATH", root + ":" + root + "\x1b", root, "environment.path"},
 		{"empty HOME", root, "", "environment.home"},
 		{"relative HOME", root, "private-home-value", "environment.home"},
 		{"unclean HOME", root, root + "/", "environment.home"},
+		{"tab in HOME", root, root + "\tname", "environment.home"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("PATH", test.path)
 			t.Setenv("HOME", test.home)
-			t.Setenv("HERMES_CRUSHER_REAL_GIT", filepath.Join(root, "git"))
 			observer, err := NewLocalObserver(root)
 			if err != nil {
 				t.Fatalf("configuration prevented a report: %v", err)

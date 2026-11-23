@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m0-git-path-probe","status":"implemented","created_at":"2026-08-29T06:48:35.822326556Z","implemented_at":"2026-08-29T07:49:12.167881984Z"}
--->
-
 # Private Git-store path invariance
 
 Status: implemented.

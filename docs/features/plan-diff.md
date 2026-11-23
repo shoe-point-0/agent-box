@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-plan-diff","status":"implemented","created_at":"2026-08-29T06:48:36.078727449Z","implemented_at":"2026-08-29T21:49:13.112703731Z"}
--->
-
 # Plan change and conflict classification
 
 Status: implemented.

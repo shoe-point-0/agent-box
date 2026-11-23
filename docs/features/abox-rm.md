@@ -1,7 +1,3 @@
-<!-- sprout-task
-{"schema_version":1,"id":"m1-safe-remove","status":"implemented","created_at":"2026-08-29T06:48:36.249156679Z","implemented_at":"2026-08-30T05:45:13.364027059Z"}
--->
-
 # Refusal-first Box removal
 
 Status: implemented.
